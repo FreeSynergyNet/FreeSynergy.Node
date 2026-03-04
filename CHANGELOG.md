@@ -6,6 +6,26 @@ was sich geändert hat.
 
 ---
 
+## 2026-03-04 – Claude Code – README.md erstellt
+
+**Neue Datei:**
+- `README.md` – Public-facing Projektbeschreibung für GitHub
+
+**Inhalt:**
+- Philosophie und Projektziel (Dezentralisierung, freiwillige Kooperation)
+- Modulübersicht (alle 14 Module mit Kategorie und Beschreibung)
+- Drei-Schichten-Architektur (modules / hosts / projects)
+- Deployment-Flow von fsn-install.sh bis DNS
+- Sicherheitsmodell (rootless, nur Zentinel extern)
+- Projektstatus-Tabelle mit aktuellem Stand
+- Requirements und Quick Start
+- Hinweis auf FreeSynergy.Net als Referenz-Deployment
+- Verlinkung auf LICENSE und contributors.md
+
+---
+
+---
+
 ## 2026-03-04 – Claude Code – DNS Rename-Cleanup (Reconcile + Explicit Cleanup)
 
 ### Neue / geänderte Dateien

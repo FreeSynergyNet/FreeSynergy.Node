@@ -8,6 +8,9 @@ projects/*/data/
 # Only example.host.yml is tracked
 # See hosts/.gitignore
 
+# Internal development log (Claude Code sessions)
+CHANGELOG.md
+
 # Editor files
 *.swp
 *.swo
