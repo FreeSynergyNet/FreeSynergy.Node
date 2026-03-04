@@ -1,0 +1,56 @@
+---
+# Zentinel Auth Agent Plugin
+# Provides forward-auth middleware for services without native OIDC
+#
+# Use cases:
+#   - Protect admin panels that have no built-in auth
+#   - Add OIDC layer to legacy services
+#   - Enforce group-based access at proxy level
+#
+# Services with NATIVE OIDC (Forgejo, Outline, CryptPad, Stalwart, Tuwunel)
+# do NOT need this agent – they handle auth themselves.
+#
+# Services that MAY need this agent:
+#   - Zentinel Control-Plane (has built-in OIDC, but can also use agent)
+#   - Future services without native SSO support
+#   - Custom/third-party apps added to the platform
+
+plugin:
+  name: "auth-agent"
+  type: "zentinel-agent"
+  description: "OIDC forward-auth agent for Zentinel proxy"
+  registry: "registry.zentinelproxy.io/auth-agent"
+
+  # Agent capabilities (from Zentinel registry)
+  capabilities:
+    - "jwt"
+    - "oidc"
+    - "api-keys"
+    - "basic-auth"
+    - "saml-sso"
+    - "mtls"
+    - "cedar-policies"
+    - "token-exchange"
+
+config:
+  # OIDC provider (Kanidm)
+  oidc_issuer: "https://{{ services.kanidm.domain }}/oauth2/openid/zentinel-auth"
+  oidc_client_id: "{{ vault_zentinel_auth_client_id | default('zentinel-auth') }}"
+  oidc_client_secret: "{{ vault_zentinel_auth_client_secret }}"
+  oidc_scopes: "openid profile email groups"
+  oidc_callback_path: "/_auth/callback"
+
+  # Session
+  cookie_name: "_fsn_auth"
+  cookie_domain: ".{{ project_domain }}"
+  cookie_secure: true
+  session_lifetime: "{{ zentinel_auth_session_lifetime | default('43200') }}"
+
+  # Forward headers to upstream services
+  forward_headers:
+    X-Auth-User: "preferred_username"
+    X-Auth-Email: "email"
+    X-Auth-Groups: "groups"
+
+  # Default: require authentication
+  default_action: "auth"

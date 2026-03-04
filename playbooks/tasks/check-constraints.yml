@@ -1,0 +1,25 @@
+---
+# Task: Check module constraints for a single module
+# Variables: module_entry (dict with key=instance_name, value=module config)
+# TODO: Implement constraint enforcement
+# Rules from RULES.md:
+#   - per_host: max N instances of this module class per host
+#   - per_ip: max N instances per IP address
+#   - locality: same_host = module must run on same host as parent
+
+- name: "Read module class for constraint check: {{ module_entry.key }}"
+  ansible.builtin.include_vars:
+    file: "{{ fsn_root }}/modules/{{ module_entry.value.module_class }}/{{ module_entry.value.module_class | basename }}.yml"
+    name: constraint_module_cfg
+  failed_when: false
+
+- name: "Check per_host constraint: {{ module_entry.key }}"
+  when:
+    - constraint_module_cfg is defined
+    - constraint_module_cfg.module.constraints.per_host is defined
+    - constraint_module_cfg.module.constraints.per_host is not none
+  ansible.builtin.debug:
+    msg: >
+      Constraint per_host={{ constraint_module_cfg.module.constraints.per_host }}
+      for module {{ module_entry.key }} ({{ module_entry.value.module_class }}).
+      Full constraint enforcement not yet implemented – see TODO.md.

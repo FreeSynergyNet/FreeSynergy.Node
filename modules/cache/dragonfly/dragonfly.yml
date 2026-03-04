@@ -1,0 +1,72 @@
+---
+module:
+  name: "dragonfly"
+  alias: []
+  type: "cache"
+  author: "FreeSynergy.Node"
+  version: "0.0.1"
+  tags:
+    - "cache"
+    - "redis-compatible"
+  description: "Dragonfly in-memory data store (Redis-compatible)"
+  website: "https://www.dragonflydb.io"
+  repository: "https://github.com/dragonflydb/dragonfly"
+  port: 6379
+
+  constraints:
+    per_host: ~
+    per_ip: ~
+    locality: "same_host"
+
+vars:
+  config_dir: "{{ project_root }}/data/{{ instance_name }}"
+
+load:
+  modules: {}
+  services: {}
+
+container:
+  name: "{{ instance_name }}"
+  image: "docker.dragonflydb.io/dragonflydb/dragonfly"
+  image_tag: "latest"
+  networks: []
+  volumes: []
+  published_ports: []
+  read_only: true
+  tmpfs:
+    - "/tmp"
+    - "/var/tmp"
+  security_opt:
+    - "no-new-privileges:true"
+  ulimits:
+    memlock: -1
+  healthcheck:
+    cmd: 'redis-cli -p 6379 ping'
+    interval: "30s"
+    timeout: "5s"
+    retries: 3
+    start_period: "15s"
+
+  health_path: ~
+  health_port: ~
+
+environment:
+  # Authentication
+  DFLY_requirepass: "{{ vault_cache_password }}"
+  # Network
+  DFLY_port: "6379"
+  DFLY_bind: "0.0.0.0"
+  # Memory
+  DFLY_maxmemory: "{{ dragonfly_maxmemory | default('2gb') }}"
+  # Performance
+  DFLY_proactor_threads: "{{ dragonfly_threads | default('0') }}"
+  DFLY_cache_mode: "{{ dragonfly_cache_mode | default('false') }}"
+  DFLY_enable_heartbeat_eviction: "{{ dragonfly_heartbeat_eviction | default('false') }}"
+  # Persistence (empty = disabled, pure cache mode)
+  DFLY_dbfilename: "{{ dragonfly_snapshot_file | default('') }}"
+  DFLY_dir: "{{ dragonfly_snapshot_dir | default('') }}"
+  # Lua scripting
+  DFLY_default_lua_flags: "allow-undeclared-keys"
+  # Logging
+  DFLY_logtostderr: "true"
+  DFLY_v: "{{ dragonfly_log_level | default('1') }}"

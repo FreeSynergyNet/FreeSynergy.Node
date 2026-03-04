@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 60 60">
+  <!-- Subtle network/connection pattern tile -->
+  <circle cx="30" cy="30" r="1" fill="#1a5c3a" opacity="0.06"/>
+  <circle cx="0" cy="0" r="1" fill="#1a5c3a" opacity="0.06"/>
+  <circle cx="60" cy="0" r="1" fill="#1a5c3a" opacity="0.06"/>
+  <circle cx="0" cy="60" r="1" fill="#1a5c3a" opacity="0.06"/>
+  <circle cx="60" cy="60" r="1" fill="#1a5c3a" opacity="0.06"/>
+  <line x1="0" y1="0" x2="30" y2="30" stroke="#1a5c3a" stroke-width="0.3" opacity="0.04"/>
+  <line x1="60" y1="0" x2="30" y2="30" stroke="#1a5c3a" stroke-width="0.3" opacity="0.04"/>
+  <line x1="0" y1="60" x2="30" y2="30" stroke="#1a5c3a" stroke-width="0.3" opacity="0.04"/>
+  <line x1="60" y1="60" x2="30" y2="30" stroke="#1a5c3a" stroke-width="0.3" opacity="0.04"/>
+</svg>

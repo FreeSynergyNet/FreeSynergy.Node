@@ -1,0 +1,113 @@
+---
+module:
+  name: "vikunja"
+  alias:
+    - "tasks"
+    - "todo"
+  type: "tasks"
+  author: "FreeSynergy.Node"
+  version: "0.0.1"
+  tags:
+    - "tasks"
+    - "project-management"
+    - "todo"
+    - "kanban"
+  description: "Vikunja – open-source task management and to-do list app"
+  website: "https://vikunja.io"
+  repository: "https://kolaente.dev/vikunja/vikunja"
+  port: 3456
+
+  constraints:
+    per_host: ~
+    per_ip: ~
+    locality: ~
+
+vars:
+  config_dir: "{{ project_root }}/data/{{ instance_name }}"
+
+load:
+  modules:
+    "postgres":
+      module_class: "database/postgres"
+    "dragonfly":
+      module_class: "cache/dragonfly"
+  services:
+    "kanidm": {}
+    "stalwart": {}
+
+container:
+  name: "{{ instance_name }}"
+  image: "docker.io/vikunja/vikunja"
+  image_tag: "latest"
+  networks: []
+  volumes:
+    - "{{ module_vars.config_dir }}/files:/app/vikunja/files:Z"
+    - "{{ module_vars.config_dir }}/config.yml:/etc/vikunja/config.yml:ro,Z"
+  published_ports: []
+
+  healthcheck:
+    cmd: "curl -fsS http://localhost:3456/api/v1/info || exit 1"
+    interval: "30s"
+    timeout: "5s"
+    retries: 3
+    start_period: "30s"
+
+  health_path: "/api/v1/info"
+  health_port: 3456
+
+  # Vikunja runs as UID 1000
+  user: "1000"
+
+environment:
+  # ------------------------------------------------------------------
+  # Service
+  # ------------------------------------------------------------------
+  VIKUNJA_SERVICE_PUBLICURL: "https://{{ service_domain }}"
+  VIKUNJA_SERVICE_JWTSECRET: "{{ vault_vikunja_jwt_secret }}"
+  VIKUNJA_SERVICE_TIMEZONE: "{{ vikunja_timezone | default('Europe/Berlin') }}"
+
+  # ------------------------------------------------------------------
+  # Database (Postgres)
+  # ------------------------------------------------------------------
+  VIKUNJA_DATABASE_TYPE: "postgres"
+  VIKUNJA_DATABASE_HOST: "{{ services.postgres.container_name }}"
+  VIKUNJA_DATABASE_PORT: "{{ services.postgres.port }}"
+  VIKUNJA_DATABASE_DATABASE: "{{ vikunja_db_name | default('vikunja') }}"
+  VIKUNJA_DATABASE_USER: "{{ vault_vikunja_db_user | default('vikunja') }}"
+  VIKUNJA_DATABASE_PASSWORD: "{{ vault_vikunja_db_password }}"
+
+  # ------------------------------------------------------------------
+  # Cache (Dragonfly)
+  # ------------------------------------------------------------------
+  VIKUNJA_REDIS_ENABLED: "true"
+  VIKUNJA_REDIS_HOST: "{{ services.dragonfly.container_name }}:{{ services.dragonfly.port }}"
+  VIKUNJA_REDIS_PASSWORD: "{{ vault_dragonfly_password }}"
+  VIKUNJA_REDIS_DB: "{{ vikunja_redis_db | default('3') }}"
+
+  # ------------------------------------------------------------------
+  # Auth: local + OIDC (Kanidm)
+  # OIDC requires config.yml for provider definition (env vars buggy)
+  # ------------------------------------------------------------------
+  VIKUNJA_AUTH_LOCAL_ENABLED: "{{ vikunja_local_auth | default('false') }}"
+  VIKUNJA_AUTH_OPENID_ENABLED: "true"
+
+  # ------------------------------------------------------------------
+  # Mail notifications (via Stalwart)
+  # ------------------------------------------------------------------
+  VIKUNJA_MAILER_ENABLED: "{{ vikunja_mailer_enabled | default('true') }}"
+  VIKUNJA_MAILER_HOST: "{{ services.stalwart.container_name | default('') }}"
+  VIKUNJA_MAILER_PORT: "{{ vikunja_mailer_port | default('587') }}"
+  VIKUNJA_MAILER_USERNAME: "{{ vault_vikunja_mailer_user | default('') }}"
+  VIKUNJA_MAILER_PASSWORD: "{{ vault_vikunja_mailer_password | default('') }}"
+  VIKUNJA_MAILER_FROMEMAIL: "{{ vikunja_mailer_from | default('tasks@' + project_domain) }}"
+
+  # ------------------------------------------------------------------
+  # CORS
+  # ------------------------------------------------------------------
+  VIKUNJA_CORS_ENABLE: "true"
+  VIKUNJA_CORS_ORIGINS: "https://{{ service_domain }}"
+
+  # ------------------------------------------------------------------
+  # Logging
+  # ------------------------------------------------------------------
+  VIKUNJA_LOG_LEVEL: "{{ vikunja_log_level | default('INFO') }}"

@@ -1,0 +1,20 @@
+# FSN Platform – Git Ignore
+
+# Project instance data (secrets + volumes)
+projects/*/configs/
+projects/*/data/
+
+# Host files (each deployment has its own)
+# Only example.host.yml is tracked
+# See hosts/.gitignore
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db

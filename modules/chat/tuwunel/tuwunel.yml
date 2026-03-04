@@ -1,0 +1,96 @@
+---
+module:
+  name: "tuwunel"
+  alias:
+    - "matrix"
+    - "chat"
+  type: "chat"
+  author: "FreeSynergy.Node"
+  version: "0.0.1"
+  tags:
+    - "chat"
+    - "matrix"
+    - "messaging"
+    - "federation"
+  description: "Tuwunel Matrix homeserver (successor to conduwuit)"
+  website: "https://matrix-construct.github.io/tuwunel/"
+  repository: "https://github.com/matrix-construct/tuwunel"
+  port: 8008
+
+  constraints:
+    per_host: ~
+    per_ip: ~
+    locality: ~
+
+  federation:
+    enabled: true
+    min_trust: 2
+
+vars:
+  config_dir: "{{ project_root }}/data/{{ instance_name }}"
+
+  # server_name MUST be the main domain (not a subdomain)
+  # Use .well-known delegation if running on a subdomain
+  server_name: "{{ project_domain }}"
+
+load:
+  modules: {}
+  services:
+    "kanidm": {}
+
+container:
+  name: "{{ instance_name }}"
+  image: "ghcr.io/matrix-construct/tuwunel"
+  image_tag: "latest"
+  networks: []
+  volumes:
+    - "{{ module_vars.config_dir }}/data:/var/lib/tuwunel:Z"
+  published_ports: []
+
+  healthcheck:
+    cmd: "curl -fsS http://localhost:8008/_matrix/client/versions || exit 1"
+    interval: "30s"
+    timeout: "5s"
+    retries: 3
+    start_period: "30s"
+
+  health_path: "/_matrix/client/versions"
+  health_port: 8008
+
+environment:
+  # ------------------------------------------------------------------
+  # Core (TUWUNEL_ prefix for env var overrides)
+  # ------------------------------------------------------------------
+  TUWUNEL_SERVER_NAME: "{{ vars.server_name }}"
+  TUWUNEL_DATABASE_PATH: "/var/lib/tuwunel"
+  TUWUNEL_PORT: "{{ module.port }}"
+  TUWUNEL_ADDRESS: "0.0.0.0"
+
+  # ------------------------------------------------------------------
+  # Registration
+  # ------------------------------------------------------------------
+  TUWUNEL_ALLOW_REGISTRATION: "{{ tuwunel_allow_registration | default('false') }}"
+  TUWUNEL_REGISTRATION_TOKEN_REQUIRED: "{{ tuwunel_registration_token | default('true') }}"
+  TUWUNEL_ALLOW_GUEST_REGISTRATION: "false"
+
+  # ------------------------------------------------------------------
+  # Federation
+  # ------------------------------------------------------------------
+  TUWUNEL_ALLOW_FEDERATION: "{{ tuwunel_allow_federation | default('true') }}"
+
+  # ------------------------------------------------------------------
+  # .well-known (for delegation when using subdomain proxy)
+  # ------------------------------------------------------------------
+  TUWUNEL_WELL_KNOWN_CLIENT: "https://{{ service_domain }}"
+  TUWUNEL_WELL_KNOWN_SERVER: "{{ service_domain }}:443"
+
+  # ------------------------------------------------------------------
+  # SSO/OIDC (Legacy SSO – Kanidm integration)
+  # Configured via tuwunel.toml [[global.idp]] section
+  # See deploy-setup hook which generates the config
+  # ------------------------------------------------------------------
+
+  # ------------------------------------------------------------------
+  # Logging
+  # ------------------------------------------------------------------
+  TUWUNEL_LOG: "{{ tuwunel_log_level | default('info') }}"

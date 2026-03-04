@@ -1,0 +1,61 @@
+---
+module:
+  name: "otel-collector"
+  alias:
+    - "otel"
+    - "telemetry"
+  type: "observability"
+  author: "FreeSynergy.Node"
+  version: "0.0.1"
+  tags:
+    - "observability"
+    - "opentelemetry"
+    - "collector"
+    - "logs"
+    - "metrics"
+    - "traces"
+  description: "OpenTelemetry Collector – collects logs, metrics and traces from all platform services"
+  website: "https://opentelemetry.io"
+  repository: "https://github.com/open-telemetry/opentelemetry-collector-contrib"
+  port: 4318
+
+  constraints:
+    per_host: 1
+    per_ip: ~
+    locality: ~
+
+vars:
+  config_dir: "{{ project_root }}/data/{{ instance_name }}"
+
+load:
+  modules: {}
+  services:
+    "openobserver": {}
+
+container:
+  name: "{{ instance_name }}"
+  image: "ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib"
+  image_tag: "latest"
+  networks: []
+  volumes:
+    - "{{ module_vars.config_dir }}/otel-config.yaml:/etc/otelcol-contrib/config.yaml:ro,Z"
+    # Podman socket for container stats (read-only)
+    - "/run/user/{{ ansible_user_uid }}/podman/podman.sock:/var/run/docker.sock:ro"
+    # Journal logs for container log collection
+    - "/var/log/journal:/var/log/journal:ro"
+    - "/run/log/journal:/run/log/journal:ro"
+  published_ports: []
+
+  healthcheck:
+    cmd: "wget --spider -q http://localhost:13133/ || exit 1"
+    interval: "30s"
+    timeout: "5s"
+    retries: 3
+    start_period: "15s"
+
+  health_path: ~
+  health_port: ~
+
+environment:
+  # Podman host (for docker_stats receiver compatibility)
+  DOCKER_HOST: "unix:///var/run/docker.sock"

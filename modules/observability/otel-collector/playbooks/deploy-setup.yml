@@ -1,0 +1,38 @@
+---
+# OpenTelemetry Collector post-deploy setup
+
+- name: "Create OTel Collector config directory"
+  ansible.builtin.file:
+    path: "{{ module_vars.config_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: "Generate OTel Collector config"
+  ansible.builtin.template:
+    src: "{{ module_path }}/templates/otel-config.yaml.j2"
+    dest: "{{ module_vars.config_dir }}/otel-config.yaml"
+    mode: "0644"
+
+- name: "Verify Podman socket is available"
+  ansible.builtin.stat:
+    path: "/run/user/{{ ansible_user_uid }}/podman/podman.sock"
+  register: podman_socket
+
+- name: "Warn if Podman socket not found"
+  when: not podman_socket.stat.exists
+  ansible.builtin.debug:
+    msg: >
+      WARNING: Podman socket not found at expected path.
+      Container metrics collection will not work.
+      Enable: systemctl --user enable --now podman.socket
+
+- name: "Wait for OTel Collector health check"
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:13133/"
+    return_content: false
+    status_code: 200
+  register: otel_health
+  retries: 20
+  delay: 3
+  until: otel_health.status == 200
+  failed_when: false

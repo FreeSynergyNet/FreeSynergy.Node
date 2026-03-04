@@ -1,0 +1,58 @@
+---
+module:
+  name: "zentinel"
+  alias: []
+  type: "proxy"
+  author: "FreeSynergy.Node"
+  version: "0.0.1"
+  tags:
+    - "proxy"
+    - "reverse-proxy"
+    - "tls"
+  description: "Zentinel reverse proxy with automatic TLS"
+  website: "https://github.com/zentinelproxy/zentinel"
+  repository: "https://github.com/zentinelproxy/zentinel"
+  port: 443
+
+  constraints:
+    per_host: 1
+    per_ip: 1
+    locality: ~
+
+vars:
+  config_dir: "{{ project_root }}/data/{{ instance_name }}"
+  kdl_path: "{{ module_vars.config_dir }}/config/zentinel.kdl"
+
+load:
+  modules:
+    "zentinel-control-plane":
+      module_class: "proxy/zentinel/zentinel-control-plane"
+  services: {}
+
+container:
+  name: "{{ instance_name }}"
+  image: "ghcr.io/zentinelproxy/zentinel"
+  image_tag: "latest"
+  networks: []
+  volumes:
+    - "{{ module_vars.config_dir }}/config:/config:Z"
+    - "{{ module_vars.config_dir }}/data:/data:Z"
+    # Static sites + branding (read-only, served by file_server)
+    - "{{ project_root }}/branding:/srv/{{ project_name }}/branding:ro,Z"
+    - "{{ project_root }}/sites:/srv/{{ project_name }}/sites:ro,Z"
+  published_ports:
+    - "80:80"
+    - "443:443"
+
+  healthcheck:
+    cmd: "curl -fsS http://localhost:80/ || exit 1"
+    interval: "15s"
+    timeout: "3s"
+    retries: 3
+    start_period: "10s"
+
+  health_path: ~
+  health_port: ~
+
+environment:
+  ZENTINEL_CONFIG: "/config/zentinel.kdl"

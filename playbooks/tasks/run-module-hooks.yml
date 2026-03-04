@@ -1,0 +1,21 @@
+---
+# Task: Run module hooks matching a glob pattern
+# Variables: hook_phase (deploy, undeploy, update, restart, clean, remove)
+#            module_path (path to the module directory)
+#            instance_name, service_domain, project_domain, etc.
+
+- name: "Find module hooks for phase {{ hook_phase }}"
+  when: module_path is defined
+  ansible.builtin.find:
+    paths: "{{ module_path }}/playbooks"
+    patterns: "{{ hook_phase }}-*.yml"
+  register: hook_files
+
+- name: "Run module hooks for phase {{ hook_phase }}"
+  when:
+    - module_path is defined
+    - hook_files.matched | default(0) > 0
+  ansible.builtin.include_tasks: "{{ item.path }}"
+  loop: "{{ hook_files.files | default([]) | sort(attribute='path') }}"
+  loop_control:
+    label: "{{ item.path | basename }}"

@@ -1,0 +1,31 @@
+---
+federation:
+  name: "FreeSynergy Federation"
+  signing_key: "{{ vault_federation_signing_key }}"
+
+  provider_list:
+    source: "https://federation.freesynergy.net/providers.yml"
+    verify_key: ""
+    auto_update: true
+    update_interval: 3600
+    fallback: local
+
+  trusted_issuers: []
+    # Example:
+    # - issuer: "https://kanidm.alice.example.org"
+    #   public_key: "ed25519:..."
+    #   name: "Alice"
+    #   priority: 2
+    #   added: "2025-03-15"
+
+  subprojects: {}
+    # Example:
+    # "bob":
+    #   subdomain: "bob"
+    #   services: [kanidm, stalwart]
+    #   modules:
+    #     "forgejo":
+    #       module_class: "git/forgejo"
+    #     "outline":
+    #       module_class: "wiki/outline"
+    #   status: active

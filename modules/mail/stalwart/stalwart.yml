@@ -1,0 +1,90 @@
+---
+module:
+  name: "stalwart"
+  alias:
+    - "mail"
+  dns:
+    mx:
+      priority: 10
+      host: "{{ host_name }}.{{ project_domain }}"
+    txt:
+      - "v=spf1 mx -all"
+    srv:
+      - service: "_submission._tcp"
+        port: 587
+        priority: 0
+        weight: 1
+      - service: "_imaps._tcp"
+        port: 993
+        priority: 0
+        weight: 1
+  type: "mail"
+  author: "FreeSynergy.Node"
+  version: "0.0.1"
+  tags:
+    - "mail"
+    - "smtp"
+    - "imap"
+    - "jmap"
+    - "caldav"
+    - "carddav"
+  description: "Stalwart all-in-one mail and collaboration server"
+  website: "https://stalw.art"
+  repository: "https://github.com/stalwartlabs/stalwart"
+  port: 443
+
+  constraints:
+    per_host: ~
+    per_ip: ~
+    locality: ~
+
+vars:
+  config_dir: "{{ project_root }}/data/{{ instance_name }}"
+
+load:
+  modules: {}
+  services:
+    "kanidm": {}
+
+container:
+  name: "{{ instance_name }}"
+  image: "docker.io/stalwartlabs/stalwart"
+  image_tag: "latest"
+  networks: []
+  volumes:
+    - "{{ module_vars.config_dir }}/data:/opt/stalwart:Z"
+  published_ports: []
+
+  healthcheck:
+    cmd: "curl -fsS http://localhost:8080/healthz || exit 1"
+    interval: "30s"
+    timeout: "5s"
+    retries: 3
+    start_period: "30s"
+
+  health_path: "/healthz"
+  health_port: 443
+  health_scheme: "https"
+
+  # Note: SMTP/IMAP ports are NOT published.
+  # Zentinel forwards Layer-4 TCP to this container:
+  #   25  -> stalwart:25   (SMTP)
+  #   587 -> stalwart:587  (Submission)
+  #   465 -> stalwart:465  (SMTPS)
+  #   993 -> stalwart:993  (IMAPS)
+  #   443 -> stalwart:443  (HTTPS/JMAP/WebAdmin/CalDAV/CardDAV)
+
+environment:
+  # ------------------------------------------------------------------
+  # Stalwart uses config.toml + Web Admin for configuration
+  # These env vars are only used on FIRST START for initialization
+  # ------------------------------------------------------------------
+  STALWART_HOSTNAME: "{{ service_domain }}"
+  STALWART_DOMAINS: "{{ project_domain }}"
+
+  # OIDC is configured via Web Admin UI after first start:
+  #   Settings > Authentication > OIDC
+  #   Issuer URL: https://{{ services.kanidm.domain }}/oauth2/openid/stalwart
+  #   Client ID: stalwart
+  #   Client Secret: (from vault)
+  #   Scopes: openid profile email

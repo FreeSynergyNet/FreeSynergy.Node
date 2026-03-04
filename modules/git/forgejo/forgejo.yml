@@ -1,0 +1,146 @@
+---
+module:
+  name: "forgejo"
+  alias:
+    - "git"
+  type: "git"
+  author: "FreeSynergy.Node"
+  version: "0.0.1"
+  tags:
+    - "git"
+    - "code"
+    - "forge"
+  description: "Forgejo self-hosted Git service"
+  website: "https://forgejo.org"
+  repository: "https://codeberg.org/forgejo/forgejo"
+  port: 3000
+
+  constraints:
+    per_host: ~
+    per_ip: ~
+    locality: ~
+
+  federation:
+    enabled: true
+    min_trust: 2
+
+vars:
+  config_dir: "{{ project_root }}/data/{{ instance_name }}"
+
+load:
+  modules:
+    "postgres":
+      module_class: "database/postgres"
+  services:
+    "kanidm": {}
+    "cache": {}
+
+container:
+  name: "{{ instance_name }}"
+  image: "codeberg.org/forgejo/forgejo"
+  image_tag: "14"
+  networks: []
+  volumes:
+    - "{{ module_vars.config_dir }}/data:/data:Z"
+    - "/etc/localtime:/etc/localtime:ro"
+  published_ports: []
+
+  healthcheck:
+    cmd: "curl -fsS http://localhost:3000/api/healthz || exit 1"
+    interval: "30s"
+    timeout: "5s"
+    retries: 3
+    start_period: "60s"
+
+  health_path: "/api/healthz"
+  health_port: 3000
+
+environment:
+  # ------------------------------------------------------------------
+  # General
+  # ------------------------------------------------------------------
+  USER_UID: "1000"
+  USER_GID: "1000"
+
+  # ------------------------------------------------------------------
+  # Server
+  # ------------------------------------------------------------------
+  FORGEJO__server__DOMAIN: "{{ service_domain }}"
+  FORGEJO__server__ROOT_URL: "https://{{ service_domain }}"
+  FORGEJO__server__HTTP_PORT: "{{ module.port }}"
+  FORGEJO__server__HTTP_ADDR: "0.0.0.0"
+  FORGEJO__server__SSH_DOMAIN: "{{ service_domain }}"
+  FORGEJO__server__SSH_PORT: "{{ forgejo_ssh_port | default('22') }}"
+  FORGEJO__server__SSH_LISTEN_PORT: "{{ forgejo_ssh_listen_port | default('2222') }}"
+  FORGEJO__server__LFS_START_SERVER: "true"
+  FORGEJO__server__OFFLINE_MODE: "{{ forgejo_offline_mode | default('false') }}"
+
+  # ------------------------------------------------------------------
+  # Database (Postgres sub-module)
+  # ------------------------------------------------------------------
+  FORGEJO__database__DB_TYPE: "postgres"
+  FORGEJO__database__HOST: "{{ services.postgres.container_name }}:{{ services.postgres.port }}"
+  FORGEJO__database__NAME: "{{ services.postgres.db_name }}"
+  FORGEJO__database__USER: "{{ services.postgres.db_user }}"
+  FORGEJO__database__PASSWD: "{{ services.postgres.vault_db_password }}"
+  FORGEJO__database__SSL_MODE: "disable"
+
+  # ------------------------------------------------------------------
+  # Cache (Dragonfly via Redis protocol)
+  # ------------------------------------------------------------------
+  FORGEJO__cache__ADAPTER: "redis"
+  FORGEJO__cache__HOST: "redis://:{{ services.cache.vault_cache_password }}@{{ services.cache.container_name }}:{{ services.cache.port }}/0"
+
+  # ------------------------------------------------------------------
+  # Session (Redis-backed for horizontal scaling)
+  # ------------------------------------------------------------------
+  FORGEJO__session__PROVIDER: "redis"
+  FORGEJO__session__PROVIDER_CONFIG: "redis://:{{ services.cache.vault_cache_password }}@{{ services.cache.container_name }}:{{ services.cache.port }}/1"
+
+  # ------------------------------------------------------------------
+  # Queue (Redis-backed)
+  # ------------------------------------------------------------------
+  FORGEJO__queue__TYPE: "redis"
+  FORGEJO__queue__CONN_STR: "redis://:{{ services.cache.vault_cache_password }}@{{ services.cache.container_name }}:{{ services.cache.port }}/2"
+
+  # ------------------------------------------------------------------
+  # Service
+  # ------------------------------------------------------------------
+  FORGEJO__service__DISABLE_REGISTRATION: "{{ forgejo_disable_registration | default('true') }}"
+  FORGEJO__service__REQUIRE_SIGNIN_VIEW: "{{ forgejo_require_signin | default('false') }}"
+  FORGEJO__service__ENABLE_NOTIFY_MAIL: "{{ forgejo_enable_notify_mail | default('false') }}"
+
+  # ------------------------------------------------------------------
+  # OAuth2 (Forgejo as OAuth2 provider for other services)
+  # ------------------------------------------------------------------
+  FORGEJO__oauth2__ENABLED: "true"
+  FORGEJO__oauth2__JWT_SIGNING_ALGORITHM: "ES256"
+
+  # ------------------------------------------------------------------
+  # OpenID (allow OpenID/OIDC login – Kanidm integration)
+  # Note: OIDC auth source is created via deploy-setup hook or Admin UI
+  # ------------------------------------------------------------------
+  FORGEJO__openid__ENABLE_OPENID_SIGNIN: "true"
+  FORGEJO__openid__ENABLE_OPENID_SIGNUP: "{{ forgejo_oidc_auto_register | default('true') }}"
+
+  # ------------------------------------------------------------------
+  # Mailer (optional, via Stalwart)
+  # ------------------------------------------------------------------
+  FORGEJO__mailer__ENABLED: "{{ forgejo_mailer_enabled | default('false') }}"
+  FORGEJO__mailer__PROTOCOL: "{{ forgejo_mailer_protocol | default('smtps') }}"
+  FORGEJO__mailer__SMTP_ADDR: "{{ forgejo_mailer_host | default('') }}"
+  FORGEJO__mailer__SMTP_PORT: "{{ forgejo_mailer_port | default('465') }}"
+  FORGEJO__mailer__USER: "{{ forgejo_mailer_user | default('') }}"
+  FORGEJO__mailer__PASSWD: "{{ vault_forgejo_mailer_password | default('') }}"
+  FORGEJO__mailer__FROM: "{{ forgejo_mailer_from | default('') }}"
+
+  # ------------------------------------------------------------------
+  # Log
+  # ------------------------------------------------------------------
+  FORGEJO__log__LEVEL: "{{ log_level | default('info') }}"
+
+  # ------------------------------------------------------------------
+  # Security
+  # ------------------------------------------------------------------
+  FORGEJO__security__INSTALL_LOCK: "true"
+  FORGEJO__security__SECRET_KEY: "{{ vault_forgejo_secret_key }}"

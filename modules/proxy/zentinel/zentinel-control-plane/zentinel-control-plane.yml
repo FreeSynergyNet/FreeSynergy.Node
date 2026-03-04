@@ -1,0 +1,49 @@
+---
+module:
+  name: "zentinel-control-plane"
+  alias: []
+  type: "proxy"
+  author: "FreeSynergy.Node"
+  version: "0.0.1"
+  tags:
+    - "proxy"
+    - "control-plane"
+    - "management"
+  description: "Zentinel Control Plane for proxy management"
+  website: "https://github.com/zentinelproxy/zentinel"
+  repository: "https://github.com/zentinelproxy/zentinel"
+  port: 8080
+
+  constraints:
+    per_host: ~
+    per_ip: ~
+    locality: ~
+
+vars:
+  config_dir: "{{ project_root }}/data/{{ instance_name }}"
+
+load:
+  modules: {}
+  services:
+    "zentinel": {}
+    "kanidm": {}
+
+container:
+  name: "{{ instance_name }}"
+  image: "ghcr.io/zentinelproxy/zentinel-control-plane"
+  image_tag: "latest"
+  networks: []
+  volumes:
+    - "{{ module_vars.config_dir }}/data:/data:Z"
+  published_ports: []
+
+environment:
+  ZENTINEL_API_URL: "http://{{ services.zentinel.container_name }}:{{ services.zentinel.port }}"
+  ZENTINEL_CP_PORT: "8080"
+  # OIDC authentication for the Control Plane Web UI
+  OIDC_ENABLED: "{{ zentinel_cp_oidc_enabled | default('true') }}"
+  OIDC_ISSUER_URL: "https://{{ services.kanidm.domain }}/oauth2/openid/zentinel-cp"
+  OIDC_CLIENT_ID: "{{ vault_zentinel_cp_oidc_client_id | default('zentinel-cp') }}"
+  OIDC_CLIENT_SECRET: "{{ vault_zentinel_cp_oidc_client_secret }}"
+  OIDC_REDIRECT_URI: "https://{{ service_domain }}/auth/callback"
+  OIDC_SCOPES: "openid profile email"

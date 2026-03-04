@@ -1,0 +1,80 @@
+---
+# ==============================================================================
+# FreeSynergy.Net – Branding Definition
+# ==============================================================================
+# Machine-readable branding data. Used by:
+#   - Zentinel static sites (landing, status, docs)
+#   - Kanidm login page customization
+#   - Forgejo/Outline/CryptPad theming
+#   - Email templates (Stalwart)
+#   - Any future service that needs project identity
+# ==============================================================================
+
+project:
+  name: "FreeSynergy.Net"
+  tagline: "Dezentral. Selbstbestimmt. Gemeinsam."
+  tagline_en: "Decentralized. Self-Determined. Together."
+  description: "Eine freie Plattform für digitale Zusammenarbeit – ohne Konzerne, ohne Überwachung, ohne Kompromisse."
+  description_en: "A free platform for digital collaboration – without corporations, without surveillance, without compromise."
+  domain: "freesynergy.net"
+  language: "de"
+
+colors:
+  # Primary palette
+  primary: "#1a5c3a"          # Deep forest green
+  primary_light: "#2d8a5e"    # Lighter green
+  primary_dark: "#0e3d25"     # Darkest green
+
+  # Accent
+  accent: "#d4a843"           # Warm gold/amber
+  accent_light: "#e8c96e"
+  accent_dark: "#b08a2e"
+
+  # Neutral
+  bg: "#faf8f5"               # Warm off-white
+  bg_dark: "#111a14"          # Near-black green tint
+  surface: "#f0ede8"          # Card/surface background
+  surface_dark: "#1c2a20"
+
+  # Text
+  text: "#1a1a1a"             # Near-black
+  text_muted: "#6b7c72"       # Muted green-gray
+  text_light: "#f0ede8"       # Light text on dark bg
+  text_on_primary: "#ffffff"
+
+  # Status
+  success: "#2d8a5e"
+  warning: "#d4a843"
+  error: "#c44d4d"
+  info: "#4a7fa5"
+
+typography:
+  # Display/Headlines
+  font_display: "Fraunces"
+  font_display_url: "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&display=swap"
+
+  # Body text
+  font_body: "Source Sans 3"
+  font_body_url: "https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;500;600&display=swap"
+
+  # Monospace (code blocks, technical)
+  font_mono: "JetBrains Mono"
+  font_mono_url: "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap"
+
+assets:
+  logo: "logo.svg"
+  logo_dark: "logo-dark.svg"
+  favicon: "favicon.ico"
+  bg_pattern: "bg-pattern.svg"
+  og_image: "og-image.png"
+
+links:
+  forgejo: "https://forgejo.freesynergy.net"
+  kanidm: "https://kanidm.freesynergy.net"
+  outline: "https://outline.freesynergy.net"
+  cryptpad: "https://cryptpad.freesynergy.net"
+  stalwart: "https://stalwart.freesynergy.net"
+  matrix: "https://tuwunel.freesynergy.net"
+  pretix: "https://pretix.freesynergy.net"
+  vikunja: "https://vikunja.freesynergy.net"
+  umap: "https://umap.freesynergy.net"

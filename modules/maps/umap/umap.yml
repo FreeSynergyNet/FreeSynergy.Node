@@ -1,0 +1,99 @@
+---
+module:
+  name: "umap"
+  alias:
+    - "maps"
+    - "karten"
+  type: "maps"
+  author: "FreeSynergy.Node"
+  version: "0.0.1"
+  tags:
+    - "maps"
+    - "openstreetmap"
+    - "geodata"
+    - "collaboration"
+  description: "uMap – collaborative maps with OpenStreetMap layers"
+  website: "https://umap-project.org"
+  repository: "https://github.com/umap-project/umap"
+  port: 8000
+
+  constraints:
+    per_host: ~
+    per_ip: ~
+    locality: ~
+
+vars:
+  config_dir: "{{ project_root }}/data/{{ instance_name }}"
+
+load:
+  modules:
+    "postgres":
+      module_class: "database/postgres"
+    "dragonfly":
+      module_class: "cache/dragonfly"
+  services:
+    "kanidm": {}
+
+container:
+  name: "{{ instance_name }}"
+  image: "docker.io/umap/umap"
+  image_tag: "latest"
+  networks: []
+  volumes:
+    - "{{ module_vars.config_dir }}/uploads:/srv/umap/uploads:Z"
+    - "{{ module_vars.config_dir }}/static:/srv/umap/static:Z"
+    - "{{ module_vars.config_dir }}/umap.conf:/etc/umap/umap.conf:ro,Z"
+  published_ports: []
+
+  healthcheck:
+    cmd: "curl -fsS http://localhost:8000/ || exit 1"
+    interval: "30s"
+    timeout: "5s"
+    retries: 3
+    start_period: "30s"
+
+  health_path: "/"
+  health_port: 8000
+
+environment:
+  # ------------------------------------------------------------------
+  # Core
+  # ------------------------------------------------------------------
+  SECRET_KEY: "{{ vault_umap_secret_key }}"
+  SITE_URL: "https://{{ service_domain }}"
+  SITE_NAME: "{{ umap_site_name | default(project_domain + ' Maps') }}"
+
+  # ------------------------------------------------------------------
+  # Database (PostGIS required!)
+  # ------------------------------------------------------------------
+  # uMap needs PostGIS, not plain Postgres
+  # The postgres module should use postgis/postgis image for this instance
+  DATABASE_URL: >-
+    postgis://{{ vault_umap_db_user | default('umap') }}:{{ vault_umap_db_password }}@{{
+    services.postgres.container_name }}:{{ services.postgres.port }}/{{ umap_db_name | default('umap') }}
+
+  # ------------------------------------------------------------------
+  # Cache (Dragonfly via Redis protocol)
+  # ------------------------------------------------------------------
+  REDIS_URL: "redis://:{{ vault_dragonfly_password }}@{{ services.dragonfly.container_name }}:{{ services.dragonfly.port }}/0"
+
+  # ------------------------------------------------------------------
+  # Static and media files
+  # ------------------------------------------------------------------
+  STATIC_ROOT: "/srv/umap/static"
+  MEDIA_ROOT: "/srv/umap/uploads"
+
+  # ------------------------------------------------------------------
+  # Realtime collaboration (websocket)
+  # ------------------------------------------------------------------
+  REALTIME_ENABLED: "{{ umap_realtime_enabled | default('true') }}"
+
+  # ------------------------------------------------------------------
+  # Anonymous editing
+  # ------------------------------------------------------------------
+  UMAP_ALLOW_ANONYMOUS: "{{ umap_allow_anonymous | default('true') }}"
+
+  # ------------------------------------------------------------------
+  # Debug (always false in production)
+  # ------------------------------------------------------------------
+  DEBUG: "0"

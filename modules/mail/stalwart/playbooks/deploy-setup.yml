@@ -1,0 +1,55 @@
+---
+# Stalwart post-deploy setup
+# Waits for readiness and provides setup instructions
+# Stalwart auto-generates admin credentials on first start
+
+- name: "Create Stalwart data directory"
+  ansible.builtin.file:
+    path: "{{ module_vars.config_dir }}/data"
+    state: directory
+    mode: "0755"
+
+- name: "Wait for Stalwart to be ready"
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:8080/healthz"
+    return_content: false
+    status_code: 200
+  register: stalwart_health
+  retries: 30
+  delay: 3
+  until: stalwart_health.status == 200
+  failed_when: false
+
+- name: "Check for initial admin credentials"
+  ansible.builtin.stat:
+    path: "{{ module_vars.config_dir }}/data/.admin-credentials"
+  register: stalwart_creds
+
+- name: "Extract admin credentials from container logs"
+  when: not stalwart_creds.stat.exists
+  block:
+    - name: "Get admin password from logs"
+      ansible.builtin.command:
+        cmd: "podman logs {{ instance_name }} 2>&1 | grep -oP \"password '\\K[^']+\""
+      register: stalwart_admin_pw
+      changed_when: false
+      failed_when: false
+
+    - name: "Save admin credentials"
+      when: stalwart_admin_pw.rc == 0
+      ansible.builtin.copy:
+        content: |
+          # Stalwart admin credentials (auto-generated on first start)
+          # Change this password via the Web Admin UI!
+          username: admin
+          password: {{ stalwart_admin_pw.stdout }}
+        dest: "{{ module_vars.config_dir }}/data/.admin-credentials"
+        mode: "0600"
+
+    - name: "Hint: configure OIDC"
+      ansible.builtin.debug:
+        msg: >
+          Stalwart is ready. Configure OIDC via Web Admin at
+          https://{{ service_domain }}:8080
+          Settings > Authentication > OIDC
+          Issuer: https://{{ services.kanidm.domain | default('auth.' + project_domain) }}/oauth2/openid/stalwart

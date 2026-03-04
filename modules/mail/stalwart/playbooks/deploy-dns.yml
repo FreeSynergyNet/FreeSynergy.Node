@@ -1,0 +1,12 @@
+---
+# Stalwart DNS setup
+# Creates MX, SPF, SRV records via the configured DNS plugin
+
+- name: "Create DNS records for mail"
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/dns-create-record.yml"
+  loop: "{{ module.dns | dict2items }}"
+  loop_control:
+    loop_var: dns_record_type
+  vars:
+    domain: "{{ project_domain }}"
+    service_domain: "{{ service_domain }}"

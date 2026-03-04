@@ -1,0 +1,61 @@
+---
+# CryptPad post-deploy setup
+# Creates directory structure, generates config.js and SSO plugin config
+
+- name: "Create CryptPad data directories"
+  ansible.builtin.file:
+    path: "{{ module_vars.config_dir }}/{{ item }}"
+    state: directory
+    owner: "4001"
+    group: "4001"
+    mode: "0755"
+  loop:
+    - "blob"
+    - "block"
+    - "customize"
+    - "data"
+    - "data/archive"
+    - "data/pins"
+    - "data/tasks"
+    - "data/blobstage"
+    - "data/decrees"
+    - "data/logs"
+    - "datastore"
+    - "config"
+
+- name: "Generate CryptPad config.js"
+  ansible.builtin.template:
+    src: "{{ module_path }}/templates/config.js.j2"
+    dest: "{{ module_vars.config_dir }}/config/config.js"
+    owner: "4001"
+    group: "4001"
+    mode: "0644"
+
+- name: "Generate CryptPad SSO plugin config"
+  when: services.kanidm is defined
+  ansible.builtin.template:
+    src: "{{ module_path }}/templates/sso.js.j2"
+    dest: "{{ module_vars.config_dir }}/config/sso.js"
+    owner: "4001"
+    group: "4001"
+    mode: "0644"
+
+- name: "Create empty SSO config when Kanidm not available"
+  when: services.kanidm is not defined
+  ansible.builtin.copy:
+    content: "module.exports = { enabled: false };\n"
+    dest: "{{ module_vars.config_dir }}/config/sso.js"
+    owner: "4001"
+    group: "4001"
+    mode: "0644"
+
+- name: "Wait for CryptPad to be ready"
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ module.port }}"
+    return_content: false
+    status_code: 200
+  register: cryptpad_health
+  retries: 30
+  delay: 3
+  until: cryptpad_health.status == 200
+  failed_when: false

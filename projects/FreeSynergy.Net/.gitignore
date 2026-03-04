@@ -1,0 +1,3 @@
+# Ignore instance configs (secrets) and data (volumes)
+configs/
+data/

@@ -1,0 +1,46 @@
+---
+# pretix post-deploy setup
+# Builds custom image, generates config, runs migrations
+
+- name: "Create pretix directories"
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default(omit) }}"
+    mode: "0755"
+  loop:
+    - { path: "{{ module_vars.config_dir }}/config", owner: "15371" }
+    - { path: "{{ module_vars.config_dir }}/data", owner: "15371" }
+
+- name: "Build pretix custom image with plugins"
+  ansible.builtin.command:
+    cmd: "podman build -t fsn-pretix:latest {{ module_path }}"
+  register: pretix_build
+  changed_when: "'COMMIT' in pretix_build.stdout"
+
+- name: "Generate pretix.cfg"
+  ansible.builtin.template:
+    src: "{{ module_path }}/templates/pretix.cfg.j2"
+    dest: "{{ module_vars.config_dir }}/config/pretix.cfg"
+    owner: "15371"
+    mode: "0600"
+
+- name: "Wait for pretix to be ready"
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ module.port }}/healthcheck/"
+    return_content: false
+    status_code: 200
+  register: pretix_health
+  retries: 45
+  delay: 5
+  until: pretix_health.status == 200
+  failed_when: false
+
+- name: "Hint: first-time admin login"
+  ansible.builtin.debug:
+    msg: >
+      pretix is ready at https://{{ service_domain }}/control/login
+      First login: admin@localhost / admin
+      CHANGE THIS PASSWORD IMMEDIATELY.
+      OIDC: Enable pretix-oidc plugin in organizer settings,
+      add pretix_oidc.auth.OIDCAuthBackend to auth_backends.

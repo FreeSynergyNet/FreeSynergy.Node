@@ -1,0 +1,110 @@
+---
+module:
+  name: "openobserver"
+  alias:
+    - "o2"
+    - "logs"
+    - "monitoring"
+  type: "observability"
+  author: "FreeSynergy.Node"
+  version: "0.0.1"
+  tags:
+    - "observability"
+    - "logs"
+    - "metrics"
+    - "traces"
+    - "monitoring"
+  description: "OpenObserve – observability platform for logs, metrics and traces"
+  website: "https://openobserve.ai"
+  repository: "https://github.com/openobserve/openobserve"
+  port: 5080
+
+  constraints:
+    per_host: ~
+    per_ip: ~
+    locality: ~
+
+  # Future: all platform services can send logs/metrics here
+  # via OpenTelemetry or direct API ingestion
+  monitoring:
+    role: "collector"
+    protocols:
+      - "otlp-grpc:5081"
+      - "otlp-http:5080/api/default/"
+
+vars:
+  config_dir: "{{ project_root }}/data/{{ instance_name }}"
+
+load:
+  modules: {}
+  services:
+    "kanidm": {}
+
+container:
+  name: "{{ instance_name }}"
+  image: "public.ecr.aws/zinclabs/openobserve"
+  image_tag: "latest"
+  networks: []
+  volumes:
+    - "{{ module_vars.config_dir }}/data:/data:Z"
+  published_ports: []
+
+  healthcheck:
+    cmd: "curl -fsS http://localhost:5080/healthz || exit 1"
+    interval: "30s"
+    timeout: "5s"
+    retries: 3
+    start_period: "30s"
+
+  health_path: "/healthz"
+  health_port: 5080
+
+environment:
+  # ------------------------------------------------------------------
+  # Admin credentials (first start only)
+  # ------------------------------------------------------------------
+  ZO_ROOT_USER_EMAIL: "{{ vault_openobserver_admin_email | default('admin@' + project_domain) }}"
+  ZO_ROOT_USER_PASSWORD: "{{ vault_openobserver_admin_password }}"
+
+  # ------------------------------------------------------------------
+  # Data storage
+  # ------------------------------------------------------------------
+  ZO_DATA_DIR: "/data"
+
+  # ------------------------------------------------------------------
+  # Network
+  # ------------------------------------------------------------------
+  ZO_HTTP_PORT: "{{ module.port }}"
+  ZO_HTTP_ADDR: "0.0.0.0"
+  ZO_GRPC_PORT: "{{ openobserver_grpc_port | default('5081') }}"
+
+  # ------------------------------------------------------------------
+  # Telemetry (disable phoning home)
+  # ------------------------------------------------------------------
+  ZO_TELEMETRY: "false"
+  ZO_TELEMETRY_URL: ""
+
+  # ------------------------------------------------------------------
+  # Performance
+  # ------------------------------------------------------------------
+  ZO_WAL_MEMORY_MODE_ENABLED: "{{ openobserver_wal_memory | default('true') }}"
+
+  # ------------------------------------------------------------------
+  # Log level
+  # ------------------------------------------------------------------
+  RUST_LOG: "{{ openobserver_log_level | default('info') }}"
+
+  # ------------------------------------------------------------------
+  # OIDC/SSO (Enterprise feature – placeholder for future)
+  # OpenObserve OSS: basic auth only
+  # OpenObserve Enterprise: OIDC, SAML, LDAP
+  # ------------------------------------------------------------------
+  # ZO_OIDC_ENABLED: "true"
+  # ZO_OIDC_ISSUER: "https://{{ services.kanidm.domain }}/oauth2/openid/openobserver"
+  # ZO_OIDC_CLIENT_ID: "openobserver"
+  # ZO_OIDC_CLIENT_SECRET: "{{ vault_openobserver_oidc_client_secret }}"
+
+  # ------------------------------------------------------------------
+  # Note: For OIDC with OSS edition, use Zentinel Auth-Agent
+  # as forward-auth proxy in front of OpenObserver
+  # ------------------------------------------------------------------

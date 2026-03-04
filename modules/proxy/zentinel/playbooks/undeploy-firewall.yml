@@ -1,0 +1,27 @@
+---
+# Zentinel firewall cleanup
+# Closes published ports in firewalld before container stop
+
+- name: "Close SMTP ports"
+  become: true
+  ansible.posix.firewalld:
+    port: "{{ item }}"
+    permanent: true
+    immediate: true
+    state: disabled
+  loop:
+    - "25/tcp"
+    - "587/tcp"
+    - "993/tcp"
+  failed_when: false
+
+- name: "Close HTTP/HTTPS ports"
+  become: true
+  ansible.posix.firewalld:
+    port: "{{ item }}"
+    permanent: true
+    immediate: true
+    state: disabled
+  loop:
+    - "80/tcp"
+    - "443/tcp"

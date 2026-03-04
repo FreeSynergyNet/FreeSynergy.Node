@@ -1,0 +1,27 @@
+---
+# Zentinel firewall setup
+# Opens published ports in firewalld after container start
+
+- name: "Open firewall ports for Zentinel"
+  become: true
+  ansible.posix.firewalld:
+    port: "{{ item }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop:
+    - "80/tcp"
+    - "443/tcp"
+
+- name: "Open SMTP port for Stalwart via Zentinel"
+  become: true
+  ansible.posix.firewalld:
+    port: "{{ item }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop:
+    - "25/tcp"
+    - "587/tcp"
+    - "993/tcp"
+  when: stalwart_enabled | default(false)

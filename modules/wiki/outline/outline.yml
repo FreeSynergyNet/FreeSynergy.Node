@@ -1,0 +1,122 @@
+---
+module:
+  name: "outline"
+  alias:
+    - "wiki"
+  type: "wiki"
+  author: "FreeSynergy.Node"
+  version: "0.0.1"
+  tags:
+    - "wiki"
+    - "knowledge"
+    - "docs"
+  description: "Outline collaborative wiki and knowledge base"
+  website: "https://www.getoutline.com"
+  repository: "https://github.com/outline/outline"
+  port: 3000
+
+  constraints:
+    per_host: ~
+    per_ip: ~
+    locality: ~
+
+  federation:
+    enabled: true
+    min_trust: 2
+
+vars:
+  config_dir: "{{ project_root }}/data/{{ instance_name }}"
+
+load:
+  modules:
+    "postgres":
+      module_class: "database/postgres"
+  services:
+    "kanidm": {}
+    "cache": {}
+
+container:
+  name: "{{ instance_name }}"
+  image: "docker.getoutline.com/outlinewiki/outline"
+  image_tag: "latest"
+  networks: []
+  volumes:
+    - "{{ module_vars.config_dir }}/data:/var/lib/outline/data:Z"
+  published_ports: []
+
+  healthcheck:
+    cmd: "curl -fsS http://localhost:3000/_health || exit 1"
+    interval: "30s"
+    timeout: "5s"
+    retries: 3
+    start_period: "30s"
+
+  health_path: "/_health"
+  health_port: 3000
+
+environment:
+  # ------------------------------------------------------------------
+  # General
+  # ------------------------------------------------------------------
+  NODE_ENV: "production"
+  URL: "https://{{ service_domain }}"
+  PORT: "{{ module.port }}"
+
+  # Secrets (generate with: openssl rand -hex 32)
+  SECRET_KEY: "{{ vault_outline_secret_key }}"
+  UTILS_SECRET: "{{ vault_outline_utils_secret }}"
+
+  # ------------------------------------------------------------------
+  # Database (Postgres sub-module)
+  # ------------------------------------------------------------------
+  DATABASE_URL: >-
+    postgres://{{ services.postgres.db_user }}:{{ services.postgres.vault_db_password }}@{{
+    services.postgres.container_name }}:{{ services.postgres.port }}/{{ services.postgres.db_name }}
+  DATABASE_CONNECTION_POOL_MIN: "{{ outline_db_pool_min | default('') }}"
+  DATABASE_CONNECTION_POOL_MAX: "{{ outline_db_pool_max | default('') }}"
+  PGSSLMODE: "disable"
+
+  # ------------------------------------------------------------------
+  # Cache (Dragonfly via Redis protocol)
+  # ------------------------------------------------------------------
+  REDIS_URL: "redis://:{{ services.cache.vault_cache_password }}@{{ services.cache.container_name }}:{{ services.cache.port }}"
+
+  # ------------------------------------------------------------------
+  # OIDC Authentication (Kanidm)
+  # Outline has NO local login – OIDC is the primary auth method
+  # ------------------------------------------------------------------
+  OIDC_CLIENT_ID: "{{ vault_outline_oidc_client_id | default('outline') }}"
+  OIDC_CLIENT_SECRET: "{{ vault_outline_oidc_client_secret }}"
+  OIDC_AUTH_URI: "https://{{ services.kanidm.domain }}/ui/oauth2"
+  OIDC_TOKEN_URI: "https://{{ services.kanidm.domain }}/oauth2/token"
+  OIDC_USERINFO_URI: "https://{{ services.kanidm.domain }}/oauth2/openid/outline/userinfo"
+  OIDC_LOGOUT_URI: "https://{{ services.kanidm.domain }}/ui/logout"
+  OIDC_USERNAME_CLAIM: "preferred_username"
+  OIDC_DISPLAY_NAME: "{{ outline_oidc_display_name | default('Login') }}"
+  OIDC_SCOPES: "openid profile email"
+
+  # ------------------------------------------------------------------
+  # File Storage (local filesystem, no S3 needed)
+  # ------------------------------------------------------------------
+  FILE_STORAGE: "local"
+  FILE_STORAGE_LOCAL_ROOT_DIR: "/var/lib/outline/data"
+  FILE_STORAGE_UPLOAD_MAX_SIZE: "{{ outline_upload_max_size | default('262144000') }}"
+
+  # ------------------------------------------------------------------
+  # Optional: SMTP for notifications
+  # ------------------------------------------------------------------
+  SMTP_HOST: "{{ outline_smtp_host | default('') }}"
+  SMTP_PORT: "{{ outline_smtp_port | default('') }}"
+  SMTP_USERNAME: "{{ outline_smtp_user | default('') }}"
+  SMTP_PASSWORD: "{{ vault_outline_smtp_password | default('') }}"
+  SMTP_FROM_EMAIL: "{{ outline_smtp_from | default('') }}"
+  SMTP_REPLY_EMAIL: "{{ outline_smtp_reply | default('') }}"
+  SMTP_SECURE: "{{ outline_smtp_secure | default('true') }}"
+
+  # ------------------------------------------------------------------
+  # Features
+  # ------------------------------------------------------------------
+  FORCE_HTTPS: "true"
+  ENABLE_UPDATES: "false"
+  DEFAULT_LANGUAGE: "{{ outline_language | default('en_US') }}"
+  LOG_LEVEL: "{{ log_level | default('info') }}"

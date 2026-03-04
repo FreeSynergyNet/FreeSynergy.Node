@@ -1,0 +1,134 @@
+---
+module:
+  name: "pretix"
+  alias:
+    - "tickets"
+    - "events"
+  type: "tickets"
+  author: "FreeSynergy.Node"
+  version: "0.0.1"
+  tags:
+    - "tickets"
+    - "events"
+    - "registration"
+    - "shop"
+  description: "pretix – ticket sales and event registration with plugins"
+  website: "https://pretix.eu"
+  repository: "https://github.com/pretix/pretix"
+  port: 8000
+
+  constraints:
+    per_host: ~
+    per_ip: ~
+    locality: ~
+
+  # IMPORTANT: pretix requires a CUSTOM Docker image for plugins
+  # The Dockerfile is at modules/tickets/pretix/Dockerfile
+  # Build before deploy: podman build -t fsn-pretix modules/tickets/pretix/
+  build:
+    dockerfile: "{{ module_path }}/Dockerfile"
+    image_name: "fsn-pretix"
+    image_tag: "latest"
+
+vars:
+  config_dir: "{{ project_root }}/data/{{ instance_name }}"
+
+  # Plugins to install (pip packages)
+  # Override this in your project file to add/remove plugins
+  pretix_plugins:
+    - "pretix-oidc"
+    - "pretix-pages"
+    - "pretix-fontpack-free"
+    - "pretix-passbook"
+
+load:
+  modules:
+    "postgres":
+      module_class: "database/postgres"
+    "dragonfly":
+      module_class: "cache/dragonfly"
+  services:
+    "kanidm": {}
+    "stalwart": {}
+
+container:
+  name: "{{ instance_name }}"
+  # Uses CUSTOM built image (not upstream directly)
+  image: "fsn-pretix"
+  image_tag: "latest"
+  networks: []
+  volumes:
+    - "{{ module_vars.config_dir }}/config:/etc/pretix:Z"
+    - "{{ module_vars.config_dir }}/data:/data:Z"
+  published_ports: []
+
+  healthcheck:
+    cmd: "curl -fsS http://localhost:8000/healthcheck/ || exit 1"
+    interval: "30s"
+    timeout: "10s"
+    retries: 3
+    start_period: "60s"
+
+  health_path: "/healthcheck/"
+  health_port: 8000
+
+  # pretix runs as UID 15371 (pretixuser)
+  user: "15371:15371"
+
+environment:
+  # ------------------------------------------------------------------
+  # Pretix core settings (PRETIX_ prefix -> pretix.cfg sections)
+  # ------------------------------------------------------------------
+  PRETIX_PRETIX_INSTANCE_NAME: "{{ pretix_instance_name | default(project_domain + ' Tickets') }}"
+  PRETIX_PRETIX_URL: "https://{{ service_domain }}"
+  PRETIX_PRETIX_CURRENCY: "{{ pretix_currency | default('EUR') }}"
+  PRETIX_PRETIX_LOGLEVEL: "{{ pretix_log_level | default('INFO') }}"
+
+  # ------------------------------------------------------------------
+  # Locale
+  # ------------------------------------------------------------------
+  PRETIX_LOCALE_DEFAULT: "{{ pretix_locale | default('de') }}"
+  PRETIX_LOCALE_TIMEZONE: "{{ pretix_timezone | default('Europe/Berlin') }}"
+  PRETIX_LANGUAGES_ENABLED: "{{ pretix_languages | default('de,en') }}"
+
+  # ------------------------------------------------------------------
+  # Database (Postgres)
+  # ------------------------------------------------------------------
+  PRETIX_DATABASE_BACKEND: "postgresql"
+  PRETIX_DATABASE_HOST: "{{ services.postgres.container_name }}"
+  PRETIX_DATABASE_PORT: "{{ services.postgres.port }}"
+  PRETIX_DATABASE_NAME: "{{ pretix_db_name | default('pretix') }}"
+  PRETIX_DATABASE_USER: "{{ vault_pretix_db_user | default('pretix') }}"
+  PRETIX_DATABASE_PASSWORD: "{{ vault_pretix_db_password }}"
+
+  # ------------------------------------------------------------------
+  # Cache (Dragonfly via Redis protocol)
+  # ------------------------------------------------------------------
+  PRETIX_REDIS_LOCATION: "redis://:{{ vault_dragonfly_password }}@{{ services.dragonfly.container_name }}:{{ services.dragonfly.port }}/4"
+  PRETIX_REDIS_SESSIONS: "true"
+
+  # ------------------------------------------------------------------
+  # Celery (task queue via Dragonfly)
+  # ------------------------------------------------------------------
+  PRETIX_CELERY_BROKER: "redis://:{{ vault_dragonfly_password }}@{{ services.dragonfly.container_name }}:{{ services.dragonfly.port }}/5"
+  PRETIX_CELERY_BACKEND: "redis://:{{ vault_dragonfly_password }}@{{ services.dragonfly.container_name }}:{{ services.dragonfly.port }}/6"
+
+  # ------------------------------------------------------------------
+  # Mail (Stalwart)
+  # ------------------------------------------------------------------
+  PRETIX_MAIL_HOST: "{{ services.stalwart.container_name | default('') }}"
+  PRETIX_MAIL_PORT: "{{ pretix_mail_port | default('587') }}"
+  PRETIX_MAIL_USER: "{{ vault_pretix_mail_user | default('') }}"
+  PRETIX_MAIL_PASSWORD: "{{ vault_pretix_mail_password | default('') }}"
+  PRETIX_MAIL_FROM: "{{ pretix_mail_from | default('tickets@' + project_domain) }}"
+  PRETIX_MAIL_TLS: "{{ pretix_mail_tls | default('on') }}"
+
+  # ------------------------------------------------------------------
+  # Data directory
+  # ------------------------------------------------------------------
+  PRETIX_DATA_DIR: "/data"
+
+  # ------------------------------------------------------------------
+  # Auto-migration (skip on multi-container, run manually)
+  # ------------------------------------------------------------------
+  AUTOMIGRATE: "{{ pretix_automigrate | default('yes') }}"

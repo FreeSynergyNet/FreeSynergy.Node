@@ -1,0 +1,69 @@
+---
+module:
+  name: "kanidm"
+  alias:
+    - "auth"
+  type: "auth"
+  author: "FreeSynergy.Node"
+  version: "0.0.1"
+  tags:
+    - "auth"
+    - "identity"
+    - "oidc"
+    - "ldap"
+  description: "Kanidm identity management server"
+  website: "https://kanidm.com"
+  repository: "https://github.com/kanidm/kanidm"
+  port: 8443
+
+  constraints:
+    per_host: ~
+    per_ip: ~
+    locality: ~
+
+  federation:
+    enabled: true
+    min_trust: 1
+
+vars:
+  config_dir: "{{ project_root }}/data/{{ instance_name }}"
+
+  # OAuth2 clients are auto-populated by the deployer from all services
+  # that declare kanidm in their services: block.
+  # Format:
+  #   kanidm_oauth2_clients:
+  #     - client_id: "forgejo"
+  #       display_name: "Forgejo"
+  #       origin: "https://forgejo.freesynergy.net"
+  #       group: "idm_all_accounts"
+  #       extra_scopes: "groups"
+  #       prefer_short_username: true
+  domain: "{{ service_domain }}"
+  origin: "https://{{ vars.domain }}"
+
+load:
+  modules: {}
+  services: {}
+
+container:
+  name: "{{ instance_name }}"
+  image: "docker.io/kanidm/server"
+  image_tag: "latest"
+  networks: []
+  volumes:
+    - "{{ module_vars.config_dir }}/data:/data:Z"
+  published_ports: []
+
+  healthcheck:
+    cmd: "kanidmd healthcheck -c /data/server.toml"
+    interval: "30s"
+    timeout: "5s"
+    retries: 3
+    start_period: "30s"
+
+  # Zentinel health endpoint (for upstream health checking)
+  health_path: "/"
+  health_port: 8443
+  health_scheme: "https"
+
+environment: {}

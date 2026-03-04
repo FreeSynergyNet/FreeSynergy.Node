@@ -1,0 +1,31 @@
+---
+# OpenObserver post-deploy setup
+
+- name: "Create OpenObserver data directory"
+  ansible.builtin.file:
+    path: "{{ module_vars.config_dir }}/data"
+    state: directory
+    mode: "0755"
+
+- name: "Wait for OpenObserver to be ready"
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ module.port }}/healthz"
+    return_content: false
+    status_code: 200
+  register: o2_health
+  retries: 30
+  delay: 3
+  until: o2_health.status == 200
+  failed_when: false
+
+- name: "Hint: OpenObserver setup"
+  ansible.builtin.debug:
+    msg: >
+      OpenObserver is ready at https://{{ service_domain }}
+      Login with the admin credentials from your vault.
+      Ingestion endpoints:
+        Logs:    POST https://{{ service_domain }}/api/default/default/_json
+        OTLP:    POST https://{{ service_domain }}/api/default/v1/logs (HTTP)
+                 gRPC: {{ service_domain }}:{{ openobserver_grpc_port | default('5081') }}
+      OSS edition: OIDC via Zentinel Auth-Agent (forward-auth).
+      Enterprise: Native OIDC/SAML support.

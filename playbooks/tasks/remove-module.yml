@@ -1,0 +1,46 @@
+---
+# Task: Remove a single module instance completely
+
+- name: "Set module variables for {{ module_entry.key }}"
+  ansible.builtin.set_fact:
+    instance_name: "{{ module_entry.key }}"
+    module_path: "{{ fsn_root }}/modules/{{ module_entry.value.module_class }}"
+
+- name: "Run remove hooks"
+  ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/run-module-hooks.yml"
+  vars:
+    hook_phase: "remove"
+  failed_when: false
+
+- name: "Stop service {{ instance_name }}"
+  ansible.builtin.systemd:
+    name: "{{ instance_name }}.service"
+    state: stopped
+    enabled: false
+    scope: user
+  failed_when: false
+
+- name: "Remove Quadlet file"
+  ansible.builtin.file:
+    path: "{{ ansible_user_dir }}/.config/containers/systemd/{{ instance_name }}.container"
+    state: absent
+
+- name: "Remove env file"
+  ansible.builtin.file:
+    path: "{{ ansible_user_dir }}/.config/containers/systemd/{{ instance_name }}.env"
+    state: absent
+
+- name: "Remove config directory"
+  ansible.builtin.file:
+    path: "{{ project_root }}/configs/{{ instance_name }}"
+    state: absent
+
+- name: "Remove data directory"
+  ansible.builtin.file:
+    path: "{{ project_root }}/data/{{ instance_name }}"
+    state: absent
+
+- name: "Reload systemd"
+  ansible.builtin.systemd:
+    daemon_reload: true
+    scope: user

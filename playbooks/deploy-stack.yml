@@ -1,0 +1,68 @@
+---
+# deploy-stack.yml – Sync + apply changes
+# Usage:
+#   ansible-playbook deploy-stack.yml -e project_config=path/to/project.yml
+#   ansible-playbook deploy-stack.yml -e project_config=path/to/project.yml -e target_host=turbo
+#   ansible-playbook deploy-stack.yml -e project_config=path/to/project.yml -e deploy_local_only=true
+
+- name: "FreeSynergy.Node – Deploy Stack"
+  hosts: "{{ target_host | default('localhost') }}"
+  gather_facts: true
+
+  vars:
+    project_file: "{{ project_config }}"
+    fsn_root: "{{ playbook_dir | dirname }}"
+    deploy_local_only: false
+
+  tasks:
+    - name: "Read project file"
+      ansible.builtin.include_vars:
+        file: "{{ project_file }}"
+        name: project_cfg
+
+    - name: "Set project variables"
+      ansible.builtin.set_fact:
+        project_name: "{{ project_cfg.project.name }}"
+        project_domain: "{{ project_cfg.project.domain }}"
+        project_root: "{{ fsn_root }}/projects/{{ project_cfg.project.name }}"
+        project_contact_acme_email: "{{ project_cfg.project.contact.acme_email | default('') }}"
+
+    - name: "Read host file"
+      ansible.builtin.find:
+        paths: "{{ fsn_root }}/hosts"
+        patterns: "*.host.yml"
+        excludes: "example*"
+      register: host_files
+
+    - name: "Load host config"
+      ansible.builtin.include_vars:
+        file: "{{ host_files.files[0].path }}"
+        name: host_cfg
+      when: host_files.matched > 0
+
+    - name: "Set host variables (from host file)"
+      when: host_files.matched > 0
+      ansible.builtin.set_fact:
+        host_ip: "{{ host_cfg.host.ip | default('127.0.0.1') }}"
+        host_ipv6: "{{ host_cfg.host.ipv6 | default('') }}"
+
+    - name: "Set default host variables (no host file found)"
+      when: host_files.matched == 0
+      ansible.builtin.set_fact:
+        host_ip: "127.0.0.1"
+        host_ipv6: ""
+
+    - name: "Check for duplicate service names"
+      ansible.builtin.assert:
+        that:
+          - project_cfg.load.modules | dict2items | map(attribute='key') | list | length ==
+            project_cfg.load.modules | dict2items | map(attribute='key') | list | unique | length
+        fail_msg: "Duplicate service names detected in project {{ project_name }}"
+
+    # --- Deploy each module ---
+    - name: "Deploy modules"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/deploy-module.yml"
+      loop: "{{ project_cfg.load.modules | dict2items }}"
+      loop_control:
+        loop_var: module_entry
+        label: "{{ module_entry.key }}"

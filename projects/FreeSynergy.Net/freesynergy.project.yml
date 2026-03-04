@@ -1,0 +1,61 @@
+---
+project:
+  name: "FreeSynergy.Net"
+  domain: "freesynergy.net"
+  description: "Free Synergy Network – decentralized cooperation platform"
+
+  branding:
+    path: "branding"
+    logo: "branding/logo.svg"
+    logo_dark: "branding/logo-dark.svg"
+    favicon: "branding/favicon.ico"
+    theme_css: "branding/theme.css"
+    bg_pattern: "branding/bg-pattern.svg"
+    meta: "branding/meta.yml"
+
+  sites:
+    landing:
+      path: "sites/landing"
+      domain: "freesynergy.net"
+
+  contact:
+    email: "admin@freesynergy.net"
+    acme_email: "admin@freesynergy.net"
+
+load:
+  modules:
+    # --- Infrastructure (deploy first) ---
+    "postgres":
+      module_class: "database/postgres"
+    "dragonfly":
+      module_class: "cache/dragonfly"
+
+    # --- Auth (depends on nothing, others depend on it) ---
+    "kanidm":
+      module_class: "auth/kanidm"
+
+    # --- Core services ---
+    "stalwart":
+      module_class: "mail/stalwart"
+    "forgejo":
+      module_class: "git/forgejo"
+    "outline":
+      module_class: "wiki/outline"
+    "cryptpad":
+      module_class: "collab/cryptpad"
+    "tuwunel":
+      module_class: "chat/tuwunel"
+
+    # --- Additional services ---
+    "vikunja":
+      module_class: "tasks/vikunja"
+    "pretix":
+      module_class: "tickets/pretix"
+    "umap":
+      module_class: "maps/umap"
+
+    # --- Observability ---
+    "openobserver":
+      module_class: "observability/openobserver"
+    "otel-collector":
+      module_class: "observability/otel-collector"

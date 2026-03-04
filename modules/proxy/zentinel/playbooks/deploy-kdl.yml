@@ -1,0 +1,86 @@
+---
+# Zentinel KDL config generation
+# Generates the complete Zentinel configuration from all project services
+
+- name: "Collect all services from project"
+  ansible.builtin.set_fact:
+    project_services: "{{ project_services | default([]) }}"
+    project_name: "{{ project_name }}"
+
+- name: "Build service list from loaded modules"
+  ansible.builtin.set_fact:
+    project_services: >-
+      {{ project_services + [{
+        'name': item.key,
+        'type': item.value.module_class.split('/')[0],
+        'subdomain': item.key,
+        'container_name': item.key,
+        'port': module_ports[item.value.module_class] | default(3000),
+        'aliases': module_aliases[item.key] | default([]),
+        'auth_agent': module_auth_agent[item.key] | default(false),
+        'health_path': module_health_paths[item.value.module_class] | default(''),
+        'health_port': module_health_ports[item.value.module_class] | default(module_ports[item.value.module_class] | default(3000)),
+        'health_scheme': module_health_schemes[item.value.module_class] | default('http')
+      }] }}
+  loop: "{{ project_cfg.load.modules | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  vars:
+    # Port lookup by module_class
+    module_ports:
+      auth/kanidm: 8443
+      mail/stalwart: 443
+      git/forgejo: 3000
+      wiki/outline: 3000
+      collab/cryptpad: 3000
+      chat/tuwunel: 8008
+      tasks/vikunja: 3456
+      tickets/pretix: 8000
+      maps/umap: 8000
+      observability/openobserver: 5080
+    # Health path lookup
+    module_health_paths:
+      auth/kanidm: "/"
+      git/forgejo: "/api/healthz"
+      wiki/outline: "/_health"
+      collab/cryptpad: "/"
+      chat/tuwunel: "/_matrix/client/versions"
+      tasks/vikunja: "/api/v1/info"
+      tickets/pretix: "/healthcheck/"
+      maps/umap: "/"
+      observability/openobserver: "/healthz"
+      mail/stalwart: "/healthz"
+    # Health port lookup (defaults to service port)
+    module_health_ports:
+      auth/kanidm: 8443
+      mail/stalwart: 443
+    # Health scheme lookup (defaults to http)
+    module_health_schemes:
+      auth/kanidm: "https"
+      mail/stalwart: "https"
+    # Alias lookup
+    module_aliases: {}
+    # Auth-agent lookup (modules without native OIDC)
+    module_auth_agent:
+      openobserver: true
+
+- name: "Ensure Zentinel config directory exists"
+  ansible.builtin.file:
+    path: "{{ module_vars.config_dir }}/config"
+    state: directory
+    mode: "0755"
+
+- name: "Generate Zentinel KDL config"
+  ansible.builtin.template:
+    src: "{{ module_path }}/templates/zentinel.kdl.j2"
+    dest: "{{ module_vars.config_dir }}/config/zentinel.kdl"
+    mode: "0644"
+  vars:
+    zentinel_acme_email: "{{ project_contact_acme_email | default('') }}"
+  register: kdl_changed
+
+- name: "Reload Zentinel config"
+  when: kdl_changed.changed
+  ansible.builtin.command:
+    cmd: "podman exec {{ instance_name }} zentinel reload"
+  failed_when: false

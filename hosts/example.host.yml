@@ -1,0 +1,20 @@
+---
+# FreeSynergy.Node – Example Host File
+# Copy this file and rename it to your hostname:
+#   cp example.host.yml myhostname.host.yml
+#
+# The host file is git-ignored. Only this example is tracked.
+
+host:
+  name: "example-host"
+  ip: "1.2.3.4"
+  ipv6: ""                          # optional, leave empty if not available
+  external: false                   # true = no SSH access, read-only
+
+  proxy:
+    zentinel:
+      module_class: "proxy/zentinel"
+      load:
+        plugins:
+          dns: "hetzner"            # options: hetzner, cloudflare
+          acme: "letsencrypt"       # options: letsencrypt, smallstep-ca

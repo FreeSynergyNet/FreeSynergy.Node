@@ -1,0 +1,73 @@
+---
+module:
+  name: "cryptpad"
+  alias:
+    - "collab"
+    - "pad"
+  type: "collab"
+  author: "FreeSynergy.Node"
+  version: "0.0.1"
+  tags:
+    - "collab"
+    - "office"
+    - "encrypted"
+  description: "CryptPad end-to-end encrypted collaborative office suite"
+  website: "https://cryptpad.org"
+  repository: "https://github.com/cryptpad/cryptpad"
+  port: 3000
+
+  constraints:
+    per_host: ~
+    per_ip: ~
+    locality: ~
+
+  # CryptPad requires TWO proxy entries: main + sandbox domain
+  # Zentinel must route both to this container
+
+vars:
+  config_dir: "{{ project_root }}/data/{{ instance_name }}"
+  sandbox_domain: "sandbox.{{ project_domain }}"
+
+load:
+  modules: {}
+  services:
+    "kanidm": {}
+
+container:
+  name: "{{ instance_name }}"
+  image: "docker.io/cryptpad/cryptpad"
+  image_tag: "latest"
+  networks: []
+  volumes:
+    - "{{ module_vars.config_dir }}/blob:/cryptpad/blob:Z"
+    - "{{ module_vars.config_dir }}/block:/cryptpad/block:Z"
+    - "{{ module_vars.config_dir }}/customize:/cryptpad/customize:Z"
+    - "{{ module_vars.config_dir }}/data:/cryptpad/data:Z"
+    - "{{ module_vars.config_dir }}/datastore:/cryptpad/datastore:Z"
+    - "{{ module_vars.config_dir }}/config/config.js:/cryptpad/config/config.js:ro,Z"
+    - "{{ module_vars.config_dir }}/config/sso.js:/cryptpad/lib/plugins/sso/config.js:ro,Z"
+  published_ports: []
+
+  healthcheck:
+    cmd: "curl -fsS http://localhost:3000/ || exit 1"
+    interval: "30s"
+    timeout: "5s"
+    retries: 3
+    start_period: "45s"
+
+  health_path: "/"
+  health_port: 3000
+
+environment:
+  # ------------------------------------------------------------------
+  # Docker entrypoint variables
+  # ------------------------------------------------------------------
+  CPAD_MAIN_DOMAIN: "https://{{ service_domain }}"
+  CPAD_SANDBOX_DOMAIN: "https://{{ vars.sandbox_domain }}"
+  CPAD_HTTP2_DISABLE: "true"
+  CPAD_REALIP_HEADER: "X-Forwarded-For"
+  CPAD_REALIP_RECURSIVE: "on"
+  CPAD_TRUSTED_PROXY: "{{ cryptpad_trusted_proxy | default('10.0.0.0/8') }}"
+
+  # Note: Most CryptPad config is in config.js, not env vars
+  # The deploy-setup hook generates config.js and sso.js from templates

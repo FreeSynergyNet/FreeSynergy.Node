@@ -1,0 +1,54 @@
+---
+module:
+  name: "postgres"
+  alias: []
+  type: "database"
+  author: "FreeSynergy.Node"
+  version: "0.0.1"
+  tags:
+    - "database"
+    - "sql"
+  description: "PostgreSQL database server"
+  website: "https://www.postgresql.org"
+  repository: "https://github.com/postgres/postgres"
+  port: 5432
+
+  constraints:
+    per_host: ~
+    per_ip: ~
+    locality: "same_host"
+
+vars:
+  config_dir: "{{ project_root }}/data/{{ instance_name }}"
+  db_name: "{{ postgres_db_name | default(parent_instance_name) }}"
+  db_user: "{{ postgres_db_user | default(parent_instance_name) }}"
+
+load:
+  modules: {}
+  services: {}
+
+container:
+  name: "{{ instance_name }}"
+  image: "docker.io/library/postgres"
+  image_tag: "18-alpine"
+  networks: []
+  volumes:
+    - "{{ module_vars.config_dir }}/data:/var/lib/postgresql:Z"
+  published_ports: []
+
+  healthcheck:
+    cmd: 'pg_isready -h localhost -U $POSTGRES_USER'
+    interval: "15s"
+    timeout: "5s"
+    retries: 5
+    start_period: "30s"
+
+  health_path: ~
+  health_port: ~
+
+environment:
+  POSTGRES_DB: "{{ vars.db_name }}"
+  POSTGRES_USER: "{{ vars.db_user }}"
+  POSTGRES_PASSWORD: "{{ vault_db_password }}"
+  POSTGRES_INITDB_ARGS: "{{ postgres_initdb_args | default('--auth-host=scram-sha-256') }}"
+  POSTGRES_HOST_AUTH_METHOD: "scram-sha-256"

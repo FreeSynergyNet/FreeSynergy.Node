@@ -1,0 +1,60 @@
+---
+# Task: Check version and redeploy if changed
+
+- name: "Set module variables for {{ module_entry.key }}"
+  ansible.builtin.set_fact:
+    instance_name: "{{ module_entry.key }}"
+    module_class: "{{ module_entry.value.module_class }}"
+    module_path: "{{ fsn_root }}/modules/{{ module_entry.value.module_class }}"
+
+- name: "Read module class file"
+  ansible.builtin.include_vars:
+    file: "{{ module_path }}/{{ module_class | basename }}.yml"
+    name: module_cfg
+
+- name: "Extract module sections for update"
+  ansible.builtin.set_fact:
+    module: "{{ module_cfg.module }}"
+    container: "{{ module_cfg.container }}"
+    module_environment: "{{ module_cfg.environment | default({}) }}"
+    module_vars: "{{ module_cfg.vars | default({}) }}"
+
+- name: "Read deployed version"
+  ansible.builtin.slurp:
+    src: "{{ project_root }}/configs/{{ instance_name }}/.deployed"
+  register: deployed_info
+  failed_when: false
+
+- name: "Parse deployed version"
+  ansible.builtin.set_fact:
+    deployed_version: "{{ (deployed_info.content | b64decode | from_yaml).deployed_version | default('0.0.0') }}"
+  when: deployed_info is success
+
+- name: "Set deployed version to 0.0.0 if not found"
+  ansible.builtin.set_fact:
+    deployed_version: "0.0.0"
+  when: deployed_info is failed
+
+- name: "Compare versions"
+  ansible.builtin.debug:
+    msg: "Module {{ instance_name }}: deployed={{ deployed_version }} current={{ module.version }}"
+
+- name: "Redeploy if version changed"
+  when: deployed_version != module.version
+  block:
+    - name: "Regenerate Quadlet for {{ instance_name }}"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/generate-quadlet.yml"
+
+    - name: "Restart service {{ instance_name }}"
+      ansible.builtin.systemd:
+        name: "{{ instance_name }}.service"
+        state: restarted
+        scope: user
+
+    - name: "Run update hooks"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/run-module-hooks.yml"
+      vars:
+        hook_phase: "update"
+
+    - name: "Record new version"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/record-deployed-version.yml"

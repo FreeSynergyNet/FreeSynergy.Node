@@ -1,0 +1,28 @@
+---
+# update-stack.yml – Version check + redeploy changed modules
+
+- name: "FreeSynergy.Node – Update Stack"
+  hosts: "{{ target_host | default('localhost') }}"
+  gather_facts: true
+
+  vars:
+    project_file: "{{ project_config }}"
+    fsn_root: "{{ playbook_dir | dirname }}"
+
+  tasks:
+    - name: "Read project file"
+      ansible.builtin.include_vars:
+        file: "{{ project_file }}"
+        name: project_cfg
+
+    - name: "Set project variables"
+      ansible.builtin.set_fact:
+        project_name: "{{ project_cfg.project.name }}"
+        project_root: "{{ fsn_root }}/projects/{{ project_cfg.project.name }}"
+
+    - name: "Check and update each module"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/update-module.yml"
+      loop: "{{ project_cfg.load.modules | dict2items }}"
+      loop_control:
+        loop_var: module_entry
+        label: "{{ module_entry.key }}"

@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FreeSynergy.Net – Dezentral. Selbstbestimmt. Gemeinsam.</title>
+  <meta name="description" content="Eine freie Plattform für digitale Zusammenarbeit – ohne Konzerne, ohne Überwachung, ohne Kompromisse.">
+
+  <!-- Shared branding -->
+  <link rel="stylesheet" href="/branding/theme.css">
+  <link rel="icon" href="/branding/favicon.ico">
+
+  <!-- Page-specific styles -->
+  <style>
+    /* --- Hero --- */
+    .hero {
+      min-height: 85vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+      background:
+        url('/branding/bg-pattern.svg') repeat,
+        linear-gradient(160deg, var(--fsn-bg) 0%, var(--fsn-surface) 100%);
+    }
+
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -30%;
+      right: -15%;
+      width: 60vw;
+      height: 60vw;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(var(--fsn-primary-rgb), 0.06) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero-logo {
+      width: clamp(200px, 30vw, 320px);
+      margin-bottom: var(--fsn-space-xl);
+    }
+
+    .hero h1 {
+      font-family: var(--fsn-font-display);
+      font-size: var(--fsn-text-4xl);
+      font-weight: 800;
+      color: var(--fsn-primary-dark);
+      line-height: 1.05;
+      max-width: 14ch;
+      margin-bottom: var(--fsn-space-lg);
+    }
+
+    .hero h1 em {
+      font-style: normal;
+      color: var(--fsn-accent-dark);
+    }
+
+    .hero-subtitle {
+      font-size: var(--fsn-text-lg);
+      color: var(--fsn-text-muted);
+      max-width: 48ch;
+      margin-bottom: var(--fsn-space-xl);
+      line-height: 1.5;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: var(--fsn-space-md);
+      flex-wrap: wrap;
+    }
+
+    /* --- Principles --- */
+    .principles {
+      padding: var(--fsn-space-3xl) 0;
+    }
+
+    .principles-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: var(--fsn-space-lg);
+      margin-top: var(--fsn-space-xl);
+    }
+
+    .principle-icon {
+      font-size: 2rem;
+      margin-bottom: var(--fsn-space-md);
+    }
+
+    .principle-title {
+      font-family: var(--fsn-font-display);
+      font-size: var(--fsn-text-xl);
+      font-weight: 600;
+      margin-bottom: var(--fsn-space-sm);
+      color: var(--fsn-primary);
+    }
+
+    .principle-text {
+      color: var(--fsn-text-muted);
+      line-height: 1.6;
+    }
+
+    /* --- Services --- */
+    .services {
+      padding: var(--fsn-space-3xl) 0;
+      background: var(--fsn-surface);
+    }
+
+    .section-title {
+      font-family: var(--fsn-font-display);
+      font-size: var(--fsn-text-2xl);
+      font-weight: 600;
+      text-align: center;
+      margin-bottom: var(--fsn-space-sm);
+    }
+
+    .section-subtitle {
+      text-align: center;
+      color: var(--fsn-text-muted);
+      max-width: 52ch;
+      margin: 0 auto var(--fsn-space-xl);
+    }
+
+    .services-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: var(--fsn-space-md);
+    }
+
+    .service-card {
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .service-name {
+      font-family: var(--fsn-font-display);
+      font-size: var(--fsn-text-lg);
+      font-weight: 600;
+      margin-bottom: var(--fsn-space-xs);
+    }
+
+    .service-desc {
+      font-size: var(--fsn-text-sm);
+      color: var(--fsn-text-muted);
+    }
+
+    /* --- Footer --- */
+    footer {
+      padding: var(--fsn-space-xl) 0;
+      text-align: center;
+      color: var(--fsn-text-muted);
+      font-size: var(--fsn-text-sm);
+    }
+
+    footer a {
+      color: var(--fsn-primary);
+      text-decoration: none;
+    }
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    /* --- Animations --- */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .animate-in {
+      animation: fadeUp 0.6s ease both;
+    }
+    .delay-1 { animation-delay: 0.1s; }
+    .delay-2 { animation-delay: 0.2s; }
+    .delay-3 { animation-delay: 0.3s; }
+    .delay-4 { animation-delay: 0.4s; }
+  </style>
+</head>
+
+<body>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="fsn-container hero-content">
+      <img src="/branding/logo.svg" alt="FreeSynergy.Net" class="hero-logo animate-in">
+
+      <h1 class="animate-in delay-1">Dezentral.<br>Selbstbestimmt.<br><em>Gemeinsam.</em></h1>
+
+      <p class="hero-subtitle animate-in delay-2">
+        Deine Daten gehören dir. Deine Infrastruktur gehört dir.
+        FreeSynergy.Net ist eine freie Plattform für digitale Zusammenarbeit –
+        selbstgehostet, quelloffen, ohne Kompromisse.
+      </p>
+
+      <div class="hero-actions animate-in delay-3">
+        <a href="https://kanidm.freesynergy.net" class="fsn-btn fsn-btn-primary">Konto erstellen</a>
+        <a href="https://forgejo.freesynergy.net/fsn/fsn-platform" class="fsn-btn fsn-btn-outline">Quellcode ansehen</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Principles -->
+  <section class="principles">
+    <div class="fsn-container">
+      <h2 class="section-title">Warum FreeSynergy?</h2>
+      <p class="section-subtitle">Drei Prinzipien, die alles bestimmen.</p>
+
+      <div class="principles-grid">
+        <div class="fsn-card animate-in delay-1">
+          <div class="principle-icon">🔒</div>
+          <div class="principle-title">Dezentral</div>
+          <p class="principle-text">
+            Jeder betreibt seine eigene Instanz. Keine zentrale Autorität.
+            Keine Abhängigkeit. Kooperation ist immer freiwillig.
+          </p>
+        </div>
+
+        <div class="fsn-card animate-in delay-2">
+          <div class="principle-icon">🌱</div>
+          <div class="principle-title">Selbstbestimmt</div>
+          <p class="principle-text">
+            Du entscheidest, was du teilst. Du entscheidest, mit wem.
+            Deine Daten verlassen nie deinen Server – es sei denn, du willst es.
+          </p>
+        </div>
+
+        <div class="fsn-card animate-in delay-3">
+          <div class="principle-icon">🤝</div>
+          <div class="principle-title">Gemeinsam</div>
+          <p class="principle-text">
+            Zusammenarbeit auf Augenhöhe. Föderiert, transparent,
+            jederzeit widerrufbar. Vertrauen wird nicht vorausgesetzt – es wird verdient.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Services -->
+  <section class="services">
+    <div class="fsn-container">
+      <h2 class="section-title">Unsere Dienste</h2>
+      <p class="section-subtitle">Alles was du für digitale Zusammenarbeit brauchst – an einem Ort.</p>
+
+      <div class="services-grid">
+        <a href="https://forgejo.freesynergy.net" class="fsn-card service-card">
+          <div class="service-name">Forgejo</div>
+          <p class="service-desc">Code & Versionierung</p>
+          <span class="fsn-badge">git</span>
+        </a>
+
+        <a href="https://outline.freesynergy.net" class="fsn-card service-card">
+          <div class="service-name">Outline</div>
+          <p class="service-desc">Wiki & Dokumentation</p>
+          <span class="fsn-badge">wiki</span>
+        </a>
+
+        <a href="https://cryptpad.freesynergy.net" class="fsn-card service-card">
+          <div class="service-name">CryptPad</div>
+          <p class="service-desc">Verschlüsselte Zusammenarbeit</p>
+          <span class="fsn-badge">collab</span>
+        </a>
+
+        <a href="https://stalwart.freesynergy.net" class="fsn-card service-card">
+          <div class="service-name">Stalwart</div>
+          <p class="service-desc">E-Mail, Kalender, Kontakte</p>
+          <span class="fsn-badge">mail</span>
+        </a>
+
+        <a href="https://tuwunel.freesynergy.net" class="fsn-card service-card">
+          <div class="service-name">Matrix</div>
+          <p class="service-desc">Sicherer Chat & Anrufe</p>
+          <span class="fsn-badge">chat</span>
+        </a>
+
+        <a href="https://vikunja.freesynergy.net" class="fsn-card service-card">
+          <div class="service-name">Vikunja</div>
+          <p class="service-desc">Aufgaben & Projekte</p>
+          <span class="fsn-badge">tasks</span>
+        </a>
+
+        <a href="https://pretix.freesynergy.net" class="fsn-card service-card">
+          <div class="service-name">pretix</div>
+          <p class="service-desc">Tickets & Events</p>
+          <span class="fsn-badge">tickets</span>
+        </a>
+
+        <a href="https://umap.freesynergy.net" class="fsn-card service-card">
+          <div class="service-name">uMap</div>
+          <p class="service-desc">Karten & Geodaten</p>
+          <span class="fsn-badge">maps</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="fsn-container">
+      <p>
+        FreeSynergy.Net · Betrieben mit
+        <a href="https://forgejo.freesynergy.net/fsn/fsn-platform">FSN Platform</a>
+        · <a href="https://kanidm.freesynergy.net">Login</a>
+      </p>
+      <p style="margin-top: var(--fsn-space-sm); opacity: 0.6;">
+        Quelloffen. Dezentral. Für alle.
+      </p>
+    </div>
+  </footer>
+
+</body>
+</html>

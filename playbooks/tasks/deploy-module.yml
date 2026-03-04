@@ -1,0 +1,79 @@
+---
+# Task: Deploy a single module instance
+# Variables: module_entry (dict with key=instance_name, value=module config)
+
+- name: "Set module variables for {{ module_entry.key }}"
+  ansible.builtin.set_fact:
+    instance_name: "{{ module_entry.key }}"
+    module_class: "{{ module_entry.value.module_class }}"
+    module_path: "{{ fsn_root }}/modules/{{ module_entry.value.module_class }}"
+    service_domain: "{{ module_entry.key }}.{{ project_domain }}"
+
+- name: "Read module class file"
+  ansible.builtin.include_vars:
+    file: "{{ module_path }}/{{ module_class | basename }}.yml"
+    name: module_cfg
+
+- name: "Extract module sections into separate variables"
+  ansible.builtin.set_fact:
+    module: "{{ module_cfg.module }}"
+    container: "{{ module_cfg.container }}"
+    module_environment: "{{ module_cfg.environment | default({}) }}"
+    healthcheck: "{{ module_cfg.container.healthcheck | default(omit) }}"
+    module_vars: "{{ module_cfg.vars | default({}) }}"
+
+- name: "Check if module is external"
+  when: module_entry.value.external | default(false)
+  block:
+    - name: "Skip deployment for external module {{ module_entry.key }}"
+      ansible.builtin.debug:
+        msg: "Module {{ instance_name }} is external – skipping container deployment"
+
+- name: "Deploy module {{ instance_name }}"
+  when: not (module_entry.value.external | default(false))
+  block:
+    - name: "Ensure data directory exists"
+      ansible.builtin.file:
+        path: "{{ project_root }}/data/{{ instance_name }}"
+        state: directory
+        mode: "0755"
+
+    - name: "Ensure config directory exists"
+      ansible.builtin.file:
+        path: "{{ project_root }}/configs/{{ instance_name }}"
+        state: directory
+        mode: "0755"
+
+    - name: "Deploy sub-modules"
+      when: module_cfg.load.modules | default({}) | length > 0
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/deploy-module.yml"
+      loop: "{{ module_cfg.load.modules | dict2items }}"
+      loop_control:
+        loop_var: sub_module_entry
+        label: "{{ sub_module_entry.key }}"
+      vars:
+        parent_instance_name: "{{ instance_name }}"
+        module_entry: "{{ sub_module_entry }}"
+
+    - name: "Generate Quadlet"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/generate-quadlet.yml"
+
+    - name: "Reload systemd user daemon"
+      ansible.builtin.systemd:
+        daemon_reload: true
+        scope: user
+
+    - name: "Start service {{ instance_name }}"
+      ansible.builtin.systemd:
+        name: "{{ instance_name }}.service"
+        state: started
+        enabled: true
+        scope: user
+
+    - name: "Run deploy hooks"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/run-module-hooks.yml"
+      vars:
+        hook_phase: "deploy"
+
+    - name: "Record deployed version"
+      ansible.builtin.include_tasks: "{{ playbook_dir }}/tasks/record-deployed-version.yml"
