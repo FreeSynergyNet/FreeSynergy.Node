@@ -9,11 +9,11 @@
 #   4. Run the platform setup and deployment playbooks
 #
 # Usage (quick – uses official FSN repo):
-#   bash <(curl -fsSL https://raw.githubusercontent.com/Lord-KalEl/FreeSynergy.Node/main/fsn-install.sh)
+#   bash <(curl -fsSL https://raw.githubusercontent.com/FreeSynergyNet/FreeSynergy.Node/main/fsn-install.sh)
 #
 # Usage (verified – recommended for production):
-#   curl -fsSL https://raw.githubusercontent.com/Lord-KalEl/FreeSynergy.Node/main/fsn-install.sh        -o fsn-install.sh
-#   curl -fsSL https://raw.githubusercontent.com/Lord-KalEl/FreeSynergy.Node/main/fsn-install.sh.sha256 -o fsn-install.sh.sha256
+#   curl -fsSL https://raw.githubusercontent.com/FreeSynergyNet/FreeSynergy.Node/main/fsn-install.sh        -o fsn-install.sh
+#   curl -fsSL https://raw.githubusercontent.com/FreeSynergyNet/FreeSynergy.Node/main/fsn-install.sh.sha256 -o fsn-install.sh.sha256
 #   sha256sum -c fsn-install.sh.sha256 && bash fsn-install.sh
 #
 # Usage (with an existing project config):
@@ -42,7 +42,7 @@
 set -euo pipefail
 
 # --- Canonical repository (update when forking) ---
-FSN_DEFAULT_REPO="https://github.com/Lord-KalEl/FreeSynergy.Node"
+FSN_DEFAULT_REPO="https://github.com/FreeSynergyNet/FreeSynergy.Node"
 
 # --- Colors ---
 RED='\033[0;31m'
