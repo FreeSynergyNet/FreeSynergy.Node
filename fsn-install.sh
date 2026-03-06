@@ -598,6 +598,186 @@ collect_secrets() {
     log "Secrets written to: ${secrets_file}"
 }
 
+# ── Editor Review ─────────────────────────────────────────────────────────────
+
+# Detect the best available text editor.
+# Checks $EDITOR first, then searches for vi/vim, nano, emacs, micro in order.
+# Deduplicates by resolved path (vi and vim often point to the same binary).
+# Sets: SELECTED_EDITOR (command name), or empty string if no editor is found.
+detect_editor() {
+    SELECTED_EDITOR=""
+    if [ -n "${EDITOR:-}" ] && command -v "${EDITOR}" &>/dev/null; then
+        SELECTED_EDITOR="${EDITOR}"
+        return
+    fi
+
+    local candidates=(vi vim nano emacs micro)
+    local found=() found_paths=()
+    for _ed in "${candidates[@]}"; do
+        command -v "${_ed}" &>/dev/null || continue
+        local _ed_path
+        _ed_path=$(command -v "${_ed}")
+        local _dup=0
+        if [ ${#found_paths[@]} -gt 0 ]; then
+            for _p in "${found_paths[@]}"; do
+                [ "${_p}" = "${_ed_path}" ] && _dup=1 && break
+            done
+        fi
+        if [ "${_dup}" -eq 0 ]; then
+            found+=("${_ed}")
+            found_paths+=("${_ed_path}")
+        fi
+    done
+
+    if [ ${#found[@]} -eq 0 ]; then
+        warn "No editor found. Config files will not be opened for review."
+        [ -n "${FSN_PROJECT:-}" ] && warn "Edit manually before deploying: ${FSN_PROJECT}"
+        return
+    fi
+
+    if [ ${#found[@]} -eq 1 ]; then
+        SELECTED_EDITOR="${found[0]}"
+        return
+    fi
+
+    echo ""
+    info "Available editors:"
+    local _i=1
+    for _ed in "${found[@]}"; do
+        [ "${_i}" -eq 1 ] \
+            && printf "  ${CYAN}%d)${NC} %s  [default]\n" "${_i}" "${_ed}" \
+            || printf "  ${CYAN}%d)${NC} %s\n" "${_i}" "${_ed}"
+        _i=$((_i + 1))
+    done
+    ask "Choose editor [default: ${found[0]}]:"
+    read -r _ed_choice
+    if [[ "${_ed_choice}" =~ ^[0-9]+$ ]] \
+       && [ "${_ed_choice}" -ge 1 ] \
+       && [ "${_ed_choice}" -le "${#found[@]}" ]; then
+        SELECTED_EDITOR="${found[$((_ed_choice - 1))]}"
+    else
+        SELECTED_EDITOR="${found[0]}"
+    fi
+}
+
+# Open a file in SELECTED_EDITOR.
+# For vi/vim/nvim, positions the cursor at the given search pattern if provided.
+# $1 = file path
+# $2 = search pattern (optional; vi/vim only)
+_open_in_editor() {
+    local _file="$1"
+    local _search="${2:-}"
+    [ -z "${SELECTED_EDITOR}" ] && return
+    if [ ! -f "${_file}" ]; then
+        warn "File not found, cannot open: ${_file}"
+        return
+    fi
+    if [ -n "${_search}" ]; then
+        case "$(basename "${SELECTED_EDITOR}")" in
+            vi|vim|nvim) "${SELECTED_EDITOR}" "+/${_search}" "${_file}"; return ;;
+        esac
+    fi
+    "${SELECTED_EDITOR}" "${_file}"
+}
+
+# Global: 1 = open all remaining module configs without asking.
+_EDIT_MODULES_ALL=0
+
+# Prompt Y/A/N for a module config section, then open project.yml if yes.
+# When _EDIT_MODULES_ALL=1, opens directly without asking.
+# $1 = instance name (e.g. "stalwart")
+# $2 = module class (e.g. "mail/stalwart")
+_offer_module_edit() {
+    local _inst="$1"
+    local _class="$2"
+    local _search="^    ${_inst}:"
+
+    if [ "${_EDIT_MODULES_ALL}" -eq 1 ]; then
+        _open_in_editor "${FSN_PROJECT}" "${_search}"
+        return
+    fi
+
+    printf "\n  ${CYAN}▸${NC} Edit module config: %s (%s)? [Y=yes / A=yes to all / N=no, default N]: " \
+        "${_inst}" "${_class}"
+    read -r _mod_ans
+    case "${_mod_ans,,}" in
+        y|yes) _open_in_editor "${FSN_PROJECT}" "${_search}" ;;
+        a|all) _EDIT_MODULES_ALL=1; _open_in_editor "${FSN_PROJECT}" "${_search}" ;;
+        *)     log "Keeping defaults for module: ${_inst}" ;;
+    esac
+}
+
+# Extract sub-module class paths declared under 'services:' in a module class YAML.
+# Prints one module_class value per line. Best-effort line-by-line parse.
+# $1 = path to module class YAML
+_get_submodules() {
+    local _mod_yaml="$1"
+    [ -f "${_mod_yaml}" ] || return
+    local _in_services=0
+    while IFS= read -r _line; do
+        [[ "${_line}" =~ services: ]] && _in_services=1 && continue
+        [ "${_in_services}" -eq 0 ] && continue
+        [[ "${_line}" =~ module_class: ]] || continue
+        local _mc="${_line#*module_class:}"
+        _mc="${_mc//\"/}"; _mc="${_mc//\'/}"; _mc="${_mc// /}"
+        [ -n "${_mc}" ] && echo "${_mc}"
+    done < "${_mod_yaml}"
+}
+
+# Offer to review generated config files in the editor before deployment starts.
+# Called after Phase 3 (file generation), before Phase 4 (secrets + deploy).
+review_configs() {
+    detect_editor
+    [ -z "${SELECTED_EDITOR}" ] && return
+    [ -z "${FSN_PROJECT}" ]     && return
+
+    step "Config Review"
+    info "Review and edit the generated config files before deployment starts."
+    info "Close the editor when done – installation continues automatically."
+    echo ""
+
+    # 1. Project file
+    ask "Open project.yml for review? [Y/n, default Y]:"
+    read -r _pans
+    [[ "${_pans,,}" != "n" ]] && _open_in_editor "${FSN_PROJECT}" ""
+
+    # 2. Host file
+    local _hostname
+    _hostname=$(hostname -s 2>/dev/null || echo "server1")
+    local _host_file="${FSN_ROOT}/hosts/${_hostname}.host.yml"
+    if [ -f "${_host_file}" ]; then
+        ask "Open host.yml for review? [Y/n, default Y]:"
+        read -r _hans
+        [[ "${_hans,,}" != "n" ]] && _open_in_editor "${_host_file}" ""
+    fi
+
+    # 3. Per-module section review (opens project.yml positioned at each module)
+    if [ ${#SELECTED_MODULES[@]} -gt 0 ]; then
+        echo ""
+        info "Module configurations (each module's section lives in project.yml):"
+        info "For vi/vim, the cursor jumps directly to the module's section."
+        echo ""
+        _EDIT_MODULES_ALL=0
+        for _mod_class in "${SELECTED_MODULES[@]}"; do
+            local _inst="${_mod_class##*/}"
+            _offer_module_edit "${_inst}" "${_mod_class}"
+
+            # Sub-module detection: read module class YAML, report + offer to review
+            local _mod_yaml="${FSN_ROOT}/modules/${_mod_class}/${_inst}.yml"
+            if [ -f "${_mod_yaml}" ]; then
+                while IFS= read -r _sub_class; do
+                    local _sub_name="${_sub_class##*/}"
+                    info "  ↳ sub-module: ${_sub_name} (${_sub_class}) – loaded automatically"
+                    _offer_module_edit "${_sub_name}" "${_sub_class}"
+                done < <(_get_submodules "${_mod_yaml}")
+            fi
+        done
+    fi
+
+    echo ""
+    log "Config review complete. Proceeding to secrets and deployment..."
+}
+
 # ── Playbooks ──────────────────────────────────────────────────────────────────
 
 run_playbooks() {
@@ -719,6 +899,9 @@ main() {
         generate_project_yml
         generate_host_yml
     fi
+
+    # ── Phase 3.5: Config review (editor) ───────────────────────────────────
+    review_configs
 
     # ── Phase 4: Secrets and deployment ─────────────────────────────────────
     collect_secrets
