@@ -39,7 +39,7 @@ vars:
   #       extra_scopes: "groups"
   #       prefer_short_username: true
   domain: "{{ service_domain }}"
-  origin: "https://{{ vars.domain }}"
+  origin: "https://{{ module_vars.domain }}"
 
 load:
   modules: {}

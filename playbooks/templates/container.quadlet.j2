@@ -11,6 +11,7 @@ Requires={{ dep }}.service
 [Container]
 ContainerName={{ container.name }}
 Image={{ container.image }}:{{ container.image_tag }}
+Network={{ project_name | lower }}.network
 {% for network in container.networks %}
 Network={{ network }}
 {% endfor %}

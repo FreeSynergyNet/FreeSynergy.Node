@@ -52,6 +52,30 @@
         host_ip: "127.0.0.1"
         host_ipv6: ""
 
+    - name: "Check if vault file exists"
+      ansible.builtin.stat:
+        path: "{{ project_root }}/vault.yml"
+      register: vault_file
+
+    - name: "Load vault variables"
+      ansible.builtin.include_vars:
+        file: "{{ project_root }}/vault.yml"
+      no_log: true
+      when: vault_file.stat.exists
+
+    - name: "Ensure project network Quadlet exists"
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/templates/project.network.j2"
+        dest: "{{ ansible_user_dir }}/.config/containers/systemd/{{ project_name | lower }}.network"
+        mode: "0644"
+      register: network_quadlet
+
+    - name: "Reload systemd (project network)"
+      when: network_quadlet.changed
+      ansible.builtin.systemd:
+        daemon_reload: true
+        scope: user
+
     - name: "Check for duplicate service names"
       ansible.builtin.assert:
         that:
