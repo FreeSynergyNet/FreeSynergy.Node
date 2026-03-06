@@ -6,6 +6,22 @@ was sich geändert hat.
 
 ---
 
+## 2026-03-06 – Claude Code – Installer: CoreOS-Fix + Wizard-Reihenfolge + UX
+
+**Was fehlte / falsch war:**
+- Fedora CoreOS hat `ID=fedora` in `/etc/os-release` → wurde als `dnf` erkannt → `install_pkg` schlug auf CoreOS fehl (kein dnf)
+- Repo wurde **vor** dem Wizard geklont → Benutzer musste warten, bevor er Fragen beantworten konnte
+- Modulauswahl las aus `${FSN_ROOT}/modules/` → benötigte geklontes Repo (Henne-Ei-Problem)
+- DNS-Token: kein Feedback nach stiller Eingabe → Benutzer wusste nicht ob Token gespeichert wurde
+- `[?]` Präfix und "Enter to skip" für Pflichtfeld verwirrend
+- Kein Install-Verzeichnis im Wizard gefragt
+- Sub-Module (postgres, dragonfly) in Modulauswahl sichtbar
+
+**Geänderte Dateien:**
+- `fsn-install.sh` – CoreOS-Erkennung via `rpm-ostree` vor OS-Detection; `install_pkg` mit `rpm-ostree`-Case; hardcodierte `FSN_MODULES_BUILTIN`-Liste (kein Repo nötig); Wizard läuft in Phase 1 (vor Downloads); `▸` statt `[?]`; DNS-Token-Bestätigung nach stiller Eingabe; Install-Verzeichnis im Wizard; Sub-Module ausgeblendet; `show_setup_summary` zeigt Token-Status
+
+---
+
 ## 2026-03-06 – Claude Code – Installer: ACME-Email + DNS-Token in Vault
 
 **Was fehlte:**

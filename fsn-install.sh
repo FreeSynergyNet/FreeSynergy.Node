@@ -3,10 +3,11 @@
 #
 # This script can be downloaded standalone and run on any fresh server.
 # It will:
-#   1. Check and install required tools (git, python3, ansible)
-#   2. Clone the FreeSynergy.Node repo (default: official FSN repo)
-#   3. Interactive setup wizard OR import an existing config file
-#   4. Run the platform setup and deployment playbooks
+#   1. Ask all setup questions FIRST (no downloads during the wizard)
+#   2. Check and install required tools (git, python3, ansible)
+#   3. Clone the FreeSynergy.Node repo to the chosen directory
+#   4. Generate project and host config files
+#   5. Run the platform setup and deployment playbooks
 #
 # Usage (quick – uses official FSN repo):
 #   bash <(curl -fsSL https://raw.githubusercontent.com/FreeSynergyNet/FreeSynergy.Node/main/fsn-install.sh)
@@ -28,7 +29,7 @@
 #
 # Available flags:
 #   --repo URL        GitHub URL of the FreeSynergy.Node repository (default: official FSN repo)
-#   --target DIR      Local directory to clone into (default: ~/FreeSynergy.Node)
+#   --target DIR      Local directory to clone into (default: asked during setup)
 #   --project FILE    Path to an already-placed project.yml (skips wizard)
 #   --config FILE     Import an external project.yml – copies it to projects/, skips wizard
 #   --skip-setup      Skip setup-server.yml (e.g. server already prepared)
@@ -44,6 +45,24 @@ set -euo pipefail
 # --- Canonical repository (update when forking) ---
 FSN_DEFAULT_REPO="https://github.com/FreeSynergyNet/FreeSynergy.Node"
 
+# --- Built-in module list (mirrors modules/ directory in the repo) ---
+# Sub-modules (postgres, dragonfly) are excluded – they load automatically.
+# Update this list when new modules are added to the repo.
+FSN_MODULES_BUILTIN=(
+    "proxy/zentinel:Reverse proxy + automatic TLS + DNS  [required for all setups]"
+    "auth/kanidm:Identity provider (OIDC, OAuth2, WebAuthn)"
+    "mail/stalwart:Mail server (SMTP, IMAP, JMAP)"
+    "git/forgejo:Git hosting + CI/CD"
+    "wiki/outline:Team wiki and knowledge base"
+    "collab/cryptpad:End-to-end encrypted collaborative documents"
+    "chat/tuwunel:Matrix homeserver"
+    "tasks/vikunja:Project management and task tracker"
+    "tickets/pretix:Event ticketing"
+    "maps/umap:Self-hosted OpenStreetMap instance"
+    "observability/openobserver:Metrics, logs, traces"
+    "observability/otel-collector:OpenTelemetry collector"
+)
+
 # --- Colors ---
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -57,11 +76,9 @@ warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
 err()  { echo -e "${RED}[ERROR]${NC} $*" >&2; }
 info() { echo -e "${CYAN}[INFO]${NC} $*"; }
 step() { echo -e "\n${BOLD}━━ $* ${NC}"; }
-ask()  { printf "${CYAN}[?]${NC} $* "; }
+ask()  { printf "  ${CYAN}▸${NC} $* "; }
 
 # --- Print checksum info for integrity verification ---
-# When run as a file:  shows the actual SHA256 of this script.
-# When piped (bash <(curl ...)): shows instructions for verified install.
 print_checksum_info() {
     echo -e "${BOLD}━━ Script Integrity ${NC}"
     if [ -f "$0" ]; then
@@ -79,7 +96,19 @@ print_checksum_info() {
 }
 
 # --- Detect OS and package manager ---
+# IMPORTANT: Check for immutable / rpm-ostree systems FIRST.
+# Fedora CoreOS has ID=fedora in /etc/os-release but does NOT have dnf at runtime.
 detect_os() {
+    if command -v rpm-ostree &>/dev/null; then
+        OS_ID="coreos"
+        PKG_MGR="rpm-ostree"
+        warn "Detected immutable OS (Fedora CoreOS / Silverblue / rpm-ostree)."
+        warn "Packages cannot be installed without layering + reboot."
+        warn "Required tools must already be installed: python3, git, ansible"
+        warn "  To layer a package: sudo rpm-ostree install <package> && sudo systemctl reboot"
+        return
+    fi
+
     if [ ! -f /etc/os-release ]; then
         err "Cannot detect OS – /etc/os-release not found"
         exit 1
@@ -112,10 +141,16 @@ install_pkg() {
     local pkg="$1"
     log "Installing ${pkg}..."
     case "${PKG_MGR}" in
-        apt)    sudo apt-get update -qq && sudo apt-get install -y -qq "${pkg}";;
-        dnf)    sudo dnf install -y -q "${pkg}";;
-        pacman) sudo pacman -S --noconfirm "${pkg}";;
-        *)      err "Unsupported package manager: ${PKG_MGR}"; exit 1;;
+        apt)        sudo apt-get update -qq && sudo apt-get install -y -qq "${pkg}";;
+        dnf)        sudo dnf install -y -q "${pkg}";;
+        pacman)     sudo pacman -S --noconfirm "${pkg}";;
+        rpm-ostree)
+            err "Cannot auto-install '${pkg}' on an immutable OS."
+            err "Layer it manually: sudo rpm-ostree install ${pkg}"
+            err "Then reboot and re-run this installer."
+            exit 1
+            ;;
+        *)          err "Unsupported package manager: ${PKG_MGR}"; exit 1;;
     esac
 }
 
@@ -173,22 +208,17 @@ fetch_platform() {
     step "Fetching FreeSynergy.Node"
 
     if [ "${FSN_REPO}" = "${FSN_DEFAULT_REPO}" ]; then
-        info "Using official FSN repo: ${FSN_REPO}"
-        info "  (use --repo YOUR_FORK_URL to install a custom fork)"
+        info "Repo:   ${FSN_REPO}"
     else
-        info "Using custom repo: ${FSN_REPO}"
+        info "Custom repo: ${FSN_REPO}"
     fi
-
-    if [ -z "${FSN_TARGET:-}" ]; then
-        FSN_TARGET="${HOME}/FreeSynergy.Node"
-        info "Install target: ${FSN_TARGET}  (override with --target)"
-    fi
+    info "Target: ${FSN_TARGET}"
 
     if [ -d "${FSN_TARGET}/.git" ]; then
         log "Repo found at ${FSN_TARGET} – pulling latest..."
         git -C "${FSN_TARGET}" pull --ff-only
     else
-        log "Cloning ${FSN_REPO} → ${FSN_TARGET} ..."
+        log "Cloning into ${FSN_TARGET} ..."
         git clone "${FSN_REPO}" "${FSN_TARGET}"
     fi
 
@@ -197,16 +227,6 @@ fetch_platform() {
 }
 
 # ── Project Setup Wizard ───────────────────────────────────────────────────────
-
-# List all available module classes from the modules/ directory tree.
-# Output: one "type/name" per line, sorted.
-list_available_modules() {
-    local mod_dir="${FSN_ROOT}/modules"
-    [ -d "${mod_dir}" ] || return
-    find "${mod_dir}" -mindepth 2 -maxdepth 2 -type d \
-        | sed "s|${mod_dir}/||" \
-        | sort
-}
 
 # Ask user to choose a DNS provider and collect the API token.
 # Sets: DNS_PROVIDER, DNS_TOKEN
@@ -230,9 +250,17 @@ select_dns_provider() {
         cloudflare) token_label="Cloudflare API Token"  ;;
     esac
 
-    ask "${token_label} (Enter to skip):"
+    echo ""
+    info "The API token is required for automatic DNS record creation."
+    info "Input is hidden (you will not see what you type). Press Enter when done."
+    ask "${token_label}:"
     read -rs DNS_TOKEN; echo
-    [ -z "${DNS_TOKEN}" ] && warn "No token entered – DNS automation will be disabled."
+    if [ -n "${DNS_TOKEN}" ]; then
+        log "Token received and stored (hidden for security)."
+    else
+        warn "No token entered – DNS automation will be disabled."
+        warn "You can add the token later to: hosts/secrets.yml"
+    fi
 }
 
 # Ask user to choose an ACME / SSL certificate provider.
@@ -252,41 +280,50 @@ select_acme_provider() {
     log "ACME provider: ${ACME_PROVIDER}"
 }
 
-# Display all modules and let the user pick which ones to install.
+# Display the built-in module list and let the user pick which ones to install.
+# Uses FSN_MODULES_BUILTIN (hardcoded – no repo clone needed before this step).
 # Sets: SELECTED_MODULES (array)
 select_modules() {
     step "Module Selection"
 
-    local modules=()
-    while IFS= read -r m; do
-        modules+=("${m}")
-    done < <(list_available_modules)
-
-    if [ ${#modules[@]} -eq 0 ]; then
-        warn "No modules found in ${FSN_ROOT}/modules/ – skipping selection."
+    if [ ${#FSN_MODULES_BUILTIN[@]} -eq 0 ]; then
+        warn "No modules defined in FSN_MODULES_BUILTIN – skipping selection."
         return
     fi
 
-    info "Available modules (enter numbers or 'all'):"
+    info "Available modules:"
     echo ""
-    for i in "${!modules[@]}"; do
-        printf "  ${CYAN}%2d)${NC} %s\n" "$((i+1))" "${modules[$i]}"
+    local i=1
+    for entry in "${FSN_MODULES_BUILTIN[@]}"; do
+        local mod="${entry%%:*}"
+        local desc="${entry#*:}"
+        printf "  ${CYAN}%2d)${NC}  %-38s  %s\n" "${i}" "${mod}" "${desc}"
+        i=$((i + 1))
     done
     echo ""
-    info "Examples:  '1 3 5'  or  'all'"
-    ask "Select modules:"
+    info "Note: sub-modules (postgres, dragonfly) load automatically – not listed here."
+    echo ""
+    ask "Enter numbers separated by spaces, or 'all':"
     read -r _selection
 
     SELECTED_MODULES=()
+    local max_idx=${#FSN_MODULES_BUILTIN[@]}
+
     if [[ "${_selection}" == "all" ]]; then
-        SELECTED_MODULES=("${modules[@]}")
+        for entry in "${FSN_MODULES_BUILTIN[@]}"; do
+            SELECTED_MODULES+=("${entry%%:*}")
+        done
     else
         for num in ${_selection}; do
-            local idx=$((num - 1))
-            if [[ ${idx} -ge 0 && ${idx} -lt ${#modules[@]} ]]; then
-                SELECTED_MODULES+=("${modules[idx]}")
+            if [[ "${num}" =~ ^[0-9]+$ ]]; then
+                local idx=$((num - 1))
+                if [[ ${idx} -ge 0 && ${idx} -lt ${max_idx} ]]; then
+                    SELECTED_MODULES+=("${FSN_MODULES_BUILTIN[${idx}]%%:*}")
+                else
+                    warn "Ignoring invalid number: ${num}"
+                fi
             else
-                warn "Ignoring invalid number: ${num}"
+                warn "Ignoring non-numeric input: ${num}"
             fi
         done
     fi
@@ -305,6 +342,7 @@ detect_server_ip() {
 }
 
 # Write the project.yml to projects/PROJECT_NAME/PROJECT_NAME.project.yml
+# Requires: FSN_ROOT set (after fetch_platform).
 # Sets: FSN_PROJECT
 generate_project_yml() {
     local project_dir="${FSN_ROOT}/projects/${PROJECT_NAME}"
@@ -343,7 +381,8 @@ generate_project_yml() {
     log "Project file: ${project_file}"
 }
 
-# Write a host skeleton to hosts/HOSTNAME.host.yml (skips if already exists).
+# Write a host file to hosts/HOSTNAME.host.yml (skips if already exists).
+# Requires: FSN_ROOT, SERVER_IP, DNS_PROVIDER, ACME_PROVIDER set.
 generate_host_yml() {
     local hostname
     hostname=$(hostname -s 2>/dev/null || echo "server1")
@@ -379,19 +418,26 @@ generate_host_yml() {
 show_setup_summary() {
     echo ""
     echo -e "${BOLD}━━ Setup Summary ${NC}"
-    info "Project:  ${PROJECT_NAME}"
-    info "Domain:   ${PROJECT_DOMAIN}"
-    info "Email:    ${PROJECT_EMAIL:-(none)}"
-    info "Server:   ${SERVER_IP:-(not detected)}"
-    info "DNS:      ${DNS_PROVIDER}"
-    info "ACME:     ${ACME_PROVIDER}"
+    info "Install to:  ${FSN_TARGET}"
+    info "Repo:        ${FSN_REPO}"
+    info "Project:     ${PROJECT_NAME}"
+    info "Domain:      ${PROJECT_DOMAIN}"
+    info "Email:       ${PROJECT_EMAIL:-(none)}"
+    info "Server IP:   ${SERVER_IP:-(not detected)}"
+    info "DNS:         ${DNS_PROVIDER}"
+    info "ACME:        ${ACME_PROVIDER}"
+    if [ -n "${DNS_TOKEN:-}" ]; then
+        info "DNS Token:   (entered, hidden)"
+    else
+        info "DNS Token:   (not entered)"
+    fi
     if [ ${#SELECTED_MODULES[@]} -gt 0 ]; then
         info "Modules (${#SELECTED_MODULES[@]}):"
         for m in "${SELECTED_MODULES[@]}"; do
             info "  · ${m}"
         done
     else
-        info "Modules:  (none selected)"
+        info "Modules:     (none selected)"
     fi
     echo ""
     ask "Proceed with these settings? [Y/n]:"
@@ -400,25 +446,39 @@ show_setup_summary() {
 }
 
 # Full interactive setup wizard.
-# Called when neither --project nor --config is given.
+# Collects all configuration BEFORE any downloads or file writes.
+# Variables set: FSN_TARGET, PROJECT_NAME, PROJECT_DOMAIN, PROJECT_EMAIL,
+#                SERVER_IP, DNS_PROVIDER, DNS_TOKEN, ACME_PROVIDER, SELECTED_MODULES
 setup_project_interactive() {
     step "Project Setup Wizard"
     info "Answer a few questions to configure your deployment."
+    info "Nothing will be downloaded or written until you confirm at the end."
     info "Press Ctrl+C at any time to abort."
     echo ""
 
+    # Install directory
+    local default_target="${HOME}/FreeSynergy.Node"
+    ask "Install directory [${default_target}]:"
+    read -r _target_input
+    FSN_TARGET="${_target_input:-${default_target}}"
+
+    # Repository source (show, don't ask – can be overridden with --repo flag)
+    if [ "${FSN_REPO}" = "${FSN_DEFAULT_REPO}" ]; then
+        info "Using official FSN repo. Override with: --repo YOUR_FORK_URL"
+    fi
+
     # Project name
-    ask "Project name (e.g. MyProject):"
+    ask "Project name (e.g. myproject):"
     read -r PROJECT_NAME
     [ -z "${PROJECT_NAME}" ] && { err "Project name is required."; exit 1; }
 
     # Domain
-    ask "Domain (e.g. example.com):"
+    ask "Domain name (e.g. example.com):"
     read -r PROJECT_DOMAIN
     [ -z "${PROJECT_DOMAIN}" ] && { err "Domain is required."; exit 1; }
 
-    # Contact email (for Let's Encrypt cert notifications)
-    ask "Contact email (for SSL certificate notifications):"
+    # Contact email (for Let's Encrypt cert expiry notifications)
+    ask "Contact email for SSL notifications (recommended, press Enter to skip):"
     read -r PROJECT_EMAIL
     [ -z "${PROJECT_EMAIL}" ] && warn "No email entered – Let's Encrypt notifications disabled."
 
@@ -439,8 +499,8 @@ setup_project_interactive() {
     select_acme_provider
     select_modules
     show_setup_summary
-    generate_project_yml
-    generate_host_yml
+    # Note: generate_project_yml and generate_host_yml are called AFTER
+    # fetch_platform in main(), because they need FSN_ROOT to be set.
 }
 
 # Import an external project.yml via --config FILE.
@@ -492,10 +552,10 @@ collect_secrets() {
         log "Secrets file already exists: ${secrets_file}"
         ask "Re-enter secrets? [y/N]"
         read -r _reenter
-        [[ "${_reenter,,}" != "y" ]] && return
+        [[ "${_reenter,,}" != "y" ]] && { log "Keeping existing secrets."; return; }
     fi
 
-    info "Secrets are stored in: ${secrets_file}"
+    info "Secrets will be stored in: ${secrets_file}"
     info "  – git-ignored, chmod 600, never shown in shell history"
     echo ""
 
@@ -507,28 +567,35 @@ collect_secrets() {
         echo "# Do NOT commit this file. It is git-ignored."
     } > "${tmp_secrets}"
 
-    # DNS token: use from wizard if already collected, otherwise ask
+    # DNS token: reuse from wizard if already collected, otherwise ask
     if [ -n "${DNS_TOKEN:-}" ]; then
         case "${DNS_PROVIDER:-hetzner}" in
             hetzner)    echo "vault_hetzner_dns_token: \"${DNS_TOKEN}\"" >> "${tmp_secrets}" ;;
             cloudflare) echo "vault_cloudflare_api_token: \"${DNS_TOKEN}\"" >> "${tmp_secrets}" ;;
         esac
-        log "DNS token saved (${DNS_PROVIDER:-hetzner})."
+        log "DNS token saved from wizard (${DNS_PROVIDER:-hetzner})."
     else
-        ask "Hetzner DNS API Token (Enter to skip):"
+        info "Input is hidden (you will not see what you type). Press Enter when done."
+        ask "Hetzner DNS API Token (press Enter to skip):"
         read -rs _hz_token; echo
-        [ -n "${_hz_token}" ] && \
+        if [ -n "${_hz_token}" ]; then
             echo "vault_hetzner_dns_token: \"${_hz_token}\"" >> "${tmp_secrets}"
+            log "Hetzner token saved."
+        else
+            warn "No Hetzner token entered."
+        fi
 
-        ask "Cloudflare API Token (Enter to skip):"
+        ask "Cloudflare API Token (press Enter to skip):"
         read -rs _cf_token; echo
-        [ -n "${_cf_token}" ] && \
+        if [ -n "${_cf_token}" ]; then
             echo "vault_cloudflare_api_token: \"${_cf_token}\"" >> "${tmp_secrets}"
+            log "Cloudflare token saved."
+        fi
     fi
 
     mv "${tmp_secrets}" "${secrets_file}"
     chmod 600 "${secrets_file}"
-    log "Secrets written to ${secrets_file}"
+    log "Secrets written to: ${secrets_file}"
 }
 
 # ── Playbooks ──────────────────────────────────────────────────────────────────
@@ -625,22 +692,35 @@ main() {
     done
 
     detect_os
+
+    # ── Phase 1: Collect all information (no downloads, no file writes) ──────
+    if [ -z "${FSN_CONFIG}" ] && [ -z "${FSN_PROJECT}" ]; then
+        setup_project_interactive
+        # FSN_TARGET is now set by the wizard (or was already set via --target)
+    fi
+
+    # Ensure FSN_TARGET is set even when --project or --config was given
+    if [ -z "${FSN_TARGET}" ]; then
+        FSN_TARGET="${HOME}/FreeSynergy.Node"
+        info "Install target: ${FSN_TARGET}  (override with --target)"
+    fi
+
+    # ── Phase 2: Install dependencies and fetch platform ────────────────────
     check_python
     check_git
     check_ansible
-    fetch_platform
+    fetch_platform      # clones or updates repo to FSN_TARGET, sets FSN_ROOT
     install_collections
 
-    # Project configuration – three modes:
-    #   1. --config FILE  → import external project.yml, skip wizard
-    #   2. --project FILE → use an already-placed project.yml, skip wizard
-    #   3. (neither)      → run interactive setup wizard
+    # ── Phase 3: Generate config files (requires FSN_ROOT) ──────────────────
     if [ -n "${FSN_CONFIG}" ]; then
         import_config "${FSN_CONFIG}"
     elif [ -z "${FSN_PROJECT}" ]; then
-        setup_project_interactive
+        generate_project_yml
+        generate_host_yml
     fi
 
+    # ── Phase 4: Secrets and deployment ─────────────────────────────────────
     collect_secrets
     run_playbooks
 
