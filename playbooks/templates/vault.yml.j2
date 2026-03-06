@@ -16,9 +16,9 @@ vault_db_password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits 
 vault_cache_password: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=32') }}"
 
 # ── DNS / ACME ────────────────────────────────────────────────────────────────
-# Fill in after DNS provider is configured.
-vault_hetzner_dns_token: "CHANGE_ME"
-vault_cloudflare_api_token: "CHANGE_ME"
+# Filled in by installer if token was provided, otherwise set manually.
+vault_hetzner_dns_token: "{{ vault_hetzner_dns_token | default('CHANGE_ME') }}"
+vault_cloudflare_api_token: "{{ vault_cloudflare_api_token | default('CHANGE_ME') }}"
 
 # ── Forgejo ───────────────────────────────────────────────────────────────────
 vault_forgejo_secret_key: "{{ lookup('password', '/dev/null chars=ascii_letters,digits length=64') }}"

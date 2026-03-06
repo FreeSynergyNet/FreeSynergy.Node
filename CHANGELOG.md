@@ -6,6 +6,18 @@ was sich geändert hat.
 
 ---
 
+## 2026-03-06 – Claude Code – Installer: ACME-Email + DNS-Token in Vault
+
+**Was fehlte:**
+- Installer hat nie nach der ACME-E-Mail gefragt → Let's Encrypt ohne Benachrichtigungsadresse
+- `vault_hetzner_dns_token` wurde in vault.yml.j2 als `"CHANGE_ME"` gerendert, obwohl der Token aus dem Installer-Wizard bekannt war → manuelle Deployments ohne `-e @secrets.yml` hätten keinen DNS-Token
+
+**Geänderte Dateien:**
+- `fsn-install.sh` – E-Mail-Frage nach Domain-Eingabe; E-Mail in Summary; in `generate_project_yml()` als `project.contact.acme_email` geschrieben; `PROJECT_EMAIL` Default in `main()`
+- `playbooks/templates/vault.yml.j2` – DNS-Tokens nutzen `{{ vault_hetzner_dns_token | default('CHANGE_ME') }}` → echter Token wird bei erstem Install-Lauf direkt eingebaut
+
+---
+
 ## 2026-03-06 – Claude Code – DNS-Vars-Fix in Stack-Playbooks
 
 **Was fehlte:**

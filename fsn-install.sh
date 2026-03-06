@@ -319,6 +319,10 @@ generate_project_yml() {
         echo "project:"
         echo "  name: \"${PROJECT_NAME}\""
         echo "  domain: \"${PROJECT_DOMAIN}\""
+        if [ -n "${PROJECT_EMAIL:-}" ]; then
+            echo "  contact:"
+            echo "    acme_email: \"${PROJECT_EMAIL}\""
+        fi
         echo ""
         echo "load:"
         echo "  modules:"
@@ -377,6 +381,7 @@ show_setup_summary() {
     echo -e "${BOLD}━━ Setup Summary ${NC}"
     info "Project:  ${PROJECT_NAME}"
     info "Domain:   ${PROJECT_DOMAIN}"
+    info "Email:    ${PROJECT_EMAIL:-(none)}"
     info "Server:   ${SERVER_IP:-(not detected)}"
     info "DNS:      ${DNS_PROVIDER}"
     info "ACME:     ${ACME_PROVIDER}"
@@ -411,6 +416,11 @@ setup_project_interactive() {
     ask "Domain (e.g. example.com):"
     read -r PROJECT_DOMAIN
     [ -z "${PROJECT_DOMAIN}" ] && { err "Domain is required."; exit 1; }
+
+    # Contact email (for Let's Encrypt cert notifications)
+    ask "Contact email (for SSL certificate notifications):"
+    read -r PROJECT_EMAIL
+    [ -z "${PROJECT_EMAIL}" ] && warn "No email entered – Let's Encrypt notifications disabled."
 
     # Server IP
     local detected_ip
@@ -584,6 +594,7 @@ main() {
     # Wizard state (set by setup_project_interactive or kept empty)
     PROJECT_NAME=""
     PROJECT_DOMAIN=""
+    PROJECT_EMAIL=""
     SERVER_IP=""
     DNS_PROVIDER="hetzner"
     DNS_TOKEN=""
