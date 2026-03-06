@@ -1,0 +1,606 @@
+# FreeSynergy.Node – German Translation
+# Copyright (C) 2026 FreeSynergy.Net
+# This file is distributed under the MIT License.
+#
+# Translators:
+#   Claude (initial machine translation, reviewed 2026-03-07)
+#
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Project-Id-Version: FreeSynergy.Node\n"
+
+# --- Script Integrity ---
+msgid "Script Integrity"
+msgstr "Skript-Integrität"
+
+msgid "Quick install (unverified). For production, verify first:"
+msgstr "Schnellinstallation (nicht verifiziert). Für Produktion bitte zuerst verifizieren:"
+
+# --- OS Detection ---
+msgid "Detected immutable OS (Fedora CoreOS / Silverblue / rpm-ostree)."
+msgstr "Unveränderliches Betriebssystem erkannt (Fedora CoreOS / Silverblue / rpm-ostree)."
+
+msgid "Packages cannot be installed without layering + reboot."
+msgstr "Pakete können nicht ohne Layering + Neustart installiert werden."
+
+msgid "Required tools must already be installed: python3, git, ansible"
+msgstr "Benötigte Werkzeuge müssen bereits installiert sein: python3, git, ansible"
+
+msgid "Cannot detect OS – /etc/os-release not found"
+msgstr "Betriebssystem nicht erkennbar – /etc/os-release nicht gefunden"
+
+msgid "Unknown OS: %s – defaulting to apt"
+msgstr "Unbekanntes Betriebssystem: %s – verwende apt als Standard"
+
+msgid "OS: %s (package manager: %s)"
+msgstr "Betriebssystem: %s (Paketmanager: %s)"
+
+# --- Package installation ---
+msgid "Installing %s..."
+msgstr "Installiere %s..."
+
+msgid "Cannot auto-install '%s' on an immutable OS."
+msgstr "Kann '%s' auf einem unveränderlichen Betriebssystem nicht automatisch installieren."
+
+msgid "Then reboot and re-run this installer."
+msgstr "Dann neu starten und diesen Installer erneut ausführen."
+
+msgid "Unsupported package manager: %s"
+msgstr "Nicht unterstützter Paketmanager: %s"
+
+# --- Dependency checks ---
+msgid "Checking Python 3"
+msgstr "Python 3 prüfen"
+
+msgid "Python3 found: %s"
+msgstr "Python3 gefunden: %s"
+
+msgid "Python3 not found – installing..."
+msgstr "Python3 nicht gefunden – wird installiert..."
+
+msgid "Checking Git"
+msgstr "Git prüfen"
+
+msgid "Git found: %s"
+msgstr "Git gefunden: %s"
+
+msgid "Git not found – installing..."
+msgstr "Git nicht gefunden – wird installiert..."
+
+msgid "Checking Ansible"
+msgstr "Ansible prüfen"
+
+msgid "Ansible found: %s"
+msgstr "Ansible gefunden: %s"
+
+msgid "Ansible not found – installing..."
+msgstr "Ansible nicht gefunden – wird installiert..."
+
+msgid "Installing via pip3..."
+msgstr "Installiere via pip3..."
+
+# --- Ansible Collections ---
+msgid "Installing Ansible Collections"
+msgstr "Ansible Collections installieren"
+
+msgid "Installing collections from requirements.yml..."
+msgstr "Collections aus requirements.yml installieren..."
+
+msgid "requirements.yml not found – skipping collection install"
+msgstr "requirements.yml nicht gefunden – Collection-Installation übersprungen"
+
+# --- Fetch platform ---
+msgid "Fetching FreeSynergy.Node"
+msgstr "FreeSynergy.Node herunterladen"
+
+msgid "Running from inside FSN repo – using current directory."
+msgstr "Läuft innerhalb des FSN-Repos – verwende aktuelles Verzeichnis."
+
+msgid "Pulling latest changes..."
+msgstr "Neueste Änderungen herunterladen..."
+
+msgid "git pull failed – continuing with current version."
+msgstr "git pull fehlgeschlagen – fahre mit aktueller Version fort."
+
+msgid "Platform ready at: %s"
+msgstr "Plattform bereit unter: %s"
+
+msgid "Custom repo: %s"
+msgstr "Benutzerdefiniertes Repo: %s"
+
+msgid "Repo found at %s – pulling latest..."
+msgstr "Repo gefunden unter %s – lade neueste Version..."
+
+msgid "Cloning into %s ..."
+msgstr "Klone nach %s ..."
+
+# --- DNS Provider ---
+msgid "DNS Provider"
+msgstr "DNS-Anbieter"
+
+msgid "Which DNS provider manages your domain?"
+msgstr "Welcher DNS-Anbieter verwaltet Ihre Domain?"
+
+msgid "  0) Skip  (manage DNS records manually)"
+msgstr "  0) Überspringen  (DNS-Einträge manuell verwalten)"
+
+msgid "  1) Hetzner DNS  [default]"
+msgstr "  1) Hetzner DNS  [Standard]"
+
+msgid "  2) Cloudflare"
+msgstr "  2) Cloudflare"
+
+msgid "Choose [0/1/2, default: 1]:"
+msgstr "Wählen [0/1/2, Standard: 1]:"
+
+msgid "DNS provider: %s"
+msgstr "DNS-Anbieter: %s"
+
+msgid "DNS automation disabled. You will need to create DNS records manually."
+msgstr "DNS-Automatisierung deaktiviert. DNS-Einträge müssen manuell erstellt werden."
+
+msgid "The API token is required for automatic DNS record creation."
+msgstr "Das API-Token wird für die automatische DNS-Erstellung benötigt."
+
+msgid "Input is hidden (you will not see what you type). Press Enter when done."
+msgstr "Eingabe wird ausgeblendet (Sie sehen nichts beim Tippen). Enter drücken wenn fertig."
+
+msgid "Token received and stored (hidden for security)."
+msgstr "Token empfangen und gespeichert (aus Sicherheitsgründen ausgeblendet)."
+
+msgid "No token entered – DNS automation will be disabled."
+msgstr "Kein Token eingegeben – DNS-Automatisierung wird deaktiviert."
+
+msgid "You can add the token later to: hosts/secrets.yml"
+msgstr "Token kann später hinzugefügt werden in: hosts/secrets.yml"
+
+# --- ACME / SSL ---
+msgid "SSL Certificates (ACME)"
+msgstr "SSL-Zertifikate (ACME)"
+
+msgid "Which provider should issue SSL certificates?"
+msgstr "Welcher Anbieter soll SSL-Zertifikate ausstellen?"
+
+msgid "  0) Skip  (manage certificates manually)"
+msgstr "  0) Überspringen  (Zertifikate manuell verwalten)"
+
+msgid "  1) Let's Encrypt – free, public CA  [default]"
+msgstr "  1) Let's Encrypt – kostenlose, öffentliche CA  [Standard]"
+
+msgid "  2) Smallstep CA  – self-hosted CA"
+msgstr "  2) Smallstep CA  – selbstgehostete CA"
+
+msgid "ACME provider: %s"
+msgstr "ACME-Anbieter: %s"
+
+msgid "ACME disabled. You will need to provide TLS certificates manually."
+msgstr "ACME deaktiviert. TLS-Zertifikate müssen manuell bereitgestellt werden."
+
+msgid "The ACME provider sends certificate expiry warnings to this address."
+msgstr "Der ACME-Anbieter sendet Ablaufwarnungen für Zertifikate an diese Adresse."
+
+msgid "Contact email for %s (recommended, press Enter to skip):"
+msgstr "Kontakt-E-Mail für %s (empfohlen, Enter zum Überspringen):"
+
+msgid "ACME contact email: %s"
+msgstr "ACME-Kontakt-E-Mail: %s"
+
+msgid "No email entered – certificate expiry notifications disabled."
+msgstr "Keine E-Mail eingegeben – Ablaufbenachrichtigungen für Zertifikate deaktiviert."
+
+# --- Module Selection ---
+msgid "Module Selection"
+msgstr "Modulauswahl"
+
+msgid "No modules defined in FSN_MODULES_BUILTIN – skipping selection."
+msgstr "Keine Module in FSN_MODULES_BUILTIN definiert – Auswahl übersprungen."
+
+msgid "Available modules:"
+msgstr "Verfügbare Module:"
+
+msgid "Note: postgres and dragonfly also load automatically when required"
+msgstr "Hinweis: postgres und dragonfly werden auch automatisch geladen, wenn benötigt"
+
+msgid "      by other services. You can still select them for a standalone install."
+msgstr "      von anderen Diensten. Können für eigenständige Installation ausgewählt werden."
+
+msgid "Enter numbers separated by spaces, or 'all':"
+msgstr "Zahlen durch Leerzeichen getrennt eingeben, oder 'all':"
+
+msgid "Ignoring invalid number: %s"
+msgstr "Ungültige Zahl ignoriert: %s"
+
+msgid "Ignoring non-numeric input: %s"
+msgstr "Nicht-numerische Eingabe ignoriert: %s"
+
+msgid "No modules selected. You can add them manually to the project.yml later."
+msgstr "Keine Module ausgewählt. Können später manuell in project.yml hinzugefügt werden."
+
+msgid "Selected %s module(s): %s"
+msgstr "Ausgewählt: %s Modul(e): %s"
+
+# --- Module descriptions ---
+msgid "Reverse proxy + automatic TLS + DNS  [required for all setups]"
+msgstr "Reverse-Proxy + automatisches TLS + DNS  [für alle Setups erforderlich]"
+
+msgid "Identity provider (OIDC, OAuth2, WebAuthn)"
+msgstr "Identitätsanbieter (OIDC, OAuth2, WebAuthn)"
+
+msgid "Mail server (SMTP, IMAP, JMAP)"
+msgstr "Mailserver (SMTP, IMAP, JMAP)"
+
+msgid "Git hosting + CI/CD"
+msgstr "Git-Hosting + CI/CD"
+
+msgid "Team wiki and knowledge base"
+msgstr "Team-Wiki und Wissensdatenbank"
+
+msgid "End-to-end encrypted collaborative documents"
+msgstr "Ende-zu-Ende-verschlüsselte kollaborative Dokumente"
+
+msgid "Matrix homeserver"
+msgstr "Matrix-Heimserver"
+
+msgid "Project management and task tracker"
+msgstr "Projektmanagement und Aufgabenverwaltung"
+
+msgid "Event ticketing"
+msgstr "Veranstaltungsticketierung"
+
+msgid "Self-hosted OpenStreetMap instance"
+msgstr "Selbstgehostete OpenStreetMap-Instanz"
+
+msgid "Metrics, logs, traces"
+msgstr "Metriken, Protokolle, Traces"
+
+msgid "OpenTelemetry collector"
+msgstr "OpenTelemetry-Sammler"
+
+msgid "PostgreSQL database  [also loads automatically as sub-module]"
+msgstr "PostgreSQL-Datenbank  [wird auch automatisch als Untermodul geladen]"
+
+msgid "Redis-compatible cache  [also loads automatically as sub-module]"
+msgstr "Redis-kompatibler Cache  [wird auch automatisch als Untermodul geladen]"
+
+# --- Network Check ---
+msgid "Network Check"
+msgstr "Netzwerkprüfung"
+
+msgid "ufw firewall is active. Required open ports:"
+msgstr "ufw-Firewall ist aktiv. Benötigte offene Ports:"
+
+msgid "  Mail (if using Stalwart): sudo ufw allow 25/tcp 143/tcp 465/tcp 587/tcp 993/tcp"
+msgstr "  Mail (bei Stalwart): sudo ufw allow 25/tcp 143/tcp 465/tcp 587/tcp 993/tcp"
+
+msgid "firewalld is active. Required services:"
+msgstr "firewalld ist aktiv. Benötigte Dienste:"
+
+msgid "No active firewall detected."
+msgstr "Keine aktive Firewall erkannt."
+
+msgid "Port %s is already in use – may conflict with Zentinel (reverse proxy)."
+msgstr "Port %s ist bereits belegt – möglicher Konflikt mit Zentinel (Reverse-Proxy)."
+
+msgid "Ports 80 and 443 are free."
+msgstr "Ports 80 und 443 sind frei."
+
+# --- Sudo check ---
+msgid "sudo access confirmed."
+msgstr "sudo-Zugriff bestätigt."
+
+msgid "Passwordless sudo not detected."
+msgstr "Passwortloses sudo nicht erkannt."
+
+msgid "setup-server.yml needs sudo for: Podman install, sysctl, user creation."
+msgstr "setup-server.yml benötigt sudo für: Podman-Installation, sysctl, Benutzeranlage."
+
+msgid "Options:"
+msgstr "Optionen:"
+
+msgid "  Y – I have sudo (password will be prompted by Ansible during setup)"
+msgstr "  J – Ich habe sudo (Passwort wird von Ansible während der Einrichtung abgefragt)"
+
+msgid "  N – No sudo. Skip server setup, deploy as current user '%s'"
+msgstr "  N – Kein sudo. Servereinrichtung überspringen, als aktueller Benutzer '%s' deployen"
+
+msgid "Do you have sudo access? [Y/n]:"
+msgstr "Haben Sie sudo-Zugriff? [J/n]:"
+
+msgid "Skipping server setup. Deploying as current user: %s"
+msgstr "Servereinrichtung wird übersprungen. Deploye als aktueller Benutzer: %s"
+
+msgid "Note: sysctl (port 80) and linger must already be configured."
+msgstr "Hinweis: sysctl (Port 80) und linger müssen bereits konfiguriert sein."
+
+msgid "Proceeding with sudo – Ansible will prompt for password when needed."
+msgstr "Fahre mit sudo fort – Ansible fragt das Passwort bei Bedarf ab."
+
+# --- Host file ---
+msgid "Host file already exists: %s – skipping generation."
+msgstr "Host-Datei existiert bereits: %s – Generierung übersprungen."
+
+msgid "Host file: %s"
+msgstr "Host-Datei: %s"
+
+# --- Setup Summary ---
+msgid "Setup Summary"
+msgstr "Setup-Zusammenfassung"
+
+msgid "Platform root: %s  (existing repo – no clone needed)"
+msgstr "Plattform-Verzeichnis: %s  (vorhandenes Repo – kein Klonen nötig)"
+
+msgid "Install to:    %s"
+msgstr "Installiere nach:    %s"
+
+msgid "Repo:          %s"
+msgstr "Repository:          %s"
+
+msgid "Project:       %s"
+msgstr "Projekt:             %s"
+
+msgid "Domain:        %s"
+msgstr "Domain:              %s"
+
+msgid "Deploy user:   %s"
+msgstr "Deployment-Benutzer: %s"
+
+msgid "Server IP:     %s"
+msgstr "Server-IP:           %s"
+
+msgid "DNS:           %s"
+msgstr "DNS:                 %s"
+
+msgid "ACME:          %s"
+msgstr "ACME:                %s"
+
+msgid "ACME email:    %s"
+msgstr "ACME-E-Mail:         %s"
+
+msgid "DNS Token:     (entered, hidden)"
+msgstr "DNS-Token:           (eingegeben, ausgeblendet)"
+
+msgid "DNS Token:     (not entered)"
+msgstr "DNS-Token:           (nicht eingegeben)"
+
+msgid "Modules (%s):"
+msgstr "Module (%s):"
+
+msgid "Modules:       (none selected)"
+msgstr "Module:              (keine ausgewählt)"
+
+msgid "Proceed with these settings? [Y/n]:"
+msgstr "Mit diesen Einstellungen fortfahren? [J/n]:"
+
+msgid "Aborted by user."
+msgstr "Vom Benutzer abgebrochen."
+
+# --- Project Setup Wizard ---
+msgid "Project Setup Wizard"
+msgstr "Projekt-Einrichtungsassistent"
+
+msgid "Answer a few questions to configure your deployment."
+msgstr "Beantworten Sie einige Fragen zur Konfiguration Ihrer Bereitstellung."
+
+msgid "Nothing will be downloaded or written until you confirm at the end."
+msgstr "Es wird nichts heruntergeladen oder geschrieben, bis Sie am Ende bestätigen."
+
+msgid "Press Ctrl+C at any time to abort."
+msgstr "Drücken Sie Ctrl+C zum Abbrechen."
+
+msgid "Install directory [%s]:"
+msgstr "Installationsverzeichnis [%s]:"
+
+msgid "Repository: %s"
+msgstr "Repository: %s"
+
+msgid "Use a different repository? [y/N]:"
+msgstr "Ein anderes Repository verwenden? [j/N]:"
+
+msgid "Repository URL:"
+msgstr "Repository-URL:"
+
+msgid "Project name (e.g. myproject):"
+msgstr "Projektname (z.B. meinprojekt):"
+
+msgid "Project name is required."
+msgstr "Projektname ist erforderlich."
+
+msgid "Domain name (e.g. example.com):"
+msgstr "Domainname (z.B. example.com):"
+
+msgid "Domain is required."
+msgstr "Domain ist erforderlich."
+
+msgid "Invalid domain '%s': must contain at least one dot."
+msgstr "Ungültige Domain '%s': muss mindestens einen Punkt enthalten."
+
+# --- Deploy User ---
+msgid "Deploy User"
+msgstr "Deployment-Benutzer"
+
+msgid "This user will own and run all containers (created if it does not exist)."
+msgstr "Dieser Benutzer besitzt und betreibt alle Container (wird angelegt, wenn nicht vorhanden)."
+
+msgid "Existing users on this system:"
+msgstr "Vorhandene Benutzer auf diesem System:"
+
+msgid "Enter a number to select, or type any username (new user will be created)."
+msgstr "Zahl eingeben zum Auswählen, oder beliebigen Benutzernamen tippen (neuer Benutzer wird angelegt)."
+
+msgid "Deploy user [%s]:"
+msgstr "Deployment-Benutzer [%s]:"
+
+msgid "Invalid number – keeping default: %s"
+msgstr "Ungültige Zahl – behalte Standard: %s"
+
+msgid "Deploy user: %s"
+msgstr "Deployment-Benutzer: %s"
+
+# --- Server IP ---
+msgid "Detected server IP: %s"
+msgstr "Erkannte Server-IP: %s"
+
+msgid "Server IP [%s]:"
+msgstr "Server-IP [%s]:"
+
+msgid "Server IP address:"
+msgstr "Server-IP-Adresse:"
+
+# --- Import config ---
+msgid "Importing Project Config"
+msgstr "Projektkonfiguration importieren"
+
+msgid "Config file not found: %s"
+msgstr "Konfigurationsdatei nicht gefunden: %s"
+
+msgid "Could not read 'project.name' from: %s"
+msgstr "Konnte 'project.name' nicht lesen aus: %s"
+
+msgid "The file must contain:"
+msgstr "Die Datei muss enthalten:"
+
+# --- Secrets ---
+msgid "Collecting Secrets"
+msgstr "Zugangsdaten sammeln"
+
+msgid "Secrets file already exists: %s"
+msgstr "Secrets-Datei existiert bereits: %s"
+
+msgid "Re-enter secrets? [y/N]"
+msgstr "Zugangsdaten neu eingeben? [j/N]"
+
+msgid "Keeping existing secrets."
+msgstr "Vorhandene Zugangsdaten beibehalten."
+
+msgid "Secrets will be stored in: %s"
+msgstr "Zugangsdaten werden gespeichert in: %s"
+
+msgid "  – git-ignored, chmod 600, never shown in shell history"
+msgstr "  – git-ignoriert, chmod 600, nie in der Shell-Chronik"
+
+msgid "DNS provider is 'none' – skipping DNS token collection."
+msgstr "DNS-Anbieter ist 'none' – DNS-Token-Erfassung übersprungen."
+
+msgid "DNS token saved from wizard (%s)."
+msgstr "DNS-Token aus dem Assistenten gespeichert (%s)."
+
+msgid "Hetzner DNS API Token (press Enter to skip):"
+msgstr "Hetzner DNS API-Token (Enter zum Überspringen):"
+
+msgid "Hetzner token saved."
+msgstr "Hetzner-Token gespeichert."
+
+msgid "No Hetzner token entered."
+msgstr "Kein Hetzner-Token eingegeben."
+
+msgid "Cloudflare API Token (press Enter to skip):"
+msgstr "Cloudflare API-Token (Enter zum Überspringen):"
+
+msgid "Cloudflare token saved."
+msgstr "Cloudflare-Token gespeichert."
+
+msgid "No Cloudflare token entered."
+msgstr "Kein Cloudflare-Token eingegeben."
+
+msgid "Secrets written to: %s"
+msgstr "Zugangsdaten geschrieben nach: %s"
+
+# --- Editor / Config Review ---
+msgid "No editor found. Config files will not be opened for review."
+msgstr "Kein Editor gefunden. Konfigurationsdateien werden nicht zur Überprüfung geöffnet."
+
+msgid "Edit manually before deploying: %s"
+msgstr "Vor dem Deployen manuell bearbeiten: %s"
+
+msgid "Available editors:"
+msgstr "Verfügbare Editoren:"
+
+msgid "Choose editor [default: %s]:"
+msgstr "Editor wählen [Standard: %s]:"
+
+msgid "File not found, cannot open: %s"
+msgstr "Datei nicht gefunden, kann nicht geöffnet werden: %s"
+
+msgid "Edit module config: %s (%s)? [Y=yes / A=yes to all / N=no, default N]: "
+msgstr "Modulkonfiguration bearbeiten: %s (%s)? [J=ja / A=ja für alle / N=nein, Standard N]: "
+
+msgid "Keeping defaults for module: %s"
+msgstr "Standardwerte für Modul beibehalten: %s"
+
+msgid "Config Review"
+msgstr "Konfigurationsüberprüfung"
+
+msgid "Review and edit the generated config files before deployment starts."
+msgstr "Überprüfen und bearbeiten Sie die generierten Konfigurationsdateien vor dem Deployment."
+
+msgid "Close the editor when done – installation continues automatically."
+msgstr "Editor schließen wenn fertig – Installation läuft automatisch weiter."
+
+msgid "Open project.yml for review? [Y/n, default Y]:"
+msgstr "project.yml zur Überprüfung öffnen? [J/n, Standard J]:"
+
+msgid "Open host.yml for review? [Y/n, default Y]:"
+msgstr "host.yml zur Überprüfung öffnen? [J/n, Standard J]:"
+
+msgid "Module configurations (each module's section lives in project.yml):"
+msgstr "Modulkonfigurationen (jeder Modul-Abschnitt befindet sich in project.yml):"
+
+msgid "For vi/vim, the cursor jumps directly to the module's section."
+msgstr "Bei vi/vim springt der Cursor direkt zum Modul-Abschnitt."
+
+msgid "  ↳ sub-module: %s (%s) – loaded automatically"
+msgstr "  ↳ Untermodul: %s (%s) – wird automatisch geladen"
+
+msgid "Config review complete. Proceeding to secrets and deployment..."
+msgstr "Konfigurationsüberprüfung abgeschlossen. Weiter mit Zugangsdaten und Deployment..."
+
+# --- Ansible Playbooks ---
+msgid "Running Ansible Playbooks"
+msgstr "Ansible-Playbooks ausführen"
+
+msgid "Step 1/4 – setup-server.yml"
+msgstr "Schritt 1/4 – setup-server.yml"
+
+msgid "Skipping setup-server.yml (--skip-setup)"
+msgstr "setup-server.yml übersprungen (--skip-setup)"
+
+msgid "Step 2/4 – fetch-modules.yml"
+msgstr "Schritt 2/4 – fetch-modules.yml"
+
+msgid "Step 3/4 – install-project.yml"
+msgstr "Schritt 3/4 – install-project.yml"
+
+msgid "Step 4/4 – deploy-stack.yml"
+msgstr "Schritt 4/4 – deploy-stack.yml"
+
+msgid "Skipping deploy-stack.yml (--skip-deploy)"
+msgstr "deploy-stack.yml übersprungen (--skip-deploy)"
+
+msgid "Run manually when ready:"
+msgstr "Manuell ausführen wenn bereit:"
+
+msgid "No project configured. Run setup wizard or use --project / --config."
+msgstr "Kein Projekt konfiguriert. Einrichtungsassistenten starten oder --project / --config verwenden."
+
+# --- Main / entry point ---
+msgid "Project file: %s"
+msgstr "Projektdatei: %s"
+
+msgid "Install target: %s  (override with --target)"
+msgstr "Installationsziel: %s  (überschreiben mit --target)"
+
+msgid "Unknown option: %s"
+msgstr "Unbekannte Option: %s"
+
+msgid "NOTE: API tokens and passwords cannot be passed as arguments."
+msgstr "HINWEIS: API-Token und Passwörter können nicht als Argumente übergeben werden."
+
+msgid "      They are collected interactively to avoid shell history exposure."
+msgstr "      Sie werden interaktiv gesammelt, um Shell-Chronik-Exposition zu vermeiden."
+
+msgid "Installation complete."
+msgstr "Installation abgeschlossen."

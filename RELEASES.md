@@ -2,6 +2,37 @@
 
 ---
 
+## v0.0.3 — 2026-03-07
+
+Installer i18n framework. All user-facing output is now translatable.
+
+### What's new
+
+- **i18n framework** — `_()` translation function + `load_translations()` embedded in `fsn-install.sh`
+- **German translation** — all ~130 installer strings translated to German (`de`)
+- **Locale auto-detection** — reads `LC_ALL` / `LANG`, strips encoding and region suffix
+- **Translation files** — `locales/en.pot` (template) + `locales/de.po` (German)
+- **Build tool** — `tools/generate-i18n.sh` converts `.po` files into embedded `declare -A` arrays
+- **printf-style placeholders** — strings with variables use `%s` in both key and translation for correct word order in all languages
+- **Graceful fallback** — unknown locale silently falls back to English; bash < 4.3 also falls back gracefully
+
+### Architecture
+
+Translations are embedded directly in `fsn-install.sh` as `declare -A _TR_xx=(...)` arrays.
+No external downloads. No version mismatch risk. Single self-contained file.
+
+`.po` files in `locales/` are the source of truth for translators.
+`tools/generate-i18n.sh` is the build step (run after editing `.po` files).
+
+### Still open
+
+- Multi-host deployment
+- Federation
+- Cloudflare DNS
+- Additional languages (Phase B)
+
+---
+
 ## v0.0.2 — 2026-03-06
 
 First full install works end-to-end. All deployment lifecycle operations implemented.

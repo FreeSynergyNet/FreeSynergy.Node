@@ -1,0 +1,612 @@
+# FreeSynergy.Node – Translation Template
+# Copyright (C) 2026 FreeSynergy.Net
+# This file is distributed under the MIT License.
+#
+# Translators:
+#   Copy this file to locales/<langcode>.po and fill in the msgstr fields.
+#   Run tools/generate-i18n.sh to embed the translations into fsn-install.sh.
+#
+# Format notes:
+#   - Use %s as a placeholder for variables (consistent with printf)
+#   - Keep the same number and order of %s placeholders in msgstr
+#   - Do not translate technical identifiers like file paths, flags, or commands
+#
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Project-Id-Version: FreeSynergy.Node\n"
+
+# --- Script Integrity ---
+msgid "Script Integrity"
+msgstr ""
+
+msgid "Quick install (unverified). For production, verify first:"
+msgstr ""
+
+# --- OS Detection ---
+msgid "Detected immutable OS (Fedora CoreOS / Silverblue / rpm-ostree)."
+msgstr ""
+
+msgid "Packages cannot be installed without layering + reboot."
+msgstr ""
+
+msgid "Required tools must already be installed: python3, git, ansible"
+msgstr ""
+
+msgid "Cannot detect OS – /etc/os-release not found"
+msgstr ""
+
+msgid "Unknown OS: %s – defaulting to apt"
+msgstr ""
+
+msgid "OS: %s (package manager: %s)"
+msgstr ""
+
+# --- Package installation ---
+msgid "Installing %s..."
+msgstr ""
+
+msgid "Cannot auto-install '%s' on an immutable OS."
+msgstr ""
+
+msgid "Then reboot and re-run this installer."
+msgstr ""
+
+msgid "Unsupported package manager: %s"
+msgstr ""
+
+# --- Dependency checks ---
+msgid "Checking Python 3"
+msgstr ""
+
+msgid "Python3 found: %s"
+msgstr ""
+
+msgid "Python3 not found – installing..."
+msgstr ""
+
+msgid "Checking Git"
+msgstr ""
+
+msgid "Git found: %s"
+msgstr ""
+
+msgid "Git not found – installing..."
+msgstr ""
+
+msgid "Checking Ansible"
+msgstr ""
+
+msgid "Ansible found: %s"
+msgstr ""
+
+msgid "Ansible not found – installing..."
+msgstr ""
+
+msgid "Installing via pip3..."
+msgstr ""
+
+# --- Ansible Collections ---
+msgid "Installing Ansible Collections"
+msgstr ""
+
+msgid "Installing collections from requirements.yml..."
+msgstr ""
+
+msgid "requirements.yml not found – skipping collection install"
+msgstr ""
+
+# --- Fetch platform ---
+msgid "Fetching FreeSynergy.Node"
+msgstr ""
+
+msgid "Running from inside FSN repo – using current directory."
+msgstr ""
+
+msgid "Pulling latest changes..."
+msgstr ""
+
+msgid "git pull failed – continuing with current version."
+msgstr ""
+
+msgid "Platform ready at: %s"
+msgstr ""
+
+msgid "Custom repo: %s"
+msgstr ""
+
+msgid "Repo found at %s – pulling latest..."
+msgstr ""
+
+msgid "Cloning into %s ..."
+msgstr ""
+
+# --- DNS Provider ---
+msgid "DNS Provider"
+msgstr ""
+
+msgid "Which DNS provider manages your domain?"
+msgstr ""
+
+msgid "  0) Skip  (manage DNS records manually)"
+msgstr ""
+
+msgid "  1) Hetzner DNS  [default]"
+msgstr ""
+
+msgid "  2) Cloudflare"
+msgstr ""
+
+msgid "Choose [0/1/2, default: 1]:"
+msgstr ""
+
+msgid "DNS provider: %s"
+msgstr ""
+
+msgid "DNS automation disabled. You will need to create DNS records manually."
+msgstr ""
+
+msgid "The API token is required for automatic DNS record creation."
+msgstr ""
+
+msgid "Input is hidden (you will not see what you type). Press Enter when done."
+msgstr ""
+
+msgid "Token received and stored (hidden for security)."
+msgstr ""
+
+msgid "No token entered – DNS automation will be disabled."
+msgstr ""
+
+msgid "You can add the token later to: hosts/secrets.yml"
+msgstr ""
+
+# --- ACME / SSL ---
+msgid "SSL Certificates (ACME)"
+msgstr ""
+
+msgid "Which provider should issue SSL certificates?"
+msgstr ""
+
+msgid "  0) Skip  (manage certificates manually)"
+msgstr ""
+
+msgid "  1) Let's Encrypt – free, public CA  [default]"
+msgstr ""
+
+msgid "  2) Smallstep CA  – self-hosted CA"
+msgstr ""
+
+msgid "ACME provider: %s"
+msgstr ""
+
+msgid "ACME disabled. You will need to provide TLS certificates manually."
+msgstr ""
+
+msgid "The ACME provider sends certificate expiry warnings to this address."
+msgstr ""
+
+msgid "Contact email for %s (recommended, press Enter to skip):"
+msgstr ""
+
+msgid "ACME contact email: %s"
+msgstr ""
+
+msgid "No email entered – certificate expiry notifications disabled."
+msgstr ""
+
+# --- Module Selection ---
+msgid "Module Selection"
+msgstr ""
+
+msgid "No modules defined in FSN_MODULES_BUILTIN – skipping selection."
+msgstr ""
+
+msgid "Available modules:"
+msgstr ""
+
+msgid "Note: postgres and dragonfly also load automatically when required"
+msgstr ""
+
+msgid "      by other services. You can still select them for a standalone install."
+msgstr ""
+
+msgid "Enter numbers separated by spaces, or 'all':"
+msgstr ""
+
+msgid "Ignoring invalid number: %s"
+msgstr ""
+
+msgid "Ignoring non-numeric input: %s"
+msgstr ""
+
+msgid "No modules selected. You can add them manually to the project.yml later."
+msgstr ""
+
+msgid "Selected %s module(s): %s"
+msgstr ""
+
+# --- Module descriptions ---
+msgid "Reverse proxy + automatic TLS + DNS  [required for all setups]"
+msgstr ""
+
+msgid "Identity provider (OIDC, OAuth2, WebAuthn)"
+msgstr ""
+
+msgid "Mail server (SMTP, IMAP, JMAP)"
+msgstr ""
+
+msgid "Git hosting + CI/CD"
+msgstr ""
+
+msgid "Team wiki and knowledge base"
+msgstr ""
+
+msgid "End-to-end encrypted collaborative documents"
+msgstr ""
+
+msgid "Matrix homeserver"
+msgstr ""
+
+msgid "Project management and task tracker"
+msgstr ""
+
+msgid "Event ticketing"
+msgstr ""
+
+msgid "Self-hosted OpenStreetMap instance"
+msgstr ""
+
+msgid "Metrics, logs, traces"
+msgstr ""
+
+msgid "OpenTelemetry collector"
+msgstr ""
+
+msgid "PostgreSQL database  [also loads automatically as sub-module]"
+msgstr ""
+
+msgid "Redis-compatible cache  [also loads automatically as sub-module]"
+msgstr ""
+
+# --- Network Check ---
+msgid "Network Check"
+msgstr ""
+
+msgid "ufw firewall is active. Required open ports:"
+msgstr ""
+
+msgid "  Mail (if using Stalwart): sudo ufw allow 25/tcp 143/tcp 465/tcp 587/tcp 993/tcp"
+msgstr ""
+
+msgid "firewalld is active. Required services:"
+msgstr ""
+
+msgid "No active firewall detected."
+msgstr ""
+
+msgid "Port %s is already in use – may conflict with Zentinel (reverse proxy)."
+msgstr ""
+
+msgid "Ports 80 and 443 are free."
+msgstr ""
+
+# --- Sudo check ---
+msgid "sudo access confirmed."
+msgstr ""
+
+msgid "Passwordless sudo not detected."
+msgstr ""
+
+msgid "setup-server.yml needs sudo for: Podman install, sysctl, user creation."
+msgstr ""
+
+msgid "Options:"
+msgstr ""
+
+msgid "  Y – I have sudo (password will be prompted by Ansible during setup)"
+msgstr ""
+
+msgid "  N – No sudo. Skip server setup, deploy as current user '%s'"
+msgstr ""
+
+msgid "Do you have sudo access? [Y/n]:"
+msgstr ""
+
+msgid "Skipping server setup. Deploying as current user: %s"
+msgstr ""
+
+msgid "Note: sysctl (port 80) and linger must already be configured."
+msgstr ""
+
+msgid "Proceeding with sudo – Ansible will prompt for password when needed."
+msgstr ""
+
+# --- Host file ---
+msgid "Host file already exists: %s – skipping generation."
+msgstr ""
+
+msgid "Host file: %s"
+msgstr ""
+
+# --- Setup Summary ---
+msgid "Setup Summary"
+msgstr ""
+
+msgid "Platform root: %s  (existing repo – no clone needed)"
+msgstr ""
+
+msgid "Install to:    %s"
+msgstr ""
+
+msgid "Repo:          %s"
+msgstr ""
+
+msgid "Project:       %s"
+msgstr ""
+
+msgid "Domain:        %s"
+msgstr ""
+
+msgid "Deploy user:   %s"
+msgstr ""
+
+msgid "Server IP:     %s"
+msgstr ""
+
+msgid "DNS:           %s"
+msgstr ""
+
+msgid "ACME:          %s"
+msgstr ""
+
+msgid "ACME email:    %s"
+msgstr ""
+
+msgid "DNS Token:     (entered, hidden)"
+msgstr ""
+
+msgid "DNS Token:     (not entered)"
+msgstr ""
+
+msgid "Modules (%s):"
+msgstr ""
+
+msgid "Modules:       (none selected)"
+msgstr ""
+
+msgid "Proceed with these settings? [Y/n]:"
+msgstr ""
+
+msgid "Aborted by user."
+msgstr ""
+
+# --- Project Setup Wizard ---
+msgid "Project Setup Wizard"
+msgstr ""
+
+msgid "Answer a few questions to configure your deployment."
+msgstr ""
+
+msgid "Nothing will be downloaded or written until you confirm at the end."
+msgstr ""
+
+msgid "Press Ctrl+C at any time to abort."
+msgstr ""
+
+msgid "Install directory [%s]:"
+msgstr ""
+
+msgid "Repository: %s"
+msgstr ""
+
+msgid "Use a different repository? [y/N]:"
+msgstr ""
+
+msgid "Repository URL:"
+msgstr ""
+
+msgid "Project name (e.g. myproject):"
+msgstr ""
+
+msgid "Project name is required."
+msgstr ""
+
+msgid "Domain name (e.g. example.com):"
+msgstr ""
+
+msgid "Domain is required."
+msgstr ""
+
+msgid "Invalid domain '%s': must contain at least one dot."
+msgstr ""
+
+# --- Deploy User ---
+msgid "Deploy User"
+msgstr ""
+
+msgid "This user will own and run all containers (created if it does not exist)."
+msgstr ""
+
+msgid "Existing users on this system:"
+msgstr ""
+
+msgid "Enter a number to select, or type any username (new user will be created)."
+msgstr ""
+
+msgid "Deploy user [%s]:"
+msgstr ""
+
+msgid "Invalid number – keeping default: %s"
+msgstr ""
+
+msgid "Deploy user: %s"
+msgstr ""
+
+# --- Server IP ---
+msgid "Detected server IP: %s"
+msgstr ""
+
+msgid "Server IP [%s]:"
+msgstr ""
+
+msgid "Server IP address:"
+msgstr ""
+
+# --- Import config ---
+msgid "Importing Project Config"
+msgstr ""
+
+msgid "Config file not found: %s"
+msgstr ""
+
+msgid "Could not read 'project.name' from: %s"
+msgstr ""
+
+msgid "The file must contain:"
+msgstr ""
+
+# --- Secrets ---
+msgid "Collecting Secrets"
+msgstr ""
+
+msgid "Secrets file already exists: %s"
+msgstr ""
+
+msgid "Re-enter secrets? [y/N]"
+msgstr ""
+
+msgid "Keeping existing secrets."
+msgstr ""
+
+msgid "Secrets will be stored in: %s"
+msgstr ""
+
+msgid "  – git-ignored, chmod 600, never shown in shell history"
+msgstr ""
+
+msgid "DNS provider is 'none' – skipping DNS token collection."
+msgstr ""
+
+msgid "DNS token saved from wizard (%s)."
+msgstr ""
+
+msgid "Hetzner DNS API Token (press Enter to skip):"
+msgstr ""
+
+msgid "Hetzner token saved."
+msgstr ""
+
+msgid "No Hetzner token entered."
+msgstr ""
+
+msgid "Cloudflare API Token (press Enter to skip):"
+msgstr ""
+
+msgid "Cloudflare token saved."
+msgstr ""
+
+msgid "No Cloudflare token entered."
+msgstr ""
+
+msgid "Secrets written to: %s"
+msgstr ""
+
+# --- Editor / Config Review ---
+msgid "No editor found. Config files will not be opened for review."
+msgstr ""
+
+msgid "Edit manually before deploying: %s"
+msgstr ""
+
+msgid "Available editors:"
+msgstr ""
+
+msgid "Choose editor [default: %s]:"
+msgstr ""
+
+msgid "File not found, cannot open: %s"
+msgstr ""
+
+msgid "Edit module config: %s (%s)? [Y=yes / A=yes to all / N=no, default N]: "
+msgstr ""
+
+msgid "Keeping defaults for module: %s"
+msgstr ""
+
+msgid "Config Review"
+msgstr ""
+
+msgid "Review and edit the generated config files before deployment starts."
+msgstr ""
+
+msgid "Close the editor when done – installation continues automatically."
+msgstr ""
+
+msgid "Open project.yml for review? [Y/n, default Y]:"
+msgstr ""
+
+msgid "Open host.yml for review? [Y/n, default Y]:"
+msgstr ""
+
+msgid "Module configurations (each module's section lives in project.yml):"
+msgstr ""
+
+msgid "For vi/vim, the cursor jumps directly to the module's section."
+msgstr ""
+
+msgid "  ↳ sub-module: %s (%s) – loaded automatically"
+msgstr ""
+
+msgid "Config review complete. Proceeding to secrets and deployment..."
+msgstr ""
+
+# --- Ansible Playbooks ---
+msgid "Running Ansible Playbooks"
+msgstr ""
+
+msgid "Step 1/4 – setup-server.yml"
+msgstr ""
+
+msgid "Skipping setup-server.yml (--skip-setup)"
+msgstr ""
+
+msgid "Step 2/4 – fetch-modules.yml"
+msgstr ""
+
+msgid "Step 3/4 – install-project.yml"
+msgstr ""
+
+msgid "Step 4/4 – deploy-stack.yml"
+msgstr ""
+
+msgid "Skipping deploy-stack.yml (--skip-deploy)"
+msgstr ""
+
+msgid "Run manually when ready:"
+msgstr ""
+
+msgid "No project configured. Run setup wizard or use --project / --config."
+msgstr ""
+
+# --- Main / entry point ---
+msgid "Project file: %s"
+msgstr ""
+
+msgid "Install target: %s  (override with --target)"
+msgstr ""
+
+msgid "Unknown option: %s"
+msgstr ""
+
+msgid "NOTE: API tokens and passwords cannot be passed as arguments."
+msgstr ""
+
+msgid "      They are collected interactively to avoid shell history exposure."
+msgstr ""
+
+msgid "Installation complete."
+msgstr ""
