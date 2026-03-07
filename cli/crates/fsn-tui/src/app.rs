@@ -1,6 +1,8 @@
 // Application state and main event loop.
 
+use std::collections::HashMap;
 use std::path::Path;
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
@@ -382,6 +384,8 @@ pub struct AppState {
     /// True = waiting for delete-confirm (J/N).
     pub dash_confirm:       bool,
     last_refresh:           Instant,
+    /// Last known Podman container statuses (name → RunState).
+    last_podman_statuses:   HashMap<String, RunState>,
 }
 
 #[derive(Debug, Clone)]
@@ -392,15 +396,43 @@ pub struct LogsState {
 }
 
 impl AppState {
-    pub fn new(sysinfo: SysInfo, services: Vec<ServiceRow>, projects: Vec<ProjectHandle>) -> Self {
-        let screen = if services.is_empty() { Screen::Welcome } else { Screen::Dashboard };
+    pub fn new(sysinfo: SysInfo, projects: Vec<ProjectHandle>) -> Self {
         Self {
-            screen, lang: Lang::De, sysinfo, services,
+            screen: Screen::Welcome, lang: Lang::De, sysinfo, services: vec![],
             selected: 0, logs_overlay: None, lang_dropdown_open: false,
             should_quit: false, welcome_focus: 0, current_form: None,
             ctrl_hint: false, projects, selected_project: 0,
             dash_focus: DashFocus::Sidebar, dash_confirm: false,
             last_refresh: Instant::now(),
+            last_podman_statuses: HashMap::new(),
+        }
+    }
+
+    /// Apply freshly-queried Podman statuses and rebuild the service list.
+    pub fn apply_podman_status(&mut self, statuses: HashMap<String, RunState>) {
+        self.last_podman_statuses = statuses;
+        self.rebuild_services();
+    }
+
+    /// Rebuild `self.services` from the current project's desired state
+    /// merged with the last known Podman container statuses.
+    pub fn rebuild_services(&mut self) {
+        let Some(proj) = self.projects.get(self.selected_project) else {
+            self.services.clear();
+            return;
+        };
+        let domain = proj.domain().to_string();
+        self.services = proj.config.load.services.iter()
+            .map(|(name, entry)| ServiceRow {
+                status:       self.last_podman_statuses.get(name).copied().unwrap_or(RunState::Missing),
+                domain:       format!("{}.{}", name, domain),
+                service_type: entry.service_class.clone(),
+                name:         name.clone(),
+            })
+            .collect();
+        // Clamp selection
+        if self.selected >= self.services.len() && !self.services.is_empty() {
+            self.selected = self.services.len() - 1;
         }
     }
 
@@ -412,9 +444,10 @@ impl AppState {
 // ── Main loop ─────────────────────────────────────────────────────────────────
 
 pub fn run_loop(
-    terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
-    state:    &mut AppState,
-    root:     &Path,
+    terminal:     &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+    state:        &mut AppState,
+    root:         &Path,
+    reconcile_rx: mpsc::Receiver<HashMap<String, RunState>>,
 ) -> Result<()> {
     const POLL_MS:      u64 = 250;
     const REFRESH_SECS: u64 = 5;
@@ -431,6 +464,11 @@ pub fn run_loop(
         }
 
         if state.should_quit { break; }
+
+        // Apply latest Podman status updates from background reconciler
+        while let Ok(statuses) = reconcile_rx.try_recv() {
+            state.apply_podman_status(statuses);
+        }
 
         if state.last_refresh.elapsed() >= Duration::from_secs(REFRESH_SECS) {
             state.sysinfo = SysInfo::collect();

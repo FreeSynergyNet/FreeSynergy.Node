@@ -161,10 +161,16 @@ fn handle_dashboard(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<
             KeyCode::Tab => state.dash_focus = DashFocus::Services,
 
             KeyCode::Up => {
-                if state.selected_project > 0 { state.selected_project -= 1; }
+                if state.selected_project > 0 {
+                    state.selected_project -= 1;
+                    state.rebuild_services();
+                }
             }
             KeyCode::Down => {
-                if state.selected_project + 1 < state.projects.len() { state.selected_project += 1; }
+                if state.selected_project + 1 < state.projects.len() {
+                    state.selected_project += 1;
+                    state.rebuild_services();
+                }
             }
 
             // n = new project
@@ -312,6 +318,7 @@ fn submit_project(state: &mut AppState, root: &Path) -> Result<()> {
                     .position(|p| p.slug == slug)
                     .unwrap_or(0);
             }
+            state.rebuild_services();
             state.screen = Screen::Dashboard;
             state.dash_focus = DashFocus::Sidebar;
             state.current_form = None;
@@ -351,8 +358,8 @@ fn submit_service(state: &mut AppState, root: &Path) -> Result<()> {
     std::fs::write(&proj.toml_path, content)?;
 
     // Reload projects so dashboard picks up the change
-    let _ = root; // used above via proj.toml_path
     state.projects = crate::load_projects(root);
+    state.rebuild_services();
     state.screen = Screen::Dashboard;
     state.dash_focus = DashFocus::Services;
     state.current_form = None;
