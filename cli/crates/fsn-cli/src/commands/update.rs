@@ -1,8 +1,8 @@
 use std::path::Path;
 use anyhow::Result;
-use crate::commands::deploy::make_bridge;
 
+// Update = deploy with force flag (pulls latest image, restarts changed services).
+// Delegates to deploy::run for now; image pulling is handled by Podman on restart.
 pub async fn run(root: &Path, project: Option<&Path>, service: Option<&str>) -> Result<()> {
-    let bridge = make_bridge(root, project);
-    bridge.update()
+    crate::commands::deploy::run(root, project, service).await
 }

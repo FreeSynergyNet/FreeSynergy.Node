@@ -162,8 +162,8 @@ fn collect_module_secrets(root: &Path, proj_dir: &Path, modules_dir: &Path) -> R
     }
 
     let registry = ModuleRegistry::load(modules_dir)?;
-    let vault_path = proj_dir.join("vault.toml");
-    let vault = VaultConfig::load(&vault_path)?;
+    // During init, vault may not exist yet – load without passphrase (plaintext or empty)
+    let vault = VaultConfig::load(proj_dir, None).unwrap_or_default();
 
     let host_path = root.join("hosts").join(format!("{}.host.toml", slug));
     let host = fsn_core::config::HostConfig::load(&host_path)
@@ -179,6 +179,7 @@ fn collect_module_secrets(root: &Path, proj_dir: &Path, modules_dir: &Path) -> R
 
     println!("--- Module configuration ---");
 
+    let vault_path = proj_dir.join("vault.toml");
     // Load existing vault values to enable skip_if_set
     let mut vault_values: HashMap<String, String> = if vault_path.exists() {
         toml::from_str(&std::fs::read_to_string(&vault_path)?).unwrap_or_default()

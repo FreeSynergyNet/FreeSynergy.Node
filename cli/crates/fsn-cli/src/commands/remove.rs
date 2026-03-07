@@ -1,7 +1,7 @@
 use std::path::Path;
 use anyhow::{bail, Result};
-
-use super::deploy::make_bridge;
+use fsn_engine::deploy::{DeployOpts, undeploy_instance};
+use fsn_podman::systemd;
 
 pub async fn run(root: &Path, project: Option<&Path>, service: Option<&str>, confirm: bool) -> Result<()> {
     if !confirm {
@@ -10,7 +10,17 @@ pub async fn run(root: &Path, project: Option<&Path>, service: Option<&str>, con
             service.unwrap_or("all services")
         );
     }
-    let bridge = make_bridge(root, project);
-    println!("Removing{}...", service.map(|s| format!(" {}", s)).unwrap_or_default());
-    bridge.remove()
+    let opts = DeployOpts::default_for_user();
+    if let Some(name) = service {
+        undeploy_instance(name, &opts).await?;
+        println!("Removed {}", name);
+    } else {
+        let units = systemd::list_fsn_units().await?;
+        for unit in &units {
+            let name = unit.trim_end_matches(".service");
+            undeploy_instance(name, &opts).await?;
+            println!("Removed {}", name);
+        }
+    }
+    Ok(())
 }

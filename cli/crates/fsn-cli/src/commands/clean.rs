@@ -1,8 +1,13 @@
 use std::path::Path;
 use anyhow::Result;
-use crate::commands::deploy::make_bridge;
 
-pub async fn run(root: &Path, project: Option<&Path>) -> Result<()> {
-    let bridge = make_bridge(root, project);
-    bridge.clean()
+pub async fn run(_root: &Path, _project: Option<&Path>) -> Result<()> {
+    // podman system prune removes stopped containers, dangling images, unused networks
+    let st = tokio::process::Command::new("podman")
+        .args(["system", "prune", "--force"])
+        .status()
+        .await?;
+    anyhow::ensure!(st.success(), "podman system prune failed");
+    println!("Cleaned up stopped containers and dangling images.");
+    Ok(())
 }
