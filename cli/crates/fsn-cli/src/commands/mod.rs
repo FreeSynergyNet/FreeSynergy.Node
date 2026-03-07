@@ -6,6 +6,7 @@ pub mod logs;
 pub mod remove;
 pub mod restart;
 pub mod serve;
+pub mod server_setup;
 pub mod status;
 pub mod sync;
 pub mod undeploy;

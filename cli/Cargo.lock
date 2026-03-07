@@ -554,6 +554,7 @@ dependencies = [
  "fsn-engine",
  "fsn-podman",
  "fsn-web",
+ "libc",
  "tokio",
  "toml 0.8.23",
  "tracing",

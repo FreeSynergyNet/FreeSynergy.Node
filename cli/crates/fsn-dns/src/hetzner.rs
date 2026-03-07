@@ -1,7 +1,7 @@
 // Hetzner DNS API implementation.
 // API docs: https://dns.hetzner.com/api-docs
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
@@ -118,6 +118,8 @@ impl DnsProvider for HetznerDns {
                     "AAAA"  => RecordType::Aaaa,
                     "CNAME" => RecordType::Cname,
                     "TXT"   => RecordType::Txt,
+                    "MX"    => RecordType::Mx,
+                    "SRV"   => RecordType::Srv,
                     _       => return None,
                 };
                 Some(DnsRecord {

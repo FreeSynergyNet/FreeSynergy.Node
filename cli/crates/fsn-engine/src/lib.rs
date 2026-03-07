@@ -8,6 +8,7 @@ pub mod deploy;
 pub mod diff;
 pub mod generate;
 pub mod health;
+pub mod hooks;
 pub mod observe;
 pub mod resolve;
 pub mod setup;

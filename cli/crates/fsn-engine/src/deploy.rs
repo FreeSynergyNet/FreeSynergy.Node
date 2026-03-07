@@ -20,7 +20,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use fsn_core::{
-    config::VaultConfig,
+    config::{ProjectConfig, VaultConfig},
     state::desired::{DesiredState, ModuleInstance},
 };
 use fsn_podman::systemd;
@@ -28,6 +28,7 @@ use tracing::{info, warn};
 
 use crate::generate::{env as gen_env, quadlet as gen_quadlet};
 use crate::health;
+use crate::hooks::{self, HookContext};
 
 /// Options for the deploy operation.
 #[derive(Debug, Clone)]
@@ -60,9 +61,12 @@ impl DeployOpts {
 /// Deploy (or reconcile) the full desired state.
 /// Sub-modules are always started before their parents.
 pub async fn deploy_all(
-    desired:  &DesiredState,
-    _vault:   &VaultConfig,
-    opts:     &DeployOpts,
+    desired:   &DesiredState,
+    project:   &ProjectConfig,
+    vault:     &VaultConfig,
+    opts:      &DeployOpts,
+    fsn_root:  &Path,
+    data_root: &Path,
 ) -> Result<()> {
     std::fs::create_dir_all(&opts.quadlet_dir)?;
     std::fs::create_dir_all(&opts.state_dir)?;
@@ -103,6 +107,20 @@ pub async fn deploy_all(
             .with_context(|| format!("health check for {}", instance.name))?;
 
         write_version_marker(instance, opts)?;
+
+        // Post-deploy hook (idempotent: creates data dirs, renders configs, inits admin)
+        let hook_ctx = HookContext {
+            instance,
+            desired,
+            project,
+            vault,
+            data_root: data_root.to_path_buf(),
+            fsn_root,
+        };
+        if let Err(e) = hooks::run_hook(&hook_ctx).await {
+            warn!("  hook for {} failed: {:#}", instance.name, e);
+        }
+
         info!("  ✓ {} running", instance.name);
     }
 

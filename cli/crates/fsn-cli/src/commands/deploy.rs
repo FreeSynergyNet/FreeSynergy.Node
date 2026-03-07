@@ -66,8 +66,12 @@ pub async fn run(
     };
 
     // ── Deploy ────────────────────────────────────────────────────────────────
-    let opts = DeployOpts::default_for_user();
-    deploy_all(&deploy_desired, &vault, &opts).await
+    let opts      = DeployOpts::default_for_user();
+    let data_root = project_path.parent()
+        .map(|p| p.join("data"))
+        .unwrap_or_else(|| root.join("data"));
+
+    deploy_all(&deploy_desired, &proj, &vault, &opts, root, &data_root).await
         .context("Deploy failed")?;
 
     println!("\n✓ Deploy complete ({} service(s))", deploy_desired.modules.len());

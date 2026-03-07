@@ -17,6 +17,12 @@ pub enum RecordType {
     Aaaa,
     Cname,
     Txt,
+    /// Mail exchanger record.  `DnsRecord::value` = priority + space + hostname,
+    /// e.g. "10 mail.example.com."
+    Mx,
+    /// Service locator.  `DnsRecord::value` = "priority weight port target",
+    /// e.g. "10 1 587 mail.example.com."
+    Srv,
 }
 
 impl std::fmt::Display for RecordType {
@@ -26,6 +32,8 @@ impl std::fmt::Display for RecordType {
             RecordType::Aaaa  => write!(f, "AAAA"),
             RecordType::Cname => write!(f, "CNAME"),
             RecordType::Txt   => write!(f, "TXT"),
+            RecordType::Mx    => write!(f, "MX"),
+            RecordType::Srv   => write!(f, "SRV"),
         }
     }
 }
