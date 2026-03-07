@@ -6,6 +6,31 @@ was sich geändert hat.
 
 ---
 
+## 2026-03-07 – Claude Code – fsn-tui: New-Project-Formular vollständig
+
+### Geänderte Dateien
+- `cli/crates/fsn-tui/src/app.rs` – `Screen::NewProject`, `FormTab`, `FormFieldType`, `FormField`, `NewProjectForm` mit 10 Feldern (3 Tabs), Cursor-Navigation, Select-Cycling, Validierung. Neu: `delete_char()`, `cursor_home()`, `cursor_end()`, `select_prev()`
+- `cli/crates/fsn-tui/src/events.rs` – Vollständiges Tastatur-Handling für `Screen::NewProject`: Tab/BackTab (Feld-Navigation), ←→ (Tab wechseln / Cursor), ↑↓ (Select-Cycling), Enter (nächster Tab / Submit), Backspace/Delete/Home/End, Esc (zurück zu Welcome). Welcome-Screen: Enter → `Screen::NewProject`
+- `cli/crates/fsn-tui/src/ui/new_project.rs` – Neu: Formular mit ratatui `Tabs`-Widget (3 Tabs), Pflichtfeld-Marker `*`, Cursor als `█`, Hinweis-Text, ⚠ auf Tabs mit fehlenden Feldern, Submit-Button auf Options-Tab
+- `cli/crates/fsn-tui/src/ui/welcome.rs` – Sysinfo-Block mit fixer Spaltenbreite (18/18/14 Zeichen), bündig ausgerichtet
+- `cli/crates/fsn-tui/src/i18n.rs` – Alle form.* Schlüssel (DE + EN): `form.tab.*`, `form.project.*`, `form.server.*`, `form.options.*`, `form.hint`, `form.required`, `form.submit`
+
+### Was sich geändert hat
+- Welcome → Enter auf „Neues Projekt" → Formular mit 3 Tabs öffnet sich
+- Pflichtfelder (markiert mit `*`): name, domain, path, email (Tab Projekt); host_ip, dns_provider, dns_api_token (Tab Server)
+- Optionale Felder (Tab Optionen): description, language (Select), version
+- Sprache jederzeit mit `L` umschalten (auch im Formular)
+- Submit nur aktiv wenn alle Pflichtfelder ausgefüllt
+- Tabs zeigen ⚠ wenn zugehörige Pflichtfelder leer sind
+
+### Offene Probleme
+- Keine — `cargo build` sauber
+
+### Nächster Schritt
+- Submit-Handler: Projekt-Verzeichnis anlegen, project.toml schreiben (Phase 2)
+
+---
+
 ## 2026-03-07 – Claude Code – KDL in Deploy-Loop + setup.fields für fehlende Module
 
 ### Geänderte Dateien
