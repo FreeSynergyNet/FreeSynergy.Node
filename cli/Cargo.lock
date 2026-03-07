@@ -535,20 +535,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "fsn-ansible"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "fsn-core",
-]
-
-[[package]]
 name = "fsn-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "fsn-ansible",
  "fsn-core",
  "fsn-dns",
  "fsn-engine",

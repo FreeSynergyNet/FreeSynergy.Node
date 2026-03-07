@@ -13,7 +13,6 @@ path = "src/main.rs"
 fsn-core    = { workspace = true }
 fsn-engine  = { workspace = true }
 fsn-podman  = { workspace = true }
-fsn-ansible = { workspace = true }
 fsn-dns     = { workspace = true }
 fsn-web     = { workspace = true }
 clap        = { workspace = true }

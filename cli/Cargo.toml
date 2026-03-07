@@ -4,7 +4,6 @@ members = [
     "crates/fsn-engine",
     "crates/fsn-podman",
     "crates/fsn-dns",
-    "crates/fsn-ansible",
     "crates/fsn-cli",
     "crates/fsn-web",
 ]
@@ -24,7 +23,6 @@ fsn-core    = { path = "crates/fsn-core" }
 fsn-engine  = { path = "crates/fsn-engine" }
 fsn-podman  = { path = "crates/fsn-podman" }
 fsn-dns     = { path = "crates/fsn-dns" }
-fsn-ansible = { path = "crates/fsn-ansible" }
 fsn-web     = { path = "crates/fsn-web" }
 
 # Serialization
