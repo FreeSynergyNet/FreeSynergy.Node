@@ -27,6 +27,8 @@ pub enum Screen {
     Welcome,
     Dashboard,
     NewProject,
+    /// Progressive setup wizard — task queue with per-task save.
+    TaskWizard,
 }
 
 // ── Dashboard focus ───────────────────────────────────────────────────────────
@@ -530,6 +532,8 @@ pub struct AppState {
     /// Receiver for the background deploy/export thread.
     /// `None` when no deploy is running.
     pub deploy_rx:          Option<mpsc::Receiver<DeployMsg>>,
+    /// Active task wizard queue. `Some` while `Screen::TaskWizard` is open.
+    pub task_queue:         Option<crate::task_queue::TaskQueue>,
 }
 
 impl AppState {
@@ -545,6 +549,7 @@ impl AppState {
             last_refresh: Instant::now(),
             last_podman_statuses: HashMap::new(),
             deploy_rx: None,
+            task_queue: None,
         };
         s.rebuild_sidebar();
         s

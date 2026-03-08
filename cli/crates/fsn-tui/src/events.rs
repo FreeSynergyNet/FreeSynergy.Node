@@ -46,6 +46,7 @@ pub fn handle(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()> {
         Screen::Welcome    => handle_welcome(key, state),
         Screen::Dashboard  => handle_dashboard(key, state, root),
         Screen::NewProject => handle_resource_form(key, state, root),
+        Screen::TaskWizard => handle_wizard(key, state, root),
     }
 }
 
@@ -146,8 +147,12 @@ fn open_new_resource_form(item_idx: usize, state: &mut AppState, root: &Path) {
     let Some(&(_, kind)) = NEW_RESOURCE_ITEMS.get(item_idx) else { return };
     match kind {
         ResourceKind::Project => {
-            state.current_form = Some(crate::project_form::new_project_form());
-            state.screen = Screen::NewProject;
+            let queue = crate::task_queue::TaskQueue::new(
+                crate::task_queue::TaskKind::NewProject,
+                state,
+            );
+            state.task_queue = Some(queue);
+            state.screen = Screen::TaskWizard;
         }
         ResourceKind::Host => {
             let project_slugs = state.projects.iter().map(|p| p.slug.clone()).collect();
@@ -265,6 +270,152 @@ fn handle_form_submit(state: &mut AppState, root: &Path) -> Result<()> {
         Some(ResourceKind::Bot)     => submit_bot(state, root)?,
         None => {}
     }
+    Ok(())
+}
+
+// ── Task Wizard ───────────────────────────────────────────────────────────────
+
+fn handle_wizard(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()> {
+    let action = if let Some(ref mut queue) = state.task_queue {
+        if let Some(task) = queue.tasks.get_mut(queue.active) {
+            if let Some(ref mut form) = task.form {
+                form.handle_key(key)
+            } else {
+                FormAction::Unhandled
+            }
+        } else {
+            FormAction::Unhandled
+        }
+    } else {
+        FormAction::Unhandled
+    };
+
+    match action {
+        FormAction::Cancel => {
+            state.task_queue = None;
+            state.screen = Screen::Dashboard;
+        }
+
+        FormAction::LangToggle => state.lang = state.lang.toggle(),
+
+        FormAction::Submit => handle_wizard_submit(state, root)?,
+
+        FormAction::Consumed => {}
+
+        FormAction::Unhandled => {
+            match key.code {
+                KeyCode::Esc => {
+                    state.task_queue = None;
+                    state.screen = Screen::Dashboard;
+                }
+                KeyCode::Char('l') | KeyCode::Char('L') => state.lang = state.lang.toggle(),
+                _ => {}
+            }
+        }
+
+        FormAction::FocusNext | FormAction::FocusPrev
+        | FormAction::TabNext  | FormAction::TabPrev
+        | FormAction::ValueChanged => {}
+
+        FormAction::Quit => state.should_quit = true,
+    }
+    Ok(())
+}
+
+fn handle_wizard_submit(state: &mut AppState, root: &Path) -> Result<()> {
+    // Validate: check missing required fields on active tab first
+    let (missing_tab, is_last, missing_all, kind) = {
+        let Some(ref queue) = state.task_queue else { return Ok(()); };
+        let Some(task) = queue.tasks.get(queue.active) else { return Ok(()); };
+        let Some(ref form) = task.form else { return Ok(()); };
+        (
+            form.tab_missing_count(form.active_tab),
+            form.is_last_tab(),
+            form.missing_required().len(),
+            task.kind.resource_kind(),
+        )
+    };
+
+    if missing_tab > 0 {
+        let msg = format!(
+            "{} {}",
+            missing_tab,
+            if missing_tab == 1 { "Pflichtfeld fehlt" } else { "Pflichtfelder fehlen" }
+        );
+        if let Some(ref mut queue) = state.task_queue {
+            if let Some(task) = queue.tasks.get_mut(queue.active) {
+                if let Some(ref mut form) = task.form { form.error = Some(msg); }
+            }
+        }
+        return Ok(());
+    }
+
+    if !is_last {
+        if let Some(ref mut queue) = state.task_queue {
+            if let Some(task) = queue.tasks.get_mut(queue.active) {
+                if let Some(ref mut form) = task.form { form.error = None; form.next_tab(); }
+            }
+        }
+        return Ok(());
+    }
+
+    if missing_all > 0 {
+        let msg = format!("{} Pflichtfeld(er) auf anderen Tabs fehlen", missing_all);
+        if let Some(ref mut queue) = state.task_queue {
+            if let Some(task) = queue.tasks.get_mut(queue.active) {
+                if let Some(ref mut form) = task.form { form.error = Some(msg); }
+            }
+        }
+        return Ok(());
+    }
+
+    // Extract the form, run it through the normal submit path, then advance the queue
+    let form = if let Some(ref mut queue) = state.task_queue {
+        if let Some(task) = queue.tasks.get_mut(queue.active) {
+            task.form.take()
+        } else { None }
+    } else { None };
+
+    let Some(form) = form else { return Ok(()); };
+    state.current_form = Some(form);
+
+    let submit_result = match kind {
+        ResourceKind::Project => submit_project(state, root),
+        ResourceKind::Host    => submit_host(state, root),
+        ResourceKind::Service => submit_service(state, root),
+        ResourceKind::Bot     => submit_bot(state, root),
+    };
+
+    // Put form back if submit failed (error displayed)
+    if let Some(ref mut queue) = state.task_queue {
+        if let Some(task) = queue.tasks.get_mut(queue.active) {
+            if task.form.is_none() {
+                task.form = state.current_form.take();
+            }
+        }
+    }
+
+    submit_result?;
+
+    // If submit succeeded, current_form is None (cleared by submit_*).
+    // Advance the wizard queue (take + put back to avoid borrow conflict).
+    let more = if let Some(mut queue) = state.task_queue.take() {
+        let has_more = queue.on_task_saved(state);
+        state.task_queue = Some(queue);
+        has_more
+    } else {
+        false
+    };
+
+    if !more {
+        // Wizard complete — return to dashboard
+        state.task_queue = None;
+        state.screen = Screen::Dashboard;
+    } else {
+        // Stay on wizard screen, next task is now active
+        state.screen = Screen::TaskWizard;
+    }
+    state.current_form = None;
     Ok(())
 }
 

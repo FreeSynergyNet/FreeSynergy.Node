@@ -80,7 +80,7 @@ fn render_header(f: &mut Frame, lang: crate::app::Lang, form: &ResourceForm, are
 
 // ── Tab bar ───────────────────────────────────────────────────────────────────
 
-fn render_tabs(f: &mut Frame, lang: crate::app::Lang, form: &ResourceForm, area: Rect) {
+pub(crate) fn render_tabs(f: &mut Frame, lang: crate::app::Lang, form: &ResourceForm, area: Rect) {
     let tab_titles: Vec<Line> = form.tab_keys.iter().enumerate().map(|(i, &key)| {
         let label       = crate::i18n::t(lang, key);
         let has_missing = form.tab_missing_count(i) > 0;
@@ -112,7 +112,7 @@ fn render_tabs(f: &mut Frame, lang: crate::app::Lang, form: &ResourceForm, area:
 
 // ── Form fields ───────────────────────────────────────────────────────────────
 
-fn render_fields(f: &mut Frame, form: &mut ResourceForm, inner: Rect, lang: crate::app::Lang) {
+pub(crate) fn render_fields(f: &mut Frame, form: &mut ResourceForm, inner: Rect, lang: crate::app::Lang) {
     let tab_indices = form.current_tab_indices();
     
 
@@ -159,7 +159,7 @@ fn render_fields(f: &mut Frame, form: &mut ResourceForm, inner: Rect, lang: crat
 
 // ── Error line ────────────────────────────────────────────────────────────────
 
-fn render_error(f: &mut Frame, lang: crate::app::Lang, form: &ResourceForm, area: Rect) {
+pub(crate) fn render_error(f: &mut Frame, lang: crate::app::Lang, form: &ResourceForm, area: Rect) {
     if let Some(ref err) = form.error {
         let line = Line::from(vec![
             Span::styled(

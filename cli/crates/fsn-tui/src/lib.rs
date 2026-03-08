@@ -17,6 +17,7 @@ pub mod project_form;
 pub mod schema_form;
 pub mod service_form;
 pub mod sysinfo;
+pub mod task_queue;
 pub mod ui;
 
 use std::collections::HashMap;

@@ -102,6 +102,21 @@ pub fn new_service_form() -> ResourceForm {
     ResourceForm::new(ResourceKind::Service, SERVICE_TABS, nodes, None, service_on_change)
 }
 
+/// Build a service form with a pre-selected default class.
+/// Used by the Task Wizard to pre-configure required service types
+/// (e.g. "proxy/zentinel" for the proxy task).
+pub fn new_service_form_with_default_class(class: &str) -> ResourceForm {
+    let class_dyn = [("class", class.to_string())];
+    let nodes = schema_form::build_nodes(
+        ServiceFormData::schema(),
+        &HashMap::new(),
+        DISPLAY_FNS,
+        &class_dyn,
+        &[],
+    );
+    ResourceForm::new(ResourceKind::Service, SERVICE_TABS, nodes, None, service_on_change)
+}
+
 // ── Submit ────────────────────────────────────────────────────────────────────
 
 /// Write a standalone `.service.toml` file for the service instance.
