@@ -664,7 +664,7 @@ fn submit_service(state: &mut AppState, root: &Path) -> Result<()> {
     std::fs::create_dir_all(&services_dir)?;
 
     let result = state.current_form.as_ref()
-        .map(|form| crate::service_form::submit_service_form(form, &services_dir));
+        .map(|form| crate::service_form::submit_service_form(form, &services_dir, &proj.slug));
 
     match result {
         Some(Ok(())) => {
@@ -675,11 +675,30 @@ fn submit_service(state: &mut AppState, root: &Path) -> Result<()> {
                 let slug      = crate::app::slugify(&svc_name);
                 let mut proj_content = std::fs::read_to_string(&proj.toml_path)?;
                 if !proj_content.contains(&format!("[load.services.{}]", slug)) {
-                    let version = form.field_value("version");
-                    let ver = if version.is_empty() { "latest".to_string() } else { version };
+                    let version  = form.field_value("version");
+                    let ver      = if version.is_empty() { "latest".to_string() } else { version };
+                    let svc_env  = form.field_value("env");
+
                     proj_content.push_str(&format!(
                         "\n[load.services.{slug}]\nservice_class = \"{svc_class}\"\nversion       = \"{ver}\"\n"
                     ));
+
+                    // Instance-level env overrides → [load.services.{slug}.env]
+                    let env_pairs: Vec<String> = svc_env.lines()
+                        .filter_map(|line| {
+                            let (k, v) = line.split_once('=')?;
+                            let k = k.trim();
+                            if k.is_empty() { return None; }
+                            Some(format!("{k} = \"{}\"", v.trim()))
+                        })
+                        .collect();
+                    if !env_pairs.is_empty() {
+                        proj_content.push_str(&format!(
+                            "\n[load.services.{slug}.env]\n{}\n",
+                            env_pairs.join("\n")
+                        ));
+                    }
+
                     std::fs::write(&proj.toml_path, proj_content)?;
                 }
             }

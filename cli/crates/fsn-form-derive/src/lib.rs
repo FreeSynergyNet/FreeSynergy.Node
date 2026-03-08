@@ -89,6 +89,7 @@ fn widget_tokens(widget: &str) -> Ts2 {
         "toggle"        => quote! { ::fsn_form::WidgetType::Toggle },
         "number"        => quote! { ::fsn_form::WidgetType::Number },
         "textarea"      => quote! { ::fsn_form::WidgetType::TextArea },
+        "env_table"     => quote! { ::fsn_form::WidgetType::EnvTable },
         _               => quote! { ::fsn_form::WidgetType::Text },
     }
 }

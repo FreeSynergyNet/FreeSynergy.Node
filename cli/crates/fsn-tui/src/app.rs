@@ -231,7 +231,7 @@ pub fn run_state_i18n(state: RunState) -> &'static str {
 // ── Resource kind ─────────────────────────────────────────────────────────────
 
 pub const PROJECT_TABS: &[&str] = &["form.tab.project", "form.tab.options"];
-pub const SERVICE_TABS: &[&str] = &["form.tab.service", "form.tab.options"];
+pub const SERVICE_TABS: &[&str] = &["form.tab.service", "form.tab.network", "form.tab.env"];
 pub const HOST_TABS:    &[&str] = &["form.tab.host", "form.tab.system", "form.tab.dns"];
 pub const BOT_TABS:     &[&str] = &["form.tab.bot", "form.tab.options"];
 

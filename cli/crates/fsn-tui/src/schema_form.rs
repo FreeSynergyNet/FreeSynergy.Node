@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use fsn_form::{FieldMeta, FormSchema, WidgetType};
 
 use crate::ui::form_node::FormNode;
-use crate::ui::nodes::{SelectInputNode, TextAreaNode, TextInputNode};
+use crate::ui::nodes::{EnvTableNode, SelectInputNode, TextAreaNode, TextInputNode};
 
 /// Build form nodes from a static schema.
 ///
@@ -90,6 +90,14 @@ fn build_node(
             // Priority: prefill > dynamic > schema default
             if let Some(v) = pre_val { node = node.pre_filled(v); }
             else if let Some(v) = dyn_val.or(field.default_val) { node = node.default_val(v); }
+            Box::new(node)
+        }
+
+        WidgetType::EnvTable => {
+            let mut node = EnvTableNode::new(field.key, field.label_key, field.tab);
+            if let Some(h) = field.hint_key { node = node.hint(h); }
+            if let Some(r) = field.rows     { node = node.rows(r); }
+            if let Some(v) = pre_val        { node.set_value(v); }
             Box::new(node)
         }
 

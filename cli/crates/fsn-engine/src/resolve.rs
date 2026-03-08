@@ -68,6 +68,7 @@ pub fn resolve_desired(
         let instance = resolve_instance(
             instance_name,
             &module_ref.service_class,
+            &module_ref.env,
             project,
             host,
             registry,
@@ -142,6 +143,7 @@ pub fn collect_cross_service_vars(project: &ProjectConfig) -> HashMap<String, St
 fn resolve_instance(
     name: &str,
     class_key: &str,
+    instance_env: &indexmap::IndexMap<String, String>,
     project: &ProjectConfig,
     host: &HostConfig,
     registry: &ServiceRegistry,
@@ -180,8 +182,12 @@ fn resolve_instance(
         module_vars,
     };
 
-    // Expand environment variables
-    let resolved_env = resolve_env(&class.environment, &ctx)?;
+    // Expand environment variables (module defaults + instance overrides)
+    let mut resolved_env = resolve_env(&class.environment, &ctx)?;
+    // Instance-level env overrides take precedence over module defaults
+    for (k, v) in instance_env {
+        resolved_env.insert(k.clone(), v.clone());
+    }
 
     // Expand volume mount strings ({{ module_vars.config_dir }}/data:/data:Z → real path)
     let resolved_volumes = resolve_volumes(&class.container.volumes, &ctx)?;
@@ -193,6 +199,7 @@ fn resolve_instance(
         let sub = resolve_instance(
             &sub_name,
             &sub_ref.service_class,
+            &indexmap::IndexMap::new(),
             project,
             host,
             registry,

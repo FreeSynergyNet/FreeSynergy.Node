@@ -146,6 +146,11 @@ pub struct ServiceEntry {
     #[serde(default)]
     pub tags: Vec<String>,
 
+    /// Instance-level environment variable overrides.
+    /// Merged on top of the service class's [environment] block during resolution.
+    #[serde(default)]
+    pub env: IndexMap<String, String>,
+
     #[serde(default)]
     pub vars: IndexMap<String, Value>,
 }

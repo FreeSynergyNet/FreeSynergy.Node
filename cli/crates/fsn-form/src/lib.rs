@@ -39,6 +39,8 @@ pub enum WidgetType {
     Number,
     /// Multi-line text area. Height controlled by `FieldMeta::rows`.
     TextArea,
+    /// Editable key-value-comment table for environment variables.
+    EnvTable,
 }
 
 // ── FieldMeta ─────────────────────────────────────────────────────────────────

@@ -1,8 +1,9 @@
 // Service-specific form — uses #[derive(Form)] for schema definition.
 //
 // Tabs:
-//   Tab 0 (Service): name, class (select), subdomain, alias
-//   Tab 1 (Options): version, port
+//   Tab 0 (Service): name, class, version, tags
+//   Tab 1 (Network): subdomain, alias, port
+//   Tab 2 (Env):     env (EnvTableNode — key/value/comment rows)
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -28,18 +29,26 @@ pub struct ServiceFormData {
            default = "proxy/zentinel")]
     pub class: String,
 
-    #[form(label = "form.service.subdomain", tab = 0, hint = "form.service.subdomain.hint")]
+    #[form(label = "form.options.version", tab = 0, default = "latest")]
+    pub version: String,
+
+    #[form(label = "form.service.tags", tab = 0, hint = "form.service.tags.hint")]
+    pub tags: String,
+
+    // ── Tab 1: Network ────────────────────────────────────────────────────
+    #[form(label = "form.service.subdomain", tab = 1, hint = "form.service.subdomain.hint")]
     pub subdomain: String,
 
-    #[form(label = "form.service.alias", tab = 0, hint = "form.service.alias.hint")]
+    #[form(label = "form.service.alias", tab = 1, hint = "form.service.alias.hint")]
     pub alias: String,
-
-    // ── Tab 1: Options ────────────────────────────────────────────────────
-    #[form(label = "form.options.version", tab = 1, default = "latest")]
-    pub version: String,
 
     #[form(label = "form.service.port", tab = 1)]
     pub port: String,
+
+    // ── Tab 2: Env ────────────────────────────────────────────────────────
+    #[form(label = "form.service.env", widget = "env_table", tab = 2, rows = 4,
+           hint = "form.service.env.hint")]
+    pub env: String,
 }
 
 // ── Display helpers ───────────────────────────────────────────────────────────
@@ -95,32 +104,48 @@ pub fn new_service_form() -> ResourceForm {
 
 // ── Submit ────────────────────────────────────────────────────────────────────
 
-pub fn submit_service_form(form: &ResourceForm, project_dir: &Path) -> Result<()> {
+/// Write a standalone `.service.toml` file for the service instance.
+///
+/// `project_slug` is required: it populates the `project` field so the TOML
+/// parses correctly as a `ServiceInstanceConfig`.
+pub fn submit_service_form(form: &ResourceForm, services_dir: &Path, project_slug: &str) -> Result<()> {
     let name      = form.field_value("name");
     let class     = form.field_value("class");
+    let version   = form.field_value("version");
+    let tags_raw  = form.field_value("tags");
     let subdomain = form.field_value("subdomain");
     let alias     = form.field_value("alias");
-    let version   = form.field_value("version");
     let port      = form.field_value("port");
 
-    if name.is_empty()  { anyhow::bail!("Service name ist erforderlich"); }
-    if class.is_empty() { anyhow::bail!("Service class ist erforderlich"); }
+    if name.is_empty()  { anyhow::bail!("Service name is required"); }
+    if class.is_empty() { anyhow::bail!("Service class is required"); }
 
-    let slug = crate::app::slugify(&name);
-    let path = project_dir.join(format!("{}.service.toml", slug));
-
+    let slug        = crate::app::slugify(&name);
     let version_val = if version.is_empty() { "latest".to_string() } else { version };
+    let path        = services_dir.join(format!("{}.service.toml", slug));
 
     let mut content = format!(
-        "[service]\nname  = \"{name}\"\nclass = \"{class}\"\n"
+        "[service]\nname          = \"{name}\"\nservice_class = \"{class}\"\nproject       = \"{project_slug}\"\nversion       = \"{version_val}\"\n"
     );
-    if !subdomain.is_empty() { content.push_str(&format!("subdomain = \"{subdomain}\"\n")); }
-    if !alias.is_empty()     { content.push_str(&format!("alias     = \"{alias}\"\n")); }
-    content.push_str(&format!("version   = \"{version_val}\"\n"));
-    if !port.is_empty() {
-        if let Ok(p) = port.parse::<u16>() {
-            content.push_str(&format!("port      = {p}\n"));
-        }
+
+    if !subdomain.is_empty() {
+        content.push_str(&format!("subdomain     = \"{subdomain}\"\n"));
+    }
+    if !alias.is_empty() {
+        content.push_str(&format!("alias         = \"{alias}\"\n"));
+    }
+    if let Ok(p) = port.parse::<u16>() {
+        content.push_str(&format!("port          = {p}\n"));
+    }
+
+    // Tags: CSV → TOML array
+    let tags: Vec<String> = tags_raw.split(',')
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty())
+        .collect();
+    if !tags.is_empty() {
+        let tag_list = tags.iter().map(|t| format!("\"{t}\"")).collect::<Vec<_>>().join(", ");
+        content.push_str(&format!("tags          = [{tag_list}]\n"));
     }
 
     std::fs::write(&path, content)?;
