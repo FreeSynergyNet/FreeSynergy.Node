@@ -87,6 +87,18 @@ fn handle_overlay(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()
                     state.pop_overlay();
                     match yes_action {
                         ConfirmAction::DeleteProject => delete_selected_project(state, root)?,
+                        ConfirmAction::LeaveForm => {
+                            state.current_form = None;
+                            state.screen = if state.projects.is_empty() {
+                                Screen::Welcome
+                            } else {
+                                Screen::Dashboard
+                            };
+                        }
+                        ConfirmAction::LeaveWizard => {
+                            state.task_queue = None;
+                            state.screen = Screen::Dashboard;
+                        }
                     }
                 }
                 _ => { state.pop_overlay(); } // any other key = cancel
@@ -203,12 +215,20 @@ fn handle_resource_form(key: KeyEvent, state: &mut AppState, root: &Path) -> Res
 
     match action {
         FormAction::Cancel => {
-            state.current_form = None;
-            state.screen = if state.projects.is_empty() {
-                Screen::Welcome
+            let dirty = state.current_form.as_ref().map(|f| f.is_dirty()).unwrap_or(false);
+            if dirty {
+                state.push_overlay(OverlayLayer::Confirm {
+                    message:    "form.confirm.leave".into(),
+                    yes_action: ConfirmAction::LeaveForm,
+                });
             } else {
-                Screen::Dashboard
-            };
+                state.current_form = None;
+                state.screen = if state.projects.is_empty() {
+                    Screen::Welcome
+                } else {
+                    Screen::Dashboard
+                };
+            }
         }
 
         FormAction::LangToggle => state.lang = state.lang.toggle(),
@@ -218,7 +238,6 @@ fn handle_resource_form(key: KeyEvent, state: &mut AppState, root: &Path) -> Res
         FormAction::Consumed => {} // node handled it, nothing to do
 
         FormAction::Unhandled => {
-            // Keys not handled by the focused node: lang toggle, quit
             match key.code {
                 KeyCode::Char('l') | KeyCode::Char('L') => state.lang = state.lang.toggle(),
                 _ => {}
@@ -292,8 +311,18 @@ fn handle_wizard(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()>
 
     match action {
         FormAction::Cancel => {
-            state.task_queue = None;
-            state.screen = Screen::Dashboard;
+            let dirty = state.task_queue.as_ref().and_then(|q| {
+                q.tasks.get(q.active)?.form.as_ref().map(|f| f.is_dirty())
+            }).unwrap_or(false);
+            if dirty {
+                state.push_overlay(OverlayLayer::Confirm {
+                    message:    "form.confirm.leave".into(),
+                    yes_action: ConfirmAction::LeaveWizard,
+                });
+            } else {
+                state.task_queue = None;
+                state.screen = Screen::Dashboard;
+            }
         }
 
         FormAction::LangToggle => state.lang = state.lang.toggle(),
@@ -305,8 +334,18 @@ fn handle_wizard(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()>
         FormAction::Unhandled => {
             match key.code {
                 KeyCode::Esc => {
-                    state.task_queue = None;
-                    state.screen = Screen::Dashboard;
+                    let dirty = state.task_queue.as_ref().and_then(|q| {
+                        q.tasks.get(q.active)?.form.as_ref().map(|f| f.is_dirty())
+                    }).unwrap_or(false);
+                    if dirty {
+                        state.push_overlay(OverlayLayer::Confirm {
+                            message:    "form.confirm.leave".into(),
+                            yes_action: ConfirmAction::LeaveWizard,
+                        });
+                    } else {
+                        state.task_queue = None;
+                        state.screen = Screen::Dashboard;
+                    }
                 }
                 KeyCode::Char('l') | KeyCode::Char('L') => state.lang = state.lang.toggle(),
                 _ => {}
@@ -484,13 +523,17 @@ fn handle_dashboard(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<
                 }
             }
 
-            // Enter activates the current sidebar item.
+            // Enter = "Eintreten" — opens the edit form for the item under the cursor.
+            // Action items open the create form (consistent: Enter always starts an interaction).
             KeyCode::Enter => {
                 let item = state.current_sidebar_item().cloned();
                 match item {
                     Some(SidebarItem::Action { kind: SidebarAction::NewProject, .. }) => {
-                        state.current_form = Some(crate::project_form::new_project_form());
-                        state.screen = Screen::NewProject;
+                        let queue = crate::task_queue::TaskQueue::new(
+                            crate::task_queue::TaskKind::NewProject, state,
+                        );
+                        state.task_queue = Some(queue);
+                        state.screen = Screen::TaskWizard;
                     }
                     Some(SidebarItem::Action { kind: SidebarAction::NewHost, .. }) => {
                         let project_slugs = state.projects.iter().map(|p| p.slug.clone()).collect();
@@ -504,15 +547,28 @@ fn handle_dashboard(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<
                         state.screen = Screen::NewProject;
                     }
                     Some(SidebarItem::Project { slug, .. }) => {
-                        if let Some(idx) = state.projects.iter().position(|p| p.slug == slug) {
-                            state.selected_project = idx;
-                            reload_hosts(state, root);
-                            state.rebuild_services();
+                        if let Some(proj) = state.projects.iter().find(|p| p.slug == slug).cloned() {
+                            state.current_form = Some(crate::project_form::edit_project_form(&proj));
+                            state.screen = Screen::NewProject;
                         }
-                        state.dash_focus = DashFocus::Services;
                     }
-                    Some(SidebarItem::Host { .. }) | Some(SidebarItem::Service { .. }) => {
-                        state.dash_focus = DashFocus::Services;
+                    Some(SidebarItem::Host { slug, .. }) => {
+                        if let Some(host) = state.hosts.iter().find(|h| h.slug == slug).cloned() {
+                            let project_slugs = state.projects.iter().map(|p| p.slug.clone()).collect();
+                            state.current_form = Some(crate::host_form::edit_host_form(&host, project_slugs));
+                            state.screen = Screen::NewProject;
+                        }
+                    }
+                    Some(SidebarItem::Service { name, .. }) => {
+                        if let Some(proj) = state.projects.get(state.selected_project).cloned() {
+                            if let Some(entry) = proj.config.load.services.get(&name).cloned() {
+                                let slug = crate::app::slugify(&name);
+                                state.current_form = Some(
+                                    crate::service_form::edit_service_form(&name, &entry, slug)
+                                );
+                                state.screen = Screen::NewProject;
+                            }
+                        }
                     }
                     _ => {}
                 }
@@ -1021,11 +1077,10 @@ fn handle_form_click(col: u16, row: u16, state: &mut AppState, term_w: u16) {
     let inner_w = term_w * 90 / 100;
     let inner   = ratatui::layout::Rect { x: inner_x, y: 6, width: inner_w, height: 200 };
 
-    // First: try clicking the focused field's overlay (e.g. dropdown)
+    // First: let the focused field handle the click (open/close dropdown, select item).
+    // click_overlay returns true when the click was fully consumed by the overlay.
     if let Some(global_idx) = form.focused_node_global_idx() {
         if form.nodes[global_idx].click_overlay(col, row, inner) {
-            // Dropdown item selected — advance focus so dropdown closes
-            form.focus_next();
             return;
         }
     }

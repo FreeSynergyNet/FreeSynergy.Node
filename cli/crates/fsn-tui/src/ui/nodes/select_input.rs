@@ -1,11 +1,11 @@
 // Select input node — drop-down field.
 //
-// Up/Down cycles through options internally.
-// The dropdown list is rendered via render_overlay(), called after all regular
-// fields so it visually appears on top.
-//
-// Options are `Vec<String>` so both static (&'static str) and dynamic
-// (runtime-computed, e.g. project slugs) choices are supported.
+// Dropdown lifecycle:
+//   Focused but closed: field shows current value + "▼" hint, no list visible.
+//   ↓ / ↑ / Enter / click on field → opens the dropdown.
+//   In dropdown: ↑↓ move the pending highlight, ←/Esc close without change,
+//                →/Enter/click on item accept + close.
+//   Click outside dropdown while open → close without change.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
@@ -32,6 +32,10 @@ pub struct SelectInputNode {
     /// Maps an option code to a human-readable label.
     pub display_fn: Option<fn(&str) -> &'static str>,
     rect:           Option<Rect>,
+    /// Whether the dropdown list is currently visible.
+    is_open:        bool,
+    /// Index of the highlighted item inside the open dropdown (not yet confirmed).
+    pending_idx:    usize,
 }
 
 impl SelectInputNode {
@@ -46,6 +50,7 @@ impl SelectInputNode {
         Self {
             key, label_key, hint_key: None, tab, required,
             value, options, display_fn: None, rect: None,
+            is_open: false, pending_idx: 0,
         }
     }
 
@@ -69,19 +74,6 @@ impl SelectInputNode {
         self.options.iter().position(|o| o == &self.value).unwrap_or(0)
     }
 
-    fn next_option(&mut self) {
-        if self.options.is_empty() { return; }
-        let next = (self.current_idx() + 1) % self.options.len();
-        self.value = self.options[next].clone();
-    }
-
-    fn prev_option(&mut self) {
-        if self.options.is_empty() { return; }
-        let cur  = self.current_idx();
-        let prev = if cur == 0 { self.options.len() - 1 } else { cur - 1 };
-        self.value = self.options[prev].clone();
-    }
-
     fn human_label(&self) -> &str {
         if let Some(f) = self.display_fn {
             let s = f(&self.value);
@@ -90,10 +82,35 @@ impl SelectInputNode {
         &self.value
     }
 
-    fn set_by_index(&mut self, idx: usize) {
-        if let Some(opt) = self.options.get(idx) {
+    fn open(&mut self) {
+        self.pending_idx = self.current_idx();
+        self.is_open = true;
+    }
+
+    fn close_reject(&mut self) {
+        self.is_open = false;
+    }
+
+    fn close_accept(&mut self) {
+        if let Some(opt) = self.options.get(self.pending_idx) {
             self.value = opt.clone();
         }
+        self.is_open = false;
+    }
+
+    /// Geometry of the dropdown list (shared by render and click-test).
+    fn dropdown_rect(&self, available: Rect) -> Option<Rect> {
+        let input_rect      = self.rect?;
+        let input_box_bottom = input_rect.y + 3;
+        let avail_h = available.bottom().saturating_sub(input_box_bottom);
+        let want_h  = (self.options.len() as u16 + 2).min(avail_h);
+        if want_h < 3 { return None; }
+        Some(Rect {
+            x: input_rect.x,
+            y: input_box_bottom,
+            width: input_rect.width,
+            height: want_h,
+        })
     }
 }
 
@@ -105,16 +122,16 @@ impl FormNode for SelectInputNode {
     fn required(&self)  -> bool                 { self.required }
 
     fn value(&self)           -> &str { &self.value }
-    fn effective_value(&self) -> &str { &self.value }  // Select always has a valid value
+    fn effective_value(&self) -> &str { &self.value }
 
     fn set_value(&mut self, v: &str) { self.value = v.to_string(); }
-    fn is_dirty(&self)  -> bool      { false }   // Select is never "dirty"
+    fn is_dirty(&self)  -> bool      { false }
     fn set_dirty(&mut self, _v: bool) {}
 
     fn set_rect(&mut self, r: Rect)     { self.rect = Some(r); }
     fn last_rect(&self) -> Option<Rect> { self.rect }
 
-    fn preferred_height(&self) -> u16 { 4 } // box-with-title(3) + hint(1)
+    fn preferred_height(&self) -> u16 { 4 }
 
     fn render(&mut self, f: &mut Frame, area: Rect, focused: bool, lang: Lang) {
         self.set_rect(area);
@@ -122,12 +139,11 @@ impl FormNode for SelectInputNode {
         let rows = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3), // input box (label in title)
-                Constraint::Length(1), // hint (hidden when focused)
+                Constraint::Length(3),
+                Constraint::Length(1),
             ])
             .split(area);
 
-        // Label in block title
         let label_text  = crate::i18n::t(lang, self.label_key);
         let req_suffix  = if self.required { " *" } else { "" };
         let label_style = if focused {
@@ -139,17 +155,17 @@ impl FormNode for SelectInputNode {
             Span::styled(format!(" {}{} ", label_text, req_suffix), label_style),
         ]);
 
-        // Input box — shows current selection + cursor when focused
         let border_style = if focused {
             Style::default().fg(Color::Cyan)
         } else {
             Style::default().fg(Color::DarkGray)
         };
+
         let display = self.human_label();
         let input_line = if focused {
             Line::from(vec![
                 Span::styled(display.to_string(), Style::default().fg(Color::White)),
-                Span::styled("█",                Style::default().fg(Color::Cyan)),
+                Span::styled(" ▼", Style::default().fg(Color::Cyan)),
             ])
         } else {
             Line::from(Span::styled(display.to_string(), Style::default().fg(Color::White)))
@@ -160,8 +176,8 @@ impl FormNode for SelectInputNode {
             rows[0],
         );
 
-        // Hint — hidden when focused (dropdown takes that space)
-        if !focused {
+        // Hint only when closed (dropdown takes the space while open)
+        if !self.is_open {
             if let Some(hk) = self.hint_key {
                 f.render_widget(
                     Paragraph::new(Line::from(Span::styled(
@@ -174,27 +190,15 @@ impl FormNode for SelectInputNode {
         }
     }
 
-    /// Render the dropdown list below the input box.
-    /// `available` is the total form area — limits how tall the dropdown can grow.
+    /// Render the dropdown — only when `is_open`.
     fn render_overlay(&mut self, f: &mut Frame, available: Rect, _lang: Lang) {
-        let Some(input_rect) = self.last_rect() else { return };
-        let input_box_bottom = input_rect.y + 3; // box starts at top (compact: no separate label)
-        let avail_h = available.bottom().saturating_sub(input_box_bottom);
-        let want_h  = (self.options.len() as u16 + 2).min(avail_h);
-        if want_h < 3 { return; }
-
-        let dropdown = Rect {
-            x: input_rect.x,
-            y: input_box_bottom,
-            width: input_rect.width,
-            height: want_h,
-        };
-        let cur = self.current_idx();
+        if !self.is_open { return; }
+        let Some(dropdown) = self.dropdown_rect(available) else { return };
 
         let items: Vec<ListItem> = self.options.iter().enumerate().map(|(i, opt)| {
             let label  = if let Some(f) = self.display_fn { f(opt.as_str()) } else { opt.as_str() };
-            let prefix = if i == cur { "▶ " } else { "  " };
-            let style  = if i == cur {
+            let prefix = if i == self.pending_idx { "▶ " } else { "  " };
+            let style  = if i == self.pending_idx {
                 Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::White)
@@ -212,54 +216,69 @@ impl FormNode for SelectInputNode {
 
     fn handle_key(&mut self, key: KeyEvent) -> FormAction {
         use KeyModifiers as KM;
-        match key.code {
-            // Selection — handled internally
-            KeyCode::Up   => { self.prev_option(); FormAction::Consumed }
-            KeyCode::Down => { self.next_option(); FormAction::Consumed }
-            // Enter confirms the current selection and advances to the next field,
-            // matching TextInputNode behaviour so the user can navigate with Enter.
-            KeyCode::Enter => FormAction::FocusNext,
 
-            // Navigation
-            KeyCode::Tab     => FormAction::FocusNext,
-            KeyCode::BackTab => FormAction::FocusPrev,
-            KeyCode::Esc     => FormAction::Cancel,
-            KeyCode::Left  if key.modifiers.contains(KM::CONTROL) => FormAction::TabPrev,
-            KeyCode::Right if key.modifiers.contains(KM::CONTROL) => FormAction::TabNext,
-
-            // Language toggle
-            KeyCode::Char('l') | KeyCode::Char('L') => FormAction::LangToggle,
-
-            _ => FormAction::Unhandled,
+        if !self.is_open {
+            match key.code {
+                // Open dropdown
+                KeyCode::Down | KeyCode::Up | KeyCode::Enter => {
+                    self.open();
+                    FormAction::Consumed
+                }
+                KeyCode::Tab     => FormAction::FocusNext,
+                KeyCode::BackTab => FormAction::FocusPrev,
+                KeyCode::Esc     => FormAction::Cancel,
+                KeyCode::Left  if key.modifiers.contains(KM::CONTROL) => FormAction::TabPrev,
+                KeyCode::Right if key.modifiers.contains(KM::CONTROL) => FormAction::TabNext,
+                KeyCode::Char('l') | KeyCode::Char('L') => FormAction::LangToggle,
+                _ => FormAction::Unhandled,
+            }
+        } else {
+            // Dropdown open — navigate pending selection
+            match key.code {
+                KeyCode::Up => {
+                    if self.pending_idx > 0 { self.pending_idx -= 1; }
+                    FormAction::Consumed
+                }
+                KeyCode::Down => {
+                    let max = self.options.len().saturating_sub(1);
+                    if self.pending_idx < max { self.pending_idx += 1; }
+                    FormAction::Consumed
+                }
+                KeyCode::Left | KeyCode::Esc   => { self.close_reject(); FormAction::Consumed      }
+                KeyCode::Right | KeyCode::Enter => { self.close_accept(); FormAction::ValueChanged  }
+                // Swallow everything else while dropdown is open
+                _ => FormAction::Consumed,
+            }
         }
     }
 
     fn click_overlay(&mut self, col: u16, row: u16, available: Rect) -> bool {
-        self.click_dropdown(col, row, available)
-    }
-}
+        if !self.is_open {
+            // Click on the field → open dropdown
+            if let Some(r) = self.rect {
+                if col >= r.x && col < r.right() && row >= r.y && row < r.bottom() {
+                    self.open();
+                    return true;
+                }
+            }
+            return false;
+        }
 
-// ── Mouse click support ───────────────────────────────────────────────────────
-
-impl SelectInputNode {
-    /// If a mouse click lands on the dropdown list, set the option and return true.
-    pub fn click_dropdown(&mut self, col: u16, row: u16, available: Rect) -> bool {
-        let Some(input_rect) = self.last_rect() else { return false };
-        let input_box_bottom = input_rect.y + 3; // compact: box starts at field top
-        let avail_h = available.bottom().saturating_sub(input_box_bottom);
-        let want_h  = (self.options.len() as u16 + 2).min(avail_h);
-        if want_h < 3 { return false; }
-
-        let dropdown = Rect {
-            x: input_rect.x,
-            y: input_box_bottom,
-            width: input_rect.width,
-            height: want_h,
-        };
-        if col < dropdown.x || col >= dropdown.right() { return false; }
-        if row <= dropdown.y || row >= dropdown.bottom() { return false; }
-        let item_row = (row - dropdown.y - 1) as usize;
-        self.set_by_index(item_row);
-        true
+        // Dropdown is open — check if click landed on an item
+        if let Some(dropdown) = self.dropdown_rect(available) {
+            if col >= dropdown.x && col < dropdown.right()
+                && row > dropdown.y && row < dropdown.bottom()
+            {
+                let item_row = (row - dropdown.y - 1) as usize;
+                if item_row < self.options.len() {
+                    self.pending_idx = item_row;
+                    self.close_accept();
+                    return true;
+                }
+            }
+        }
+        // Click outside → close without change
+        self.close_reject();
+        false
     }
 }

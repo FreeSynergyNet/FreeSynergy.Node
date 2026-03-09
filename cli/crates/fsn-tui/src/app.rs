@@ -412,6 +412,11 @@ impl ResourceForm {
 
     // ── Validation ─────────────────────────────────────────────────────────
 
+    /// Returns `true` if any field node has been edited by the user.
+    pub fn is_dirty(&self) -> bool {
+        self.nodes.iter().any(|n| n.is_dirty())
+    }
+
     pub fn tab_missing_count(&self, tab_idx: usize) -> usize {
         self.nodes.iter()
             .filter(|n| n.tab() == tab_idx && n.required() && !n.is_filled())
@@ -515,6 +520,10 @@ pub enum OverlayLayer {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfirmAction {
     DeleteProject,
+    /// Leave a resource form (Screen::NewProject) discarding unsaved changes.
+    LeaveForm,
+    /// Leave the task wizard discarding unsaved changes.
+    LeaveWizard,
 }
 
 /// Options shown in the new-resource selector popup (label key + kind).
