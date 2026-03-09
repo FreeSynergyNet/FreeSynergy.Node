@@ -8,6 +8,7 @@
 //   4. For each instance: enable + start service
 //   5. Wait for health check
 //   6. Write deployed version marker
+//   7. Generate proxy config: via plugin (if store_root set) or built-in fallback
 //
 // Undeploy:
 //   1. systemctl --user stop + disable
@@ -20,7 +21,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use fsn_core::{
-    config::{ProjectConfig, VaultConfig},
+    config::{ProjectConfig, VaultConfig, service::ServiceType},
     state::desired::{DesiredState, ServiceInstance},
 };
 use fsn_podman::systemd;
@@ -29,6 +30,7 @@ use tracing::{info, warn};
 use crate::generate::{env as gen_env, kdl as gen_kdl, quadlet as gen_quadlet};
 use crate::health;
 use crate::hooks::{self, HookContext};
+use crate::module_runner::{ContextBuilder, ModuleRunner};
 
 /// Options for the deploy operation.
 #[derive(Debug, Clone)]
@@ -44,6 +46,14 @@ pub struct DeployOpts {
 
     /// How long to wait for each service to become healthy.
     pub health_timeout: Duration,
+
+    /// Local root of the downloaded Store module tree
+    /// (e.g. `~/.local/share/fsn/store/Node/`).
+    ///
+    /// When set, modules with a `[plugin]` manifest are invoked via the
+    /// process plugin protocol instead of the built-in generators.
+    /// When absent, built-in generators are used as fallback.
+    pub store_root: Option<PathBuf>,
 }
 
 impl DeployOpts {
@@ -54,6 +64,7 @@ impl DeployOpts {
             state_dir:      PathBuf::from(&home).join(".local/share/fsn/deployed"),
             dry_run:        false,
             health_timeout: Duration::from_secs(120),
+            store_root:     None,
         }
     }
 }
@@ -126,8 +137,8 @@ pub async fn deploy_all(
         info!("  ✓ {} running", instance.name);
     }
 
-    // ── Phase 5: Write Zentinel KDL config ───────────────────────────────────
-    write_zentinel_kdl(desired, data_root)?;
+    // ── Phase 5: Generate proxy config (plugin or built-in fallback) ─────────
+    generate_proxy_config(desired, data_root, opts)?;
 
     Ok(())
 }
@@ -231,15 +242,20 @@ async fn run_systemctl_disable(unit: &str) -> Result<()> {
     Ok(())
 }
 
-/// Write (or update) the Zentinel KDL config after a deploy.
-///
-/// Path: {data_root}/{proxy_instance_name}/config/zentinel.kdl
-/// - If the file exists: only the FSN-managed block is updated (markers preserved)
-/// - If new: full config is generated (listeners + managed section)
-fn write_zentinel_kdl(desired: &DesiredState, data_root: &Path) -> Result<()> {
-    use fsn_core::config::service::ServiceType;
+// ── Proxy config generation ───────────────────────────────────────────────────
 
-    // Find the proxy instance (ServiceType::Proxy)
+/// Generate the proxy routing config (Zentinel KDL) after a deploy.
+///
+/// Strategy:
+///   1. Find the proxy service instance in desired state.
+///   2. If it has a `[plugin]` manifest with `generate-config` AND
+///      `opts.store_root` is set → invoke via ModuleRunner (plugin protocol).
+///   3. Otherwise → fall back to built-in `gen_kdl` generator (no external dep).
+fn generate_proxy_config(
+    desired:   &DesiredState,
+    data_root: &Path,
+    opts:      &DeployOpts,
+) -> Result<()> {
     let proxy = desired
         .services
         .iter()
@@ -249,6 +265,70 @@ fn write_zentinel_kdl(desired: &DesiredState, data_root: &Path) -> Result<()> {
         return Ok(()); // no proxy in this project — nothing to do
     };
 
+    // Plugin path: requires store_root + manifest with generate-config command
+    if let Some(store_root) = &opts.store_root {
+        if let Some(manifest) = &proxy.class.manifest {
+            if manifest.commands.iter().any(|c| c == "generate-config") {
+                return run_plugin_generate_config(proxy, desired, data_root, store_root);
+            }
+        }
+    }
+
+    // Built-in fallback
+    write_zentinel_kdl_builtin(proxy, desired, data_root)
+}
+
+/// Invoke the plugin executable for `generate-config`.
+fn run_plugin_generate_config(
+    proxy:      &ServiceInstance,
+    desired:    &DesiredState,
+    data_root:  &Path,
+    store_root: &Path,
+) -> Result<()> {
+    // Store layout: {store_root}/{class_key}/  e.g. store_root/proxy/zentinel/
+    let store_module_dir = store_root.join(&proxy.class_key);
+    let runner = ModuleRunner::new(&store_module_dir);
+
+    // All services except the proxy itself are peers
+    let peers: Vec<&ServiceInstance> = desired
+        .services
+        .iter()
+        .filter(|s| s.name != proxy.name)
+        .collect();
+
+    let data_root_str = data_root.join(&proxy.name).to_string_lossy().into_owned();
+
+    let ctx = ContextBuilder::build(
+        "generate-config",
+        proxy,
+        &desired.domain,
+        &data_root_str,
+        &peers,
+    );
+
+    let response = runner.run(&ctx)
+        .with_context(|| format!("plugin generate-config for {}", proxy.name))?;
+
+    for log in &response.logs {
+        info!("  [{}] {}", proxy.name, log.message);
+    }
+
+    runner.apply(&response)
+        .with_context(|| format!("applying plugin output for {}", proxy.name))?;
+
+    info!("  ✓ Zentinel config written (via plugin)");
+    Ok(())
+}
+
+/// Built-in Zentinel KDL generator — used when no store_root or no plugin manifest.
+///
+/// - Existing file: only the FSN-managed block is replaced (markers preserved).
+/// - New file: full config is generated (server + listeners + managed section).
+fn write_zentinel_kdl_builtin(
+    proxy:     &ServiceInstance,
+    desired:   &DesiredState,
+    data_root: &Path,
+) -> Result<()> {
     let kdl_path = data_root
         .join(&proxy.name)
         .join("config")
@@ -266,7 +346,7 @@ fn write_zentinel_kdl(desired: &DesiredState, data_root: &Path) -> Result<()> {
     };
 
     write_if_changed(&kdl_path, &new_content)?;
-    info!("  ✓ Zentinel config written → {}", kdl_path.display());
+    info!("  ✓ Zentinel config written (built-in) → {}", kdl_path.display());
 
     Ok(())
 }
