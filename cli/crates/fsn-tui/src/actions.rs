@@ -7,14 +7,16 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use crate::app::{AppState, RunState, Screen, SidebarItem};
+use crate::app::{AppState, NotifKind, RunState, Screen, SidebarItem};
 
 // ── Project / host / service deletion ────────────────────────────────────────
 
 pub fn delete_selected_project(state: &mut AppState, root: &Path) -> Result<()> {
     let Some(proj) = state.projects.get(state.selected_project) else { return Ok(()); };
     let project_dir = root.join("projects").join(&proj.slug);
-    let _ = std::fs::remove_dir_all(&project_dir);
+    if let Err(e) = std::fs::remove_dir_all(&project_dir) {
+        state.push_notif(NotifKind::Error, format!("Verzeichnis konnte nicht gelöscht werden: {e}"));
+    }
     state.projects.remove(state.selected_project);
     if state.selected_project > 0 && state.selected_project >= state.projects.len() {
         state.selected_project -= 1;
@@ -36,7 +38,9 @@ pub fn delete_selected_host(state: &mut AppState, root: &Path) -> Result<()> {
             .join("projects")
             .join(&proj.slug)
             .join(format!("{}.host.toml", slug));
-        let _ = std::fs::remove_file(&host_file);
+        if let Err(e) = std::fs::remove_file(&host_file) {
+            state.push_notif(NotifKind::Warning, format!("Host-Datei nicht gefunden: {e}"));
+        }
     }
     state.hosts.remove(state.selected_host);
     if state.selected_host > 0 && state.selected_host >= state.hosts.len() {
@@ -55,7 +59,9 @@ pub fn delete_service_by_name(state: &mut AppState, root: &Path, name: String) -
     let slug         = crate::resource_form::slugify(&name);
 
     let svc_file = services_dir.join(format!("{slug}.service.toml"));
-    let _ = std::fs::remove_file(&svc_file);
+    if let Err(e) = std::fs::remove_file(&svc_file) {
+        state.push_notif(NotifKind::Warning, format!("Service-Datei nicht gefunden: {e}"));
+    }
 
     if let Ok(content) = std::fs::read_to_string(&proj.toml_path) {
         let filtered = remove_toml_table_block(&content, &format!("load.services.{slug}"));
@@ -138,6 +144,48 @@ pub fn remove_toml_table_block(content: &str, table_path: &str) -> String {
         }
     }
     out
+}
+
+// ── Clipboard ─────────────────────────────────────────────────────────────────
+
+/// Copy `text` to the system clipboard and push a success/error toast.
+pub fn copy_to_clipboard(state: &mut AppState, text: &str) {
+    match arboard::Clipboard::new().and_then(|mut cb| cb.set_text(text)) {
+        Ok(()) => state.push_notif(NotifKind::Info, format!("Kopiert: {}", text)),
+        Err(e) => state.push_notif(NotifKind::Warning, format!("Clipboard-Fehler: {e}")),
+    }
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn toml_block_removal_removes_exact_section() {
+        let input = "[project]\nname = \"foo\"\n\n[load.services.myapp]\nimage = \"nginx\"\n\n[other]\nval = 1\n";
+        let result = remove_toml_table_block(input, "load.services.myapp");
+        assert!(!result.contains("[load.services.myapp]"), "section should be removed");
+        assert!(result.contains("[project]"), "other sections must survive");
+        assert!(result.contains("[other]"),   "other sections must survive");
+    }
+
+    #[test]
+    fn toml_block_removal_removes_sub_tables() {
+        let input = "[load.services.myapp]\nimage = \"nginx\"\n\n[load.services.myapp.env]\nKEY = \"val\"\n\n[load.services.other]\nimage = \"redis\"\n";
+        let result = remove_toml_table_block(input, "load.services.myapp");
+        assert!(!result.contains("[load.services.myapp]"),     "exact section must go");
+        assert!(!result.contains("[load.services.myapp.env]"), "sub-section must go");
+        assert!(result.contains("[load.services.other]"),      "unrelated service stays");
+    }
+
+    #[test]
+    fn toml_block_removal_no_op_when_not_found() {
+        let input = "[project]\nname = \"foo\"\n";
+        let result = remove_toml_table_block(input, "nonexistent");
+        assert_eq!(result.trim(), input.trim());
+    }
 }
 
 // ── Podman helpers ────────────────────────────────────────────────────────────

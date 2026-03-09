@@ -7,8 +7,8 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use crate::app::{AppState, DashFocus, Screen};
-use crate::resource_form::ResourceKind;
+use crate::app::{AppState, DashFocus, NotifKind, Screen};
+use crate::resource_form::{FormErrorKind, ResourceKind};
 
 // ── Generic form submit (validation + dispatch) ───────────────────────────────
 
@@ -153,6 +153,7 @@ pub fn submit_project(state: &mut AppState, root: &Path) -> Result<()> {
 
     match result {
         Some(Ok(())) => {
+            let name = state.current_form.as_ref().map(|f| f.field_value("name")).unwrap_or_default();
             state.projects = crate::load_projects(root);
             if let Some(ref form) = state.current_form {
                 let slug = form.edit_id.clone()
@@ -165,9 +166,10 @@ pub fn submit_project(state: &mut AppState, root: &Path) -> Result<()> {
             state.screen      = Screen::Dashboard;
             state.dash_focus  = DashFocus::Sidebar;
             state.current_form = None;
+            state.push_notif(NotifKind::Success, format!("Projekt '{}' gespeichert", name));
         }
         Some(Err(e)) => {
-            if let Some(ref mut form) = state.current_form { form.error = Some(format!("{e}")); }
+            if let Some(ref mut form) = state.current_form { form.error = Some(format!("{e}")); form.error_kind = FormErrorKind::IoError; }
         }
         None => {}
     }
@@ -221,15 +223,17 @@ pub fn submit_service(state: &mut AppState, root: &Path) -> Result<()> {
                     std::fs::write(&proj.toml_path, proj_content)?;
                 }
             }
+            let svc_name = state.current_form.as_ref().map(|f| f.field_value("name")).unwrap_or_default();
             state.projects = crate::load_projects(root);
             state.rebuild_services();
             state.rebuild_sidebar();
             state.screen      = Screen::Dashboard;
             state.dash_focus  = DashFocus::Services;
             state.current_form = None;
+            state.push_notif(NotifKind::Success, format!("Service '{}' gespeichert", svc_name));
         }
         Some(Err(e)) => {
-            if let Some(ref mut form) = state.current_form { form.error = Some(format!("{e}")); }
+            if let Some(ref mut form) = state.current_form { form.error = Some(format!("{e}")); form.error_kind = FormErrorKind::IoError; }
         }
         None => {}
     }
@@ -248,14 +252,16 @@ pub fn submit_host(state: &mut AppState, root: &Path) -> Result<()> {
 
     match result {
         Some(Ok(())) => {
+            let name = state.current_form.as_ref().map(|f| f.field_value("name")).unwrap_or_default();
             state.hosts = crate::load_hosts(&project_dir);
             state.rebuild_sidebar();
             state.screen      = Screen::Dashboard;
             state.dash_focus  = DashFocus::Sidebar;
             state.current_form = None;
+            state.push_notif(NotifKind::Success, format!("Host '{}' gespeichert", name));
         }
         Some(Err(e)) => {
-            if let Some(ref mut form) = state.current_form { form.error = Some(format!("{e}")); }
+            if let Some(ref mut form) = state.current_form { form.error = Some(format!("{e}")); form.error_kind = FormErrorKind::IoError; }
         }
         None => {}
     }
@@ -274,12 +280,14 @@ pub fn submit_bot(state: &mut AppState, root: &Path) -> Result<()> {
 
     match result {
         Some(Ok(())) => {
+            let name = state.current_form.as_ref().map(|f| f.field_value("name")).unwrap_or_default();
             state.screen      = Screen::Dashboard;
             state.dash_focus  = DashFocus::Services;
             state.current_form = None;
+            state.push_notif(NotifKind::Success, format!("Bot '{}' gespeichert", name));
         }
         Some(Err(e)) => {
-            if let Some(ref mut form) = state.current_form { form.error = Some(format!("{e}")); }
+            if let Some(ref mut form) = state.current_form { form.error = Some(format!("{e}")); form.error_kind = FormErrorKind::IoError; }
         }
         None => {}
     }

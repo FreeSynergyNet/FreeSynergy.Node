@@ -80,6 +80,52 @@ pub fn render(f: &mut Frame, state: &mut AppState) {
     for layer in &state.overlay_stack {
         layer.render(f, state);
     }
+
+    // Toast notifications — always on top, top-right corner.
+    render_notifications(f, state);
+}
+
+// ── Toast notifications ───────────────────────────────────────────────────────
+
+fn render_notifications(f: &mut Frame, state: &AppState) {
+    use ratatui::{
+        layout::Rect,
+        style::{Color, Style},
+        text::{Line, Span},
+        widgets::{Clear, Paragraph},
+    };
+    use crate::app::NotifKind;
+
+    if state.notifications.is_empty() { return; }
+
+    let area     = f.area();
+    let max_w    = 52u16.min(area.width.saturating_sub(2));
+
+    for (i, notif) in state.notifications.iter().enumerate() {
+        let y = area.y + i as u16;
+        if y >= area.bottom() { break; }
+
+        let (color, prefix) = match notif.kind {
+            NotifKind::Success => (Color::Green,  " ✓ "),
+            NotifKind::Warning => (Color::Yellow, " ! "),
+            NotifKind::Error   => (Color::Red,    " ✗ "),
+            NotifKind::Info    => (Color::Cyan,   " i "),
+        };
+
+        let body    = format!("{}{} ", prefix, notif.message);
+        let width   = (body.chars().count() as u16).min(max_w);
+        let x       = area.right().saturating_sub(width + 1);
+        let toast_area = Rect { x, y, width, height: 1 };
+
+        f.render_widget(Clear, toast_area);
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                body,
+                Style::default().fg(Color::Black).bg(color),
+            ))),
+            toast_area,
+        );
+    }
 }
 
 fn render_new_resource(f: &mut Frame, state: &AppState) {

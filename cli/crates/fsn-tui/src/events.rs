@@ -19,6 +19,7 @@ use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::app::{AppState, ConfirmAction, OverlayKind, OverlayLayer, Screen};
+use crate::resource_form::FormErrorKind;
 use crate::ui::form_node::FormAction;
 use crate::events_dashboard::{self, execute_confirm_action, handle_new_resource_overlay};
 use crate::submit::{handle_form_submit, handle_wizard_submit};
@@ -165,10 +166,19 @@ fn handle_resource_form(key: KeyEvent, state: &mut AppState, root: &Path) -> Res
                 state.lang = state.lang.toggle();
             }
         }
-        // Navigation and value changes are resolved inside ResourceForm::handle_key.
+        // Navigation and value changes — mark form as touched and run live validation.
         FormAction::FocusNext | FormAction::FocusPrev
         | FormAction::TabNext  | FormAction::TabPrev
-        | FormAction::ValueChanged => {}
+        | FormAction::ValueChanged => {
+            if let Some(ref mut form) = state.current_form {
+                form.touched = true;
+                // Clear a previous submit-level validation error so it doesn't
+                // persist after the user starts actively editing.
+                if form.error_kind == FormErrorKind::Validation {
+                    form.error = None;
+                }
+            }
+        }
         FormAction::Quit => state.should_quit = true,
     }
     Ok(())

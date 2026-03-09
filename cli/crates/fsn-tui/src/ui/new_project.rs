@@ -13,6 +13,7 @@ use ratatui::{
 };
 
 use crate::app::{AppState, ResourceForm};
+use crate::resource_form::FormErrorKind;
 use crate::ui::widgets;
 
 pub fn render(f: &mut Frame, state: &mut AppState, area: Rect) {
@@ -152,14 +153,41 @@ pub(crate) fn render_fields(f: &mut Frame, form: &mut ResourceForm, inner: Rect,
 
 pub(crate) fn render_error(f: &mut Frame, lang: crate::app::Lang, form: &ResourceForm, area: Rect) {
     if let Some(ref err) = form.error {
+        let (icon, color) = match form.error_kind {
+            FormErrorKind::Validation => ("⚠ ", Color::Yellow),
+            FormErrorKind::IoError    => ("✗ ", Color::Red),
+        };
         let line = Line::from(vec![
             Span::styled(
-                format!("  {} ", crate::i18n::t(lang, "form.error")),
-                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                format!("  {}", icon),
+                Style::default().fg(color).add_modifier(Modifier::BOLD),
             ),
-            Span::styled(err.as_str(), Style::default().fg(Color::Red)),
+            Span::styled(err.as_str(), Style::default().fg(color)),
         ]);
         f.render_widget(Paragraph::new(line), area);
+    } else if form.touched {
+        // Live validation hint: show remaining required fields count.
+        let missing = form.missing_required();
+        if missing.is_empty() {
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    "  ✓ Alle Pflichtfelder ausgefüllt",
+                    Style::default().fg(Color::Green),
+                ))),
+                area,
+            );
+        } else {
+            f.render_widget(
+                Paragraph::new(Line::from(vec![
+                    Span::styled("  ⚠ ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                    Span::styled(
+                        format!("{} Pflichtfeld(er) noch leer", missing.len()),
+                        Style::default().fg(Color::Yellow),
+                    ),
+                ])),
+                area,
+            );
+        }
     } else {
         f.render_widget(
             Paragraph::new(Line::from(Span::styled(

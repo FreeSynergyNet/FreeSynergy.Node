@@ -14,10 +14,11 @@ use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent};
 
 use crate::app::{
-    AppState, ConfirmAction, DashFocus, LogsState, OverlayLayer, ResourceKind, Screen,
+    AppState, ConfirmAction, DashFocus, LogsState, NotifKind, OverlayLayer, ResourceKind, Screen,
     SidebarAction, SidebarItem, NEW_RESOURCE_ITEMS,
 };
 use crate::actions::{
+    copy_to_clipboard,
     delete_selected_project, delete_selected_host, delete_service_by_name,
     fetch_logs, podman_status, stop_service_container, sync_sidebar_selection,
 };
@@ -29,6 +30,50 @@ pub fn handle_dashboard(key: KeyEvent, state: &mut AppState, root: &Path) -> Res
     match state.dash_focus {
         DashFocus::Sidebar  => handle_dashboard_sidebar(key, state, root),
         DashFocus::Services => handle_dashboard_services(key, state, root),
+    }
+}
+
+// ── Sidebar filter ────────────────────────────────────────────────────────────
+
+fn handle_sidebar_filter_key(key: KeyEvent, state: &mut AppState) -> Result<()> {
+    use crossterm::event::KeyCode;
+    match key.code {
+        KeyCode::Esc | KeyCode::Enter => {
+            state.sidebar_filter = None;
+        }
+        KeyCode::Up => {
+            let indices: Vec<usize> = state.visible_sidebar_items().into_iter().map(|(i, _)| i).collect();
+            if let Some(pos) = indices.iter().position(|&i| i == state.sidebar_cursor) {
+                if pos > 0 { state.sidebar_cursor = indices[pos - 1]; }
+            }
+        }
+        KeyCode::Down => {
+            let indices: Vec<usize> = state.visible_sidebar_items().into_iter().map(|(i, _)| i).collect();
+            if let Some(pos) = indices.iter().position(|&i| i == state.sidebar_cursor) {
+                if pos + 1 < indices.len() { state.sidebar_cursor = indices[pos + 1]; }
+            } else if let Some(&first) = indices.first() {
+                state.sidebar_cursor = first;
+            }
+        }
+        KeyCode::Backspace => {
+            if let Some(ref mut f) = state.sidebar_filter { f.pop(); }
+            adjust_cursor_to_filter(state);
+        }
+        KeyCode::Char(c) => {
+            if let Some(ref mut f) = state.sidebar_filter { f.push(c); }
+            adjust_cursor_to_filter(state);
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// After the filter query changes, ensure sidebar_cursor points to a visible item.
+fn adjust_cursor_to_filter(state: &mut AppState) {
+    let indices: Vec<usize> = state.visible_sidebar_items().into_iter().map(|(i, _)| i).collect();
+    if indices.is_empty() { return; }
+    if !indices.contains(&state.sidebar_cursor) {
+        state.sidebar_cursor = indices[0];
     }
 }
 
@@ -58,6 +103,11 @@ fn handle_dashboard_shared(key: KeyEvent, state: &mut AppState) -> bool {
 // ── Sidebar focus ─────────────────────────────────────────────────────────────
 
 fn handle_dashboard_sidebar(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()> {
+    // Filter mode intercepts all keys — Esc closes filter, typing refines it.
+    if state.sidebar_filter.is_some() {
+        return handle_sidebar_filter_key(key, state);
+    }
+
     if handle_dashboard_shared(key, state) { return Ok(()); }
 
     match key.code {
@@ -77,6 +127,10 @@ fn handle_dashboard_sidebar(key: KeyEvent, state: &mut AppState, root: &Path) ->
                 state.sidebar_cursor = next;
                 sync_sidebar_selection(state, root);
             }
+        }
+
+        KeyCode::Char('/') => {
+            state.sidebar_filter = Some(String::new());
         }
 
         KeyCode::Char('S') => {
@@ -100,6 +154,19 @@ fn handle_dashboard_sidebar(key: KeyEvent, state: &mut AppState, root: &Path) ->
         KeyCode::Char('s') => sidebar_start_resource(state, root),
         KeyCode::Char('x') | KeyCode::Delete => sidebar_confirm_delete(state),
 
+        // 'y' = yank (copy) selected item name to clipboard.
+        KeyCode::Char('y') => {
+            if let Some(item) = state.current_sidebar_item() {
+                let text = match item {
+                    SidebarItem::Project { name, .. } => name.clone(),
+                    SidebarItem::Host    { name, .. } => name.clone(),
+                    SidebarItem::Service { name, .. } => name.clone(),
+                    _ => String::new(),
+                };
+                if !text.is_empty() { copy_to_clipboard(state, &text); }
+            }
+        }
+
         _ => {}
     }
     Ok(())
@@ -118,6 +185,21 @@ fn handle_dashboard_services(key: KeyEvent, state: &mut AppState, root: &Path) -
             if state.selected + 1 < state.services.len() { state.selected += 1; }
         }
 
+        // Space = toggle current service in multi-select set.
+        KeyCode::Char(' ') => {
+            let idx = state.selected;
+            if state.selected_services.contains(&idx) {
+                state.selected_services.remove(&idx);
+            } else {
+                state.selected_services.insert(idx);
+            }
+        }
+
+        // 'u' = clear all selections.
+        KeyCode::Char('u') => {
+            state.selected_services.clear();
+        }
+
         KeyCode::Char('l') => {
             if let Some(svc) = state.services.get(state.selected) {
                 let lines = fetch_logs(&svc.name);
@@ -134,15 +216,31 @@ fn handle_dashboard_services(key: KeyEvent, state: &mut AppState, root: &Path) -
         }
         KeyCode::Char('r') => {
             if let Some(svc) = state.services.get(state.selected) {
+                let name = svc.name.clone();
                 let _ = std::process::Command::new("podman")
-                    .args(["restart", &svc.name]).output();
+                    .args(["restart", &name]).output();
                 if let Some(row) = state.services.get_mut(state.selected) {
                     row.status = podman_status(&row.name);
                 }
+                state.push_notif(NotifKind::Info, format!("Service '{}' neugestartet", name));
             }
         }
         KeyCode::Char('x') => {
-            if let Some(svc) = state.services.get(state.selected) {
+            if !state.selected_services.is_empty() {
+                // Batch stop: stop all selected services immediately (no confirm for batch).
+                let names: Vec<String> = state.selected_services.iter()
+                    .filter_map(|&i| state.services.get(i).map(|s| s.name.clone()))
+                    .collect();
+                for name in &names {
+                    let _ = std::process::Command::new("podman").args(["stop", name]).output();
+                    if let Some(row) = state.services.iter_mut().find(|s| &s.name == name) {
+                        row.status = podman_status(name);
+                    }
+                }
+                let count = names.len();
+                state.selected_services.clear();
+                state.push_notif(NotifKind::Info, format!("{} Services gestoppt", count));
+            } else if let Some(svc) = state.services.get(state.selected) {
                 state.push_overlay(OverlayLayer::Confirm {
                     message:    "confirm.stop.service".into(),
                     data:       Some(svc.name.clone()),
@@ -151,15 +249,40 @@ fn handle_dashboard_services(key: KeyEvent, state: &mut AppState, root: &Path) -
             }
         }
         KeyCode::Char('s') => {
-            if let Some(svc) = state.services.get(state.selected).cloned() {
+            if !state.selected_services.is_empty() {
+                // Batch start: start all selected services.
+                let names: Vec<String> = state.selected_services.iter()
+                    .filter_map(|&i| state.services.get(i).map(|s| s.name.clone()))
+                    .collect();
+                for name in &names {
+                    let _ = std::process::Command::new("systemctl")
+                        .args(["--user", "start", &format!("{}.service", name)])
+                        .output();
+                    if let Some(row) = state.services.iter_mut().find(|s| &s.name == name) {
+                        row.status = podman_status(name);
+                    }
+                }
+                let count = names.len();
+                state.selected_services.clear();
+                state.push_notif(NotifKind::Info, format!("{} Services gestartet", count));
+            } else if let Some(svc) = state.services.get(state.selected).cloned() {
                 let _ = std::process::Command::new("systemctl")
                     .args(["--user", "start", &format!("{}.service", svc.name)])
                     .output();
                 if let Some(row) = state.services.iter_mut().find(|s| s.name == svc.name) {
                     row.status = podman_status(&svc.name);
                 }
+                state.push_notif(NotifKind::Info, format!("Service '{}' gestartet", svc.name));
             }
         }
+
+        // 'y' = yank domain of selected service to clipboard.
+        KeyCode::Char('y') => {
+            if let Some(domain) = state.services.get(state.selected).map(|s| s.domain.clone()) {
+                copy_to_clipboard(state, &domain);
+            }
+        }
+
         _ => {}
     }
     Ok(())
@@ -350,8 +473,14 @@ pub(crate) fn execute_confirm_action(
     yes_action: ConfirmAction,
 ) -> Result<()> {
     match yes_action {
-        ConfirmAction::DeleteProject => delete_selected_project(state, root)?,
-        ConfirmAction::DeleteHost    => delete_selected_host(state, root)?,
+        ConfirmAction::DeleteProject => {
+            delete_selected_project(state, root)?;
+            state.push_notif(NotifKind::Success, "Projekt gelöscht");
+        }
+        ConfirmAction::DeleteHost    => {
+            delete_selected_host(state, root)?;
+            state.push_notif(NotifKind::Success, "Host gelöscht");
+        }
         ConfirmAction::LeaveForm => {
             state.current_form = None;
             state.screen = if state.projects.is_empty() {
@@ -366,10 +495,14 @@ pub(crate) fn execute_confirm_action(
         }
         ConfirmAction::Quit => { state.should_quit = true; }
         ConfirmAction::DeleteService => {
+            let name = data.clone().unwrap_or_default();
             delete_service_by_name(state, root, data.unwrap_or_default())?;
+            state.push_notif(NotifKind::Success, format!("Service '{}' gelöscht", name));
         }
         ConfirmAction::StopService => {
+            let name = data.clone().unwrap_or_default();
             stop_service_container(state, data.unwrap_or_default());
+            state.push_notif(NotifKind::Info, format!("Service '{}' gestoppt", name));
         }
     }
     Ok(())

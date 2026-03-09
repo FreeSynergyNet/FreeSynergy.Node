@@ -44,6 +44,15 @@ impl ResourceKind {
 
 // ── ResourceForm ──────────────────────────────────────────────────────────────
 
+/// Severity of a form-level error message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FormErrorKind {
+    /// Validation failure — user can fix it (shown in yellow).
+    Validation,
+    /// I/O or system failure — not user-actionable (shown in red).
+    IoError,
+}
+
 pub struct ResourceForm {
     pub kind:         ResourceKind,
     /// i18n keys for tab headers.
@@ -54,6 +63,11 @@ pub struct ResourceForm {
     /// All field nodes across all tabs.
     pub nodes:        Vec<Box<dyn FormNode>>,
     pub error:        Option<String>,
+    /// Severity of `error` — determines icon and color in `render_error`.
+    pub error_kind:   FormErrorKind,
+    /// Set to `true` after the user first navigates or changes a value.
+    /// Enables live validation hints without showing warnings on a fresh form.
+    pub touched:      bool,
     /// None = create, Some(id) = edit existing (slug for projects).
     pub edit_id:      Option<String>,
     /// Called after any value change: `(nodes, changed_field_key)`.
@@ -79,7 +93,7 @@ impl ResourceForm {
         edit_id:   Option<String>,
         on_change: fn(&mut Vec<Box<dyn FormNode>>, &'static str),
     ) -> Self {
-        Self { kind, tab_keys, active_tab: 0, active_field: 0, nodes, error: None, edit_id, on_change }
+        Self { kind, tab_keys, active_tab: 0, active_field: 0, nodes, error: None, error_kind: FormErrorKind::Validation, touched: false, edit_id, on_change }
     }
 
     /// i18n key for the form screen header.
@@ -228,4 +242,54 @@ pub fn slugify(s: &str) -> String {
         }
     }
     out.trim_matches('-').to_string()
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn slugify_basic() {
+        assert_eq!(slugify("My Project"),  "my-project");
+        assert_eq!(slugify("hello world"), "hello-world");
+    }
+
+    #[test]
+    fn slugify_collapses_separators() {
+        assert_eq!(slugify("a  b"), "a-b");
+        assert_eq!(slugify("a--b"), "a-b");
+        assert_eq!(slugify("a_b"),  "a-b");
+    }
+
+    #[test]
+    fn slugify_strips_leading_trailing_dashes() {
+        assert_eq!(slugify("-foo-"), "foo");
+        assert_eq!(slugify("_bar_"), "bar");
+    }
+
+    #[test]
+    fn slugify_removes_special_chars() {
+        assert_eq!(slugify("my!project@2024"), "myproject2024");
+    }
+
+    #[test]
+    fn slugify_preserves_dots() {
+        assert_eq!(slugify("v1.2.3"), "v1.2.3");
+    }
+
+    #[test]
+    fn form_error_kind_defaults_to_validation() {
+        use crate::resource_form::{ResourceKind, FormErrorKind};
+        let form = ResourceForm::new(
+            ResourceKind::Project,
+            &["form.tab.project"],
+            vec![],
+            None,
+            |_, _| {},
+        );
+        assert_eq!(form.error_kind, FormErrorKind::Validation);
+        assert!(form.error.is_none());
+    }
 }

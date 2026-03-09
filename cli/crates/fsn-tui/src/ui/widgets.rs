@@ -106,6 +106,7 @@ pub fn truncate(prefix: &str, name: &str, max_w: usize) -> String {
 
 /// Button widget — filled if focused, bordered if not.
 pub fn button_line(label: &str, focused: bool, disabled: bool) -> Line<'static> {
+
     let (fg, bg, modifier) = if disabled {
         (Color::DarkGray, Color::Reset, Modifier::empty())
     } else if focused {
@@ -117,4 +118,48 @@ pub fn button_line(label: &str, focused: bool, disabled: bool) -> Line<'static> 
         format!("  {}  ", label),
         Style::default().fg(fg).bg(bg).add_modifier(modifier),
     ))
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::RunState;
+
+    #[test]
+    fn truncate_fits_without_ellipsis() {
+        assert_eq!(truncate("▶ ", "hello", 20), "▶ hello");
+    }
+
+    #[test]
+    fn truncate_adds_ellipsis_when_too_long() {
+        let result = truncate("  ", "verylongname", 8);
+        assert!(result.ends_with('…'), "expected ellipsis, got: {result}");
+        assert!(result.chars().count() <= 8, "expected len ≤ 8, got: {}", result.chars().count());
+    }
+
+    #[test]
+    fn truncate_exact_fit() {
+        // prefix(2) + name(3) = 5 == max_w — no ellipsis needed
+        assert_eq!(truncate("  ", "abc", 5), "  abc");
+    }
+
+    #[test]
+    fn run_state_char_values() {
+        assert_eq!(run_state_char(RunState::Running), "●");
+        assert_eq!(run_state_char(RunState::Stopped), "○");
+        assert_eq!(run_state_char(RunState::Failed),  "✕");
+        assert_eq!(run_state_char(RunState::Missing), "·");
+    }
+
+    #[test]
+    fn run_state_color_running_is_green() {
+        assert_eq!(run_state_color(RunState::Running), Color::Green);
+    }
+
+    #[test]
+    fn run_state_color_failed_is_red() {
+        assert_eq!(run_state_color(RunState::Failed), Color::Red);
+    }
 }

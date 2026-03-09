@@ -18,6 +18,17 @@ pub struct SysInfo {
     pub arch:           String,
 }
 
+impl Default for SysInfo {
+    fn default() -> Self {
+        Self {
+            hostname: "test-host".into(), user: "test".into(), ip: "127.0.0.1".into(),
+            ram_used_gb: 0.0, ram_total_gb: 16.0, cpu_cores: 4,
+            uptime_str: "0m".into(), podman_version: "n/a".into(),
+            arch: "x86_64".into(),
+        }
+    }
+}
+
 impl SysInfo {
     pub fn collect() -> Self {
         let mut sys = System::new_all();

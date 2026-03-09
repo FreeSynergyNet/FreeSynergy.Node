@@ -128,25 +128,57 @@ fn render_sidebar(f: &mut Frame, state: &AppState, area: Rect) {
         height: area.height.saturating_sub(2),
     };
 
-    if state.sidebar_items.is_empty() {
+    // When filter is active: reserve top row for the search input.
+    let (list_area, filter_row) = if let Some(ref query) = state.sidebar_filter {
+        let rows = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(1), Constraint::Min(1)])
+            .split(inner);
+        (rows[1], Some((rows[0], query.as_str())))
+    } else {
+        (inner, None)
+    };
+
+    // Render filter input line.
+    if let Some((farea, query)) = filter_row {
+        let display = format!("/{}_", query);
         f.render_widget(
             Paragraph::new(Line::from(Span::styled(
-                state.t("dash.no_projects"),
-                Style::default().fg(Color::DarkGray),
+                display,
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
             ))),
-            inner,
+            farea,
+        );
+    }
+
+    // Items to display: full list or filtered subset.
+    let visible: Vec<(usize, &SidebarItem)> = if state.sidebar_filter.is_some() {
+        state.visible_sidebar_items()
+    } else {
+        state.sidebar_items.iter().enumerate().collect()
+    };
+
+    if visible.is_empty() {
+        let msg = if state.sidebar_filter.as_deref().is_some_and(|f| !f.is_empty()) {
+            state.t("dash.filter.empty")
+        } else {
+            state.t("dash.no_projects")
+        };
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(msg, Style::default().fg(Color::DarkGray)))),
+            list_area,
         );
         return;
     }
 
-    let max_w = inner.width.saturating_sub(4) as usize;
+    let max_w = list_area.width.saturating_sub(4) as usize;
 
     // Each SidebarItem renders its own sidebar line — no external dispatch.
-    let lines: Vec<Line> = state.sidebar_items.iter().enumerate()
-        .map(|(i, item)| item.sidebar_line(i == state.sidebar_cursor, focused, max_w, state.lang))
+    let lines: Vec<Line> = visible.iter()
+        .map(|(i, item)| item.sidebar_line(*i == state.sidebar_cursor, focused, max_w, state.lang))
         .collect();
 
-    f.render_widget(Paragraph::new(lines), inner);
+    f.render_widget(Paragraph::new(lines), list_area);
 }
 
 // ── Center panel ──────────────────────────────────────────────────────────────
@@ -192,16 +224,30 @@ fn render_services(f: &mut Frame, state: &AppState, area: Rect) {
     ])
     .height(1);
 
+    let multi_select = !state.selected_services.is_empty();
+
     let rows: Vec<Row> = state.services.iter().enumerate().map(|(i, svc)| {
-        let selected = i == state.selected && services_focused;
-        let name_style = if selected {
+        let is_cursor   = i == state.selected && services_focused;
+        let is_checked  = state.selected_services.contains(&i);
+
+        let name_style = if is_cursor {
             Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+        } else if is_checked {
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(Color::White)
         };
+
+        let prefix = if multi_select {
+            if is_checked  { "[✓] " } else { "[ ] " }
+        } else if is_cursor {
+            "▶ "
+        } else {
+            "  "
+        };
+
         Row::new(vec![
-            Cell::from(if selected { format!("▶ {}", svc.name) } else { format!("  {}", svc.name) })
-                .style(name_style),
+            Cell::from(format!("{}{}", prefix, svc.name)).style(name_style),
             Cell::from(svc.service_type.as_str()).style(Style::default().fg(Color::DarkGray)),
             Cell::from(svc.domain.as_str()).style(Style::default().fg(Color::Blue)),
             Cell::from(Line::from(widgets::status_span(svc.status, state))),
@@ -229,6 +275,30 @@ fn render_services(f: &mut Frame, state: &AppState, area: Rect) {
 
 fn render_hint(f: &mut Frame, state: &AppState, area: Rect) {
     let has_confirm = state.confirm_overlay().is_some();
+
+    // Multi-select mode hint takes priority in services focus.
+    if !has_confirm && state.dash_focus == DashFocus::Services && !state.selected_services.is_empty() {
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                state.t("dash.hint.multiselect"),
+                Style::default().fg(Color::Yellow),
+            ))).alignment(Alignment::Center),
+            area,
+        );
+        return;
+    }
+
+    // Filter mode hint takes priority over confirm and normal sidebar hints.
+    if !has_confirm && state.dash_focus == DashFocus::Sidebar && state.sidebar_filter.is_some() {
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                state.t("dash.hint.filter"),
+                Style::default().fg(Color::Yellow),
+            ))).alignment(Alignment::Center),
+            area,
+        );
+        return;
+    }
 
     let key: &'static str = if has_confirm {
         "dash.hint.confirm"

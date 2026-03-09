@@ -13,7 +13,7 @@ use crate::app::Lang;
 /// making them reusable across TUI, web, and test contexts.
 ///
 /// # Example
-/// ```rust
+/// ```rust,ignore
 /// fn render_hint(t: &impl Translate) -> &'static str {
 ///     t.t("welcome.hint")
 /// }
@@ -70,10 +70,10 @@ fn de(key: &str) -> Option<&'static str> {
         "dash.col.type"   => "Typ",
         "dash.col.domain" => "Domain",
         "dash.col.status" => "Status",
-        "dash.hint"           => "↑↓=Nav  n=Neu  e=Bearbeiten  s=Starten  x=Löschen  Tab=Services  q=Beenden",
+        "dash.hint"           => "↑↓=Nav  /=Suche  y=Kop.  n=Neu  e=Bearb.  x=Lösch.  Tab=Serv.  q=Ende",
         "dash.hint.host"      => "↑↓=Nav  n=Neuer Host  e=Bearbeiten  s=Starten  x=Löschen  Tab=Detail  q=Beenden",
         "dash.hint.service"   => "↑↓=Nav  n=Neuer Service  e=Bearbeiten  s=Starten  x=Löschen  Tab=Detail  q=Beenden",
-        "dash.hint.services"  => "↑↓=Nav  s=Start  r=Restart  x=Stop  d=Deploy  l=Logs  Tab=Sidebar  q=Beenden",
+        "dash.hint.services"  => "↑↓=Nav  Leer=Wählen  s=Start  r=Restart  x=Stop  d=Deploy  l=Logs  y=Kop.  q=Ende",
         "dash.hint.confirm"   => "Projekt wirklich löschen?  J=Ja  N=Abbrechen",
         "dash.no_projects"    => "(Kein Projekt angelegt)",
         "dash.new_project"    => "+ Neues Projekt",
@@ -219,6 +219,11 @@ fn de(key: &str) -> Option<&'static str> {
         "settings.store.add.prompt" => "Store-URL (z.B. https://github.com/du/modules):",
         "settings.store.name.prompt"=> "Store-Name:",
         "settings.empty"         => "(Keine Stores konfiguriert)",
+        // ── Sidebar filter ────────────────────────────────────────────────
+        "dash.filter.empty"      => "(keine Treffer)",
+        "dash.hint.filter"       => "Esc=Schließen  ↑↓=Nav  Enter=Auswählen  Zeichen=Suche",
+        // ── Multi-select ──────────────────────────────────────────────────
+        "dash.hint.multiselect"  => "Leertaste=Wählen  s=Alle starten  x=Alle stoppen  u=Abwählen",
         _ => return None,
     })
 }
@@ -247,10 +252,10 @@ fn en(key: &str) -> Option<&'static str> {
         "dash.col.type"   => "Type",
         "dash.col.domain" => "Domain",
         "dash.col.status" => "Status",
-        "dash.hint"           => "↑↓=Nav  n=New  e=Edit  s=Start  x=Delete  Tab=Services  q=Quit",
+        "dash.hint"           => "↑↓=Nav  /=Search  y=Copy  n=New  e=Edit  x=Delete  Tab=Services  q=Quit",
         "dash.hint.host"      => "↑↓=Nav  n=New Host  e=Edit  s=Start  x=Delete  Tab=Detail  q=Quit",
         "dash.hint.service"   => "↑↓=Nav  n=New Service  e=Edit  s=Start  x=Delete  Tab=Detail  q=Quit",
-        "dash.hint.services"  => "↑↓=Nav  s=Start  r=Restart  x=Stop  d=Deploy  l=Logs  Tab=Sidebar  q=Quit",
+        "dash.hint.services"  => "↑↓=Nav  Space=Select  s=Start  r=Restart  x=Stop  d=Deploy  l=Logs  y=Copy  q=Quit",
         "dash.hint.confirm"   => "Really delete project?  Y=Yes  N=Cancel",
         "dash.no_projects"    => "(No project found)",
         "dash.new_project"    => "+ New Project",
@@ -396,6 +401,11 @@ fn en(key: &str) -> Option<&'static str> {
         "settings.store.add.prompt" => "Store URL (e.g. https://github.com/you/modules):",
         "settings.store.name.prompt"=> "Store display name:",
         "settings.empty"         => "(no stores configured)",
+        // ── Sidebar filter ────────────────────────────────────────────────
+        "dash.filter.empty"      => "(no matches)",
+        "dash.hint.filter"       => "Esc=Close  ↑↓=Nav  Enter=Select  Type=Search",
+        // ── Multi-select ──────────────────────────────────────────────────
+        "dash.hint.multiselect"  => "Space=Select  s=Start all  x=Stop all  u=Deselect",
         _ => return None,
     })
 }

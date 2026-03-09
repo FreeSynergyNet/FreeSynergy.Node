@@ -1,6 +1,6 @@
 // Application state and main event loop.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -22,6 +22,18 @@ pub use crate::handles::{HostHandle, ProjectHandle, RunState, ServiceHandle, Ser
 pub use crate::resource_form::{
     BOT_TABS, HOST_TABS, PROJECT_TABS, ResourceForm, ResourceKind, SERVICE_TABS, slugify,
 };
+
+// ── Notifications (toast system) ──────────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NotifKind { Success, Warning, Error, Info }
+
+#[derive(Debug, Clone)]
+pub struct Notification {
+    pub message: String,
+    pub kind:    NotifKind,
+    pub born:    Instant,
+}
 
 // ── Screens ───────────────────────────────────────────────────────────────────
 
@@ -202,6 +214,13 @@ pub struct AppState {
     pub settings:             AppSettings,
     pub store_entries:        Vec<StoreEntry>,
     pub settings_cursor:      usize,
+    /// Non-blocking feedback banners (auto-expire after a few seconds).
+    pub notifications:        Vec<Notification>,
+    /// Active sidebar filter query — `None` = closed, `Some("")` = open but empty.
+    pub sidebar_filter:       Option<String>,
+    /// Indices of services currently selected for batch operations.
+    /// Empty = no multi-select mode active.
+    pub selected_services:    HashSet<usize>,
 }
 
 impl AppState {
@@ -221,6 +240,9 @@ impl AppState {
             settings: AppSettings::load().unwrap_or_default(),
             store_entries: Vec::new(),
             settings_cursor: 0,
+            notifications: Vec::new(),
+            sidebar_filter: None,
+            selected_services: HashSet::new(),
         };
         s.rebuild_sidebar();
         s
@@ -345,6 +367,34 @@ impl AppState {
         })
     }
 
+    // ── Notification helpers ───────────────────────────────────────────────
+
+    pub fn push_notif(&mut self, kind: NotifKind, message: impl Into<String>) {
+        self.notifications.push(Notification { message: message.into(), kind, born: Instant::now() });
+    }
+
+    /// Remove notifications older than `max_age`. Called each loop tick.
+    pub fn expire_notifications(&mut self, max_age: Duration) {
+        self.notifications.retain(|n| n.born.elapsed() < max_age);
+    }
+
+    /// Sidebar items visible given the current filter query.
+    /// Sections and Action items are hidden while a non-empty filter is active.
+    pub fn visible_sidebar_items(&self) -> Vec<(usize, &SidebarItem)> {
+        let filter = self.sidebar_filter.as_deref().unwrap_or("").to_lowercase();
+        self.sidebar_items.iter().enumerate()
+            .filter(|(_, item)| {
+                if filter.is_empty() { return true; }
+                match item {
+                    SidebarItem::Project { name, .. } => name.to_lowercase().contains(&filter),
+                    SidebarItem::Host    { name, .. } => name.to_lowercase().contains(&filter),
+                    SidebarItem::Service { name, .. } => name.to_lowercase().contains(&filter),
+                    _ => false,
+                }
+            })
+            .collect()
+    }
+
     pub fn apply_deploy_msg(&mut self, msg: DeployMsg) {
         if let Some(ds) = self.deploy_overlay_mut() {
             match msg {
@@ -398,7 +448,137 @@ pub fn run_loop(
             state.sysinfo = SysInfo::collect();
             state.last_refresh = Instant::now();
         }
+
+        state.expire_notifications(Duration::from_secs(4));
     }
 
     Ok(())
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sysinfo::SysInfo;
+    use std::time::Duration;
+
+    fn empty_state() -> AppState {
+        AppState::new(SysInfo::default(), vec![])
+    }
+
+    // ── SidebarItem ───────────────────────────────────────────────────────
+
+    #[test]
+    fn section_is_not_selectable() {
+        let item = SidebarItem::Section("sidebar.projects");
+        assert!(!item.is_selectable());
+    }
+
+    #[test]
+    fn project_is_selectable() {
+        let item = SidebarItem::Project { slug: "p".into(), name: "My Project".into() };
+        assert!(item.is_selectable());
+    }
+
+    #[test]
+    fn action_kind_returns_correct_variant() {
+        let item = SidebarItem::Action { label_key: "dash.new_project", kind: SidebarAction::NewProject };
+        assert_eq!(item.action_kind(), Some(SidebarAction::NewProject));
+    }
+
+    #[test]
+    fn section_action_kind_is_none() {
+        let item = SidebarItem::Section("sidebar.hosts");
+        assert_eq!(item.action_kind(), None);
+    }
+
+    #[test]
+    fn hint_key_host() {
+        let item = SidebarItem::Host { slug: "h".into(), name: "srv1".into() };
+        assert_eq!(item.hint_key(), "dash.hint.host");
+    }
+
+    #[test]
+    fn hint_key_service() {
+        let item = SidebarItem::Service { name: "kanidm".into(), class: "iam".into(), status: RunState::Running };
+        assert_eq!(item.hint_key(), "dash.hint.service");
+    }
+
+    // ── Notifications ─────────────────────────────────────────────────────
+
+    #[test]
+    fn push_notif_appends() {
+        let mut state = empty_state();
+        state.push_notif(NotifKind::Success, "Saved");
+        assert_eq!(state.notifications.len(), 1);
+        assert_eq!(state.notifications[0].message, "Saved");
+        assert_eq!(state.notifications[0].kind, NotifKind::Success);
+    }
+
+    #[test]
+    fn expire_notifications_removes_old() {
+        let mut state = empty_state();
+        state.push_notif(NotifKind::Info, "old");
+        // Manually set born to 10s ago by sleeping 0ms + using max_age=0
+        state.expire_notifications(Duration::from_millis(0));
+        // After expiry with 0ms max_age, all are removed
+        assert!(state.notifications.is_empty());
+    }
+
+    #[test]
+    fn expire_notifications_keeps_fresh() {
+        let mut state = empty_state();
+        state.push_notif(NotifKind::Info, "fresh");
+        state.expire_notifications(Duration::from_secs(60));
+        assert_eq!(state.notifications.len(), 1);
+    }
+
+    // ── Sidebar filter ────────────────────────────────────────────────────
+
+    #[test]
+    fn visible_sidebar_items_no_filter() {
+        let mut state = empty_state();
+        state.sidebar_items = vec![
+            SidebarItem::Section("sidebar.projects"),
+            SidebarItem::Project { slug: "p".into(), name: "Alpha".into() },
+        ];
+        state.sidebar_filter = None;
+        let visible = state.visible_sidebar_items();
+        assert_eq!(visible.len(), 2);
+    }
+
+    #[test]
+    fn visible_sidebar_items_filter_matches() {
+        let mut state = empty_state();
+        state.sidebar_items = vec![
+            SidebarItem::Section("sidebar.projects"),
+            SidebarItem::Project { slug: "alpha".into(), name: "Alpha".into() },
+            SidebarItem::Project { slug: "beta".into(),  name: "Beta".into()  },
+        ];
+        state.sidebar_filter = Some("alp".into());
+        let visible = state.visible_sidebar_items();
+        assert_eq!(visible.len(), 1);
+        assert!(matches!(&visible[0].1, SidebarItem::Project { slug, .. } if slug == "alpha"));
+    }
+
+    #[test]
+    fn visible_sidebar_items_filter_case_insensitive() {
+        let mut state = empty_state();
+        state.sidebar_items = vec![
+            SidebarItem::Project { slug: "p".into(), name: "MyApp".into() },
+        ];
+        state.sidebar_filter = Some("myapp".into());
+        assert_eq!(state.visible_sidebar_items().len(), 1);
+    }
+
+    #[test]
+    fn visible_sidebar_items_filter_no_match() {
+        let mut state = empty_state();
+        state.sidebar_items = vec![
+            SidebarItem::Project { slug: "p".into(), name: "Alpha".into() },
+        ];
+        state.sidebar_filter = Some("zzz".into());
+        assert!(state.visible_sidebar_items().is_empty());
+    }
 }
