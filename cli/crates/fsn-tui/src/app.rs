@@ -513,8 +513,9 @@ pub struct DeployState {
 #[derive(Debug, Clone)]
 pub enum OverlayLayer {
     Logs(LogsState),
-    /// Confirmation prompt. `yes_action` is a tag processed by events.rs.
-    Confirm { message: String, yes_action: ConfirmAction },
+    /// Confirmation prompt. `message` is an i18n key; `data` carries optional payload
+    /// (e.g. service name for DeleteService). `yes_action` is processed by events.rs.
+    Confirm { message: String, data: Option<String>, yes_action: ConfirmAction },
     /// Deploy / Compose-export progress overlay.
     Deploy(DeployState),
     /// New-resource selector popup (↑↓ to pick, Enter to open form).
@@ -524,10 +525,14 @@ pub enum OverlayLayer {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfirmAction {
     DeleteProject,
+    /// Delete the service instance whose name is stored alongside (via overlay message field).
+    DeleteService,
     /// Leave a resource form (Screen::NewProject) discarding unsaved changes.
     LeaveForm,
     /// Leave the task wizard discarding unsaved changes.
     LeaveWizard,
+    /// Quit the application.
+    Quit,
 }
 
 /// Options shown in the new-resource selector popup (label key + kind).
@@ -645,10 +650,10 @@ impl AppState {
     }
 
     /// Shortcut — is the topmost overlay a Confirm dialog?
-    pub fn confirm_overlay(&self) -> Option<(&str, ConfirmAction)> {
+    pub fn confirm_overlay(&self) -> Option<(&str, Option<&str>, ConfirmAction)> {
         self.overlay_stack.last().and_then(|o| {
-            if let OverlayLayer::Confirm { message, yes_action } = o {
-                Some((message.as_str(), *yes_action))
+            if let OverlayLayer::Confirm { message, data, yes_action } = o {
+                Some((message.as_str(), data.as_deref(), *yes_action))
             } else {
                 None
             }

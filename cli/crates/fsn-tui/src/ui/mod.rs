@@ -158,7 +158,13 @@ fn render_confirm(f: &mut Frame, state: &AppState) {
         widgets::{Block, Borders, Clear, Paragraph},
     };
 
-    let Some((msg_key, _)) = state.confirm_overlay() else { return };
+    let Some((msg_key, data, _)) = state.confirm_overlay() else { return };
+    // If `data` is present (e.g. service name for delete), show it in the message.
+    let display_msg = if let Some(d) = data {
+        format!("{} '{}'", state.t(msg_key), d)
+    } else {
+        state.t(msg_key).to_string()
+    };
     let area = f.area();
     let popup = Rect {
         x: area.width / 4,
@@ -170,7 +176,7 @@ fn render_confirm(f: &mut Frame, state: &AppState) {
     f.render_widget(Clear, popup);
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(
-            state.t(msg_key),
+            display_msg,
             Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
         )))
         .block(Block::default().borders(Borders::ALL)

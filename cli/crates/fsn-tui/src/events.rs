@@ -81,7 +81,7 @@ fn handle_overlay(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()
             }
         }
         Some("confirm") => {
-            let (_, yes_action) = state.confirm_overlay().unwrap();
+            let (_, _, yes_action) = state.confirm_overlay().unwrap();
             match key.code {
                 KeyCode::Char('j') | KeyCode::Char('J')
                 | KeyCode::Char('y') | KeyCode::Char('Y') => {
@@ -99,6 +99,12 @@ fn handle_overlay(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()
                         ConfirmAction::LeaveWizard => {
                             state.task_queue = None;
                             state.screen = Screen::Dashboard;
+                        }
+                        ConfirmAction::Quit => {
+                            state.should_quit = true;
+                        }
+                        ConfirmAction::DeleteService => {
+                            delete_selected_service(state, root)?;
                         }
                     }
                 }
@@ -220,6 +226,7 @@ fn handle_resource_form(key: KeyEvent, state: &mut AppState, root: &Path) -> Res
             if dirty {
                 state.push_overlay(OverlayLayer::Confirm {
                     message:    "form.confirm.leave".into(),
+                    data:       None,
                     yes_action: ConfirmAction::LeaveForm,
                 });
             } else {
@@ -318,6 +325,7 @@ fn handle_wizard(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()>
             if dirty {
                 state.push_overlay(OverlayLayer::Confirm {
                     message:    "form.confirm.leave".into(),
+                    data:       None,
                     yes_action: ConfirmAction::LeaveWizard,
                 });
             } else {
@@ -341,6 +349,7 @@ fn handle_wizard(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()>
                     if dirty {
                         state.push_overlay(OverlayLayer::Confirm {
                             message:    "form.confirm.leave".into(),
+                            data:       None,
                             yes_action: ConfirmAction::LeaveWizard,
                         });
                     } else {
@@ -465,7 +474,13 @@ fn handle_dashboard(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<
     match state.dash_focus {
         // ── Sidebar ────────────────────────────────────────────────────────
         DashFocus::Sidebar => match key.code {
-            KeyCode::Char('q') | KeyCode::Esc => state.should_quit = true,
+            KeyCode::Char('q') | KeyCode::Esc => {
+                state.push_overlay(OverlayLayer::Confirm {
+                    message:    "confirm.quit".into(),
+                    data:       None,
+                    yes_action: ConfirmAction::Quit,
+                });
+            }
             KeyCode::Char('L') => state.lang = state.lang.toggle(),
             KeyCode::Tab => state.dash_focus = DashFocus::Services,
 
@@ -581,14 +596,22 @@ fn handle_dashboard(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<
                 }
             }
 
-            // Context-aware 'x': delete project or (future) host.
+            // Context-aware 'x': delete project or service.
             KeyCode::Char('x') | KeyCode::Delete => {
-                let item = state.current_sidebar_item();
+                let item = state.current_sidebar_item().cloned();
                 match item {
                     Some(SidebarItem::Project { .. }) if !state.projects.is_empty() => {
                         state.push_overlay(OverlayLayer::Confirm {
                             message:    "dash.hint.confirm".into(),
+                            data:       None,
                             yes_action: ConfirmAction::DeleteProject,
+                        });
+                    }
+                    Some(SidebarItem::Service { name, .. }) => {
+                        state.push_overlay(OverlayLayer::Confirm {
+                            message:    "confirm.delete.service".into(),
+                            data:       Some(name.clone()),
+                            yes_action: ConfirmAction::DeleteService,
                         });
                     }
                     _ => {}
@@ -600,7 +623,13 @@ fn handle_dashboard(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<
 
         // ── Services ───────────────────────────────────────────────────────
         DashFocus::Services => match key.code {
-            KeyCode::Char('q') | KeyCode::Esc => state.should_quit = true,
+            KeyCode::Char('q') | KeyCode::Esc => {
+                state.push_overlay(OverlayLayer::Confirm {
+                    message:    "confirm.quit".into(),
+                    data:       None,
+                    yes_action: ConfirmAction::Quit,
+                });
+            }
             KeyCode::Char('L') => state.lang = state.lang.toggle(),
             KeyCode::Tab => state.dash_focus = DashFocus::Sidebar,
 
@@ -822,6 +851,61 @@ fn delete_selected_project(state: &mut AppState, root: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Delete a service from project.toml and from the services/ directory.
+/// The service name is encoded in the confirm overlay message as "confirm.delete.service:{name}".
+fn delete_selected_service(state: &mut AppState, root: &Path) -> Result<()> {
+    // Extract the service name from the overlay's data field.
+    let name = {
+        let Some(OverlayLayer::Confirm { ref data, .. }) = state.overlay_stack.last().cloned() else {
+            return Ok(());
+        };
+        data.clone().unwrap_or_default()
+    };
+    if name.is_empty() { return Ok(()); }
+
+    let Some(proj) = state.projects.get(state.selected_project).cloned() else { return Ok(()); };
+    let project_dir  = root.join("projects").join(&proj.slug);
+    let services_dir = project_dir.join("services");
+    let slug         = crate::app::slugify(&name);
+
+    // Remove the .service.toml file
+    let svc_file = services_dir.join(format!("{slug}.service.toml"));
+    let _ = std::fs::remove_file(&svc_file);
+
+    // Remove the [load.services.{slug}] block from project.toml
+    if let Ok(content) = std::fs::read_to_string(&proj.toml_path) {
+        let filtered = remove_toml_table_block(&content, &format!("load.services.{slug}"));
+        let _ = std::fs::write(&proj.toml_path, filtered);
+    }
+
+    state.projects = crate::load_projects(root);
+    state.rebuild_services();
+    state.rebuild_sidebar();
+    Ok(())
+}
+
+/// Remove all lines belonging to `[table_path]` and `[table_path.*]` from TOML text.
+/// Simple line-based approach — sufficient for our flat project.toml structure.
+fn remove_toml_table_block(content: &str, table_path: &str) -> String {
+    let header_exact  = format!("[{table_path}]");
+    let header_prefix = format!("[{table_path}.");
+    let mut out = String::new();
+    let mut skip = false;
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') {
+            // New table header — re-evaluate skip
+            skip = trimmed == header_exact
+                || trimmed.starts_with(&header_prefix);
+        }
+        if !skip {
+            out.push_str(line);
+            out.push('\n');
+        }
+    }
+    out
+}
+
 fn reload_hosts(state: &mut AppState, root: &Path) {
     if let Some(proj) = state.projects.get(state.selected_project) {
         state.hosts = crate::load_hosts(&root.join("projects").join(&proj.slug));
@@ -835,15 +919,24 @@ fn sync_sidebar_selection(state: &mut AppState, root: &Path) {
     match state.current_sidebar_item().cloned() {
         Some(SidebarItem::Project { slug, .. }) => {
             if let Some(idx) = state.projects.iter().position(|p| p.slug == slug) {
-                state.selected_project = idx;
-                reload_hosts(state, root);
-                state.rebuild_services();
+                if state.selected_project != idx {
+                    state.selected_project = idx;
+                    reload_hosts(state, root);
+                    state.rebuild_services();
+                    state.rebuild_sidebar();
+                }
             }
         }
         Some(SidebarItem::Host { slug, .. }) => {
             if let Some(idx) = state.hosts.iter().position(|h| h.slug == slug) {
                 state.selected_host = idx;
             }
+        }
+        // When cursor lands on a service, ensure selected_project is the right one.
+        // Services in the sidebar always belong to selected_project, so no change needed —
+        // but we still call rebuild_services() to sync the right panel.
+        Some(SidebarItem::Service { .. }) => {
+            state.rebuild_services();
         }
         _ => {}
     }

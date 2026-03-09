@@ -257,10 +257,13 @@ impl FormNode for TextAreaNode {
     fn handle_key(&mut self, key: KeyEvent) -> FormAction {
         use KeyModifiers as KM;
         match key.code {
-            KeyCode::Enter if key.modifiers.contains(KM::CONTROL) => FormAction::Submit,
+            // Submit: Ctrl+Enter or Alt+Enter (terminal compatibility — many terminals
+            // cannot distinguish Ctrl+Enter from plain Enter).
+            KeyCode::Enter if key.modifiers.intersects(KM::CONTROL | KM::ALT) => FormAction::Submit,
 
             KeyCode::Tab     => FormAction::FocusNext,
             KeyCode::BackTab => FormAction::FocusPrev,
+            // Esc exits the textarea (back to dashboard or cancel form).
             KeyCode::Esc     => FormAction::Cancel,
             KeyCode::Left  if key.modifiers.contains(KM::CONTROL) => FormAction::TabPrev,
             KeyCode::Right if key.modifiers.contains(KM::CONTROL) => FormAction::TabNext,
