@@ -2,10 +2,7 @@
 // Replaces playbooks/tasks/check-constraints.yml
 
 use anyhow::{bail, Result};
-use fsn_core::{
-    config::service::Locality,
-    state::DesiredState,
-};
+use fsn_core::state::DesiredState;
 
 /// Check all deployment constraints for the resolved desired state.
 /// Returns Err if any constraint is violated.

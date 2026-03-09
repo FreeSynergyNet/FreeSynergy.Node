@@ -282,7 +282,7 @@ fn resolve_volumes(raw_volumes: &[String], ctx: &TemplateContext) -> Result<Vec<
 pub fn collect_proxy_services(
     project: &ProjectConfig,
     registry: &ServiceRegistry,
-    project_root: &str,
+    _project_root: &str,
 ) -> Vec<crate::template::ProxyServiceSpec> {
     let mut specs = Vec::new();
 
@@ -368,7 +368,7 @@ fn precompute_module_vars(
 ) -> HashMap<String, String> {
     use minijinja::Environment;
     let mut out = HashMap::new();
-    let mut env = Environment::new();
+    let env = Environment::new();
 
     let base_vars: HashMap<String, minijinja::Value> = [
         ("project_root",   project_root),

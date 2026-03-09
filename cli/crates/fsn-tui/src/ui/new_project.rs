@@ -12,7 +12,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::app::{AppState, ResourceForm, ResourceKind};
+use crate::app::{AppState, ResourceForm};
 use crate::ui::widgets;
 
 pub fn render(f: &mut Frame, state: &mut AppState, area: Rect) {
@@ -176,7 +176,7 @@ pub(crate) fn render_error(f: &mut Frame, lang: crate::app::Lang, form: &Resourc
 fn render_hint(f: &mut Frame, state: &AppState, area: Rect) {
     let key = if state.ctrl_hint { "form.hint.ctrl" } else { "form.hint" };
     let hint_text = state.t(key);
-    let f1_label  = state.t("help.title");
+    let _f1_label = state.t("help.title");
 
     let line = Line::from(vec![
         Span::styled(hint_text, Style::default().fg(Color::DarkGray)),

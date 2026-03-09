@@ -62,7 +62,7 @@ pub struct ProxyServiceSpec {
 
 /// Render a single Jinja2 template string with the given context.
 pub fn render(template: &str, ctx: &TemplateContext) -> Result<String> {
-    let mut env = Environment::new();
+    let env = Environment::new();
 
     // Build variable map – includes core vars plus vault secrets
     let mut vars: HashMap<String, minijinja::Value> = [

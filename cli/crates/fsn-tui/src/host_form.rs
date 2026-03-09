@@ -129,7 +129,7 @@ pub fn new_host_form(project_slugs: Vec<String>, current_project: &str) -> Resou
 pub fn edit_host_form(handle: &HostHandle, project_slugs: Vec<String>) -> ResourceForm {
     let h = &handle.config.host;
     let ssh_port_str = h.ssh_port.to_string();
-    let mut prefill: HashMap<&str, &str> = [
+    let prefill: HashMap<&str, &str> = [
         ("name",        h.name.as_str()),
         ("alias",       h.alias.as_deref().unwrap_or("")),
         ("address",     h.addr()),

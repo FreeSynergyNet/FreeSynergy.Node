@@ -161,6 +161,7 @@ struct RecordsResponse {
 }
 #[derive(Deserialize)]
 struct HetznerRecord {
+    #[allow(dead_code)]
     id: String,
     name: String,
     #[serde(rename = "type")]

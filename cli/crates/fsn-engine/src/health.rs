@@ -5,9 +5,9 @@ use std::time::Duration;
 
 use anyhow::{bail, Result};
 use fsn_core::state::{desired::ServiceInstance, HealthStatus};
-use tracing::{debug, warn};
+use tracing::debug;
 
-const DEFAULT_TIMEOUT:  Duration = Duration::from_secs(120);
+const _DEFAULT_TIMEOUT: Duration = Duration::from_secs(120);
 const POLL_INTERVAL:    Duration = Duration::from_secs(3);
 
 /// Wait until the service is reachable and returns a successful HTTP response,

@@ -95,7 +95,7 @@ fn ensure_project_skeleton(root: &Path) -> Result<(String, PathBuf)> {
 
 // ── Phase 2: Module selection ─────────────────────────────────────────────
 
-fn select_modules(root: &Path, proj_dir: &Path, slug: &str, modules_dir: &Path) -> Result<()> {
+fn select_modules(_root: &Path, proj_dir: &Path, slug: &str, modules_dir: &Path) -> Result<()> {
     let registry = ServiceRegistry::load(modules_dir)?;
     let mut all_classes: Vec<(&str, &fsn_core::config::service::ServiceClass)> =
         registry.all().collect();

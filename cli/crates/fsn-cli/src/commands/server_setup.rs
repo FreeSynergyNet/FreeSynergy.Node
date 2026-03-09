@@ -15,7 +15,7 @@ use tracing::info;
 
 const MIN_PODMAN_MAJOR: u32 = 5;
 
-pub async fn run(root: &Path) -> Result<()> {
+pub async fn run(_root: &Path) -> Result<()> {
     check_root()?;
 
     let user = detect_deploy_user();

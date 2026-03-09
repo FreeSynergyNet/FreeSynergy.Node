@@ -81,13 +81,18 @@ fn handle_overlay(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()
             }
         }
         Some("confirm") => {
-            let (_, _, yes_action) = state.confirm_overlay().unwrap();
+            // Extract data BEFORE popping — overlay is gone afterwards.
+            let (data, yes_action) = {
+                let (_, d, a) = state.confirm_overlay().unwrap();
+                (d.map(|s| s.to_string()), a)
+            };
             match key.code {
                 KeyCode::Char('j') | KeyCode::Char('J')
                 | KeyCode::Char('y') | KeyCode::Char('Y') => {
                     state.pop_overlay();
                     match yes_action {
                         ConfirmAction::DeleteProject => delete_selected_project(state, root)?,
+                        ConfirmAction::DeleteHost    => delete_selected_host(state, root)?,
                         ConfirmAction::LeaveForm => {
                             state.current_form = None;
                             state.screen = if state.projects.is_empty() {
@@ -104,7 +109,12 @@ fn handle_overlay(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()
                             state.should_quit = true;
                         }
                         ConfirmAction::DeleteService => {
-                            delete_selected_service(state, root)?;
+                            // Service name was stored in the overlay's data field.
+                            delete_service_by_name(state, root, data.unwrap_or_default())?;
+                        }
+                        ConfirmAction::StopService => {
+                            // Container name stored in data field.
+                            stop_service_container(state, data.unwrap_or_default());
                         }
                     }
                 }
@@ -502,8 +512,8 @@ fn handle_dashboard(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<
                 }
             }
 
-            // 's' / 'S' — open Settings screen.
-            KeyCode::Char('s') | KeyCode::Char('S') => {
+            // 'S' (uppercase) — open Settings screen.
+            KeyCode::Char('S') => {
                 state.settings_cursor = 0;
                 state.screen = Screen::Settings;
             }
@@ -596,15 +606,56 @@ fn handle_dashboard(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<
                 }
             }
 
-            // Context-aware 'x': delete project or service.
+            // Context-aware 's': start the focused resource.
+            // Project → deploy all services; Host → start services on this host;
+            // Service → start individual service container.
+            KeyCode::Char('s') => {
+                let item = state.current_sidebar_item().cloned();
+                match item {
+                    Some(SidebarItem::Project { slug, .. }) => {
+                        if let Some(proj) = state.projects.iter().find(|p| p.slug == slug).cloned() {
+                            let host = state.hosts.first().map(|h| h.config.clone());
+                            trigger_deploy(state, root, proj.slug.clone(), proj.config.clone(), host);
+                        }
+                    }
+                    Some(SidebarItem::Host { slug, .. }) => {
+                        // Start all services assigned to this host
+                        if let Some(proj) = state.projects.get(state.selected_project).cloned() {
+                            let host_cfg = state.hosts.iter()
+                                .find(|h| h.slug == slug)
+                                .map(|h| h.config.clone());
+                            trigger_deploy(state, root, proj.slug.clone(), proj.config.clone(), host_cfg);
+                        }
+                    }
+                    Some(SidebarItem::Service { name, .. }) => {
+                        // Start individual service container
+                        let _ = std::process::Command::new("systemctl")
+                            .args(["--user", "start", &format!("{}.service", name)])
+                            .output();
+                        if let Some(row) = state.services.iter_mut().find(|s| s.name == name) {
+                            row.status = podman_status(&name);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            // Context-aware 'x': delete project, host, or service config.
             KeyCode::Char('x') | KeyCode::Delete => {
                 let item = state.current_sidebar_item().cloned();
                 match item {
                     Some(SidebarItem::Project { .. }) if !state.projects.is_empty() => {
                         state.push_overlay(OverlayLayer::Confirm {
-                            message:    "dash.hint.confirm".into(),
+                            message:    "confirm.delete.project".into(),
                             data:       None,
                             yes_action: ConfirmAction::DeleteProject,
+                        });
+                    }
+                    Some(SidebarItem::Host { slug, .. }) => {
+                        state.push_overlay(OverlayLayer::Confirm {
+                            message:    "confirm.delete.host".into(),
+                            data:       Some(slug.clone()),
+                            yes_action: ConfirmAction::DeleteHost,
                         });
                     }
                     Some(SidebarItem::Service { name, .. }) => {
@@ -671,13 +722,22 @@ fn handle_dashboard(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<
 
             KeyCode::Char('x') => {
                 if let Some(svc) = state.services.get(state.selected) {
-                    let _ = std::process::Command::new("podman")
-                        .args(["stop", &svc.name]).output();
-                    let _ = std::process::Command::new("podman")
-                        .args(["rm",   &svc.name]).output();
-                    state.services.remove(state.selected);
-                    if state.selected > 0 && state.selected >= state.services.len() {
-                        state.selected -= 1;
+                    state.push_overlay(OverlayLayer::Confirm {
+                        message:    "confirm.stop.service".into(),
+                        data:       Some(svc.name.clone()),
+                        yes_action: ConfirmAction::StopService,
+                    });
+                }
+            }
+
+            // 's' — start the selected service container.
+            KeyCode::Char('s') => {
+                if let Some(svc) = state.services.get(state.selected).cloned() {
+                    let _ = std::process::Command::new("systemctl")
+                        .args(["--user", "start", &format!("{}.service", svc.name)])
+                        .output();
+                    if let Some(row) = state.services.iter_mut().find(|s| s.name == svc.name) {
+                        row.status = podman_status(&svc.name);
                     }
                 }
             }
@@ -851,16 +911,43 @@ fn delete_selected_project(state: &mut AppState, root: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Delete a service from project.toml and from the services/ directory.
-/// The service name is encoded in the confirm overlay message as "confirm.delete.service:{name}".
-fn delete_selected_service(state: &mut AppState, root: &Path) -> Result<()> {
-    // Extract the service name from the overlay's data field.
-    let name = {
-        let Some(OverlayLayer::Confirm { ref data, .. }) = state.overlay_stack.last().cloned() else {
-            return Ok(());
-        };
-        data.clone().unwrap_or_default()
+/// Delete a host config file from the project directory.
+/// `slug` is the host slug (passed from the confirm overlay's data field).
+fn delete_selected_host(state: &mut AppState, root: &Path) -> Result<()> {
+    let slug = match state.hosts.get(state.selected_host) {
+        Some(h) => h.slug.clone(),
+        None    => return Ok(()),
     };
+    if let Some(proj) = state.projects.get(state.selected_project) {
+        let host_file = root
+            .join("projects")
+            .join(&proj.slug)
+            .join(format!("{}.host.toml", slug));
+        let _ = std::fs::remove_file(&host_file);
+    }
+    state.hosts.remove(state.selected_host);
+    if state.selected_host > 0 && state.selected_host >= state.hosts.len() {
+        state.selected_host -= 1;
+    }
+    state.rebuild_sidebar();
+    Ok(())
+}
+
+/// Stop a running container without deleting its config.
+/// Called when the user confirms a stop action from the Services panel.
+fn stop_service_container(state: &mut AppState, name: String) {
+    if name.is_empty() { return; }
+    let _ = std::process::Command::new("podman").args(["stop", &name]).output();
+    let _ = std::process::Command::new("podman").args(["rm",   &name]).output();
+    // Refresh status from podman
+    if let Some(row) = state.services.iter_mut().find(|s| s.name == name) {
+        row.status = podman_status(&name);
+    }
+}
+
+/// Delete a service config (TOML file) and its project.toml entry.
+/// `name` is the service instance name (passed from the confirm overlay's data field).
+fn delete_service_by_name(state: &mut AppState, root: &Path, name: String) -> Result<()> {
     if name.is_empty() { return Ok(()); }
 
     let Some(proj) = state.projects.get(state.selected_project).cloned() else { return Ok(()); };

@@ -3,7 +3,7 @@ use anyhow::{bail, Result};
 use fsn_engine::deploy::{DeployOpts, undeploy_instance};
 use fsn_podman::systemd;
 
-pub async fn run(root: &Path, project: Option<&Path>, service: Option<&str>, confirm: bool) -> Result<()> {
+pub async fn run(_root: &Path, _project: Option<&Path>, service: Option<&str>, confirm: bool) -> Result<()> {
     if !confirm {
         bail!(
             "Remove deletes ALL data for {}. Re-run with --confirm to proceed.",

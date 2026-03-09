@@ -10,7 +10,7 @@ use std::path::Path;
 use anyhow::Result;
 use fsn_form::Form;
 
-use crate::app::{ResourceForm, ResourceKind, SERVICE_TABS};
+use crate::app::{BOT_TABS, ResourceForm, ResourceKind};
 use crate::schema_form;
 use crate::ui::form_node::FormNode;
 
@@ -101,7 +101,7 @@ pub fn new_bot_form() -> ResourceForm {
         &[],
         &[],
     );
-    ResourceForm::new(ResourceKind::Bot, SERVICE_TABS, nodes, None, bot_on_change)
+    ResourceForm::new(ResourceKind::Bot, BOT_TABS, nodes, None, bot_on_change)
 }
 
 // ── Submit ────────────────────────────────────────────────────────────────────

@@ -3,7 +3,7 @@ use anyhow::Result;
 use fsn_engine::deploy::{DeployOpts, undeploy_instance};
 use fsn_podman::systemd;
 
-pub async fn run(root: &Path, _project: Option<&Path>, service: Option<&str>) -> Result<()> {
+pub async fn run(_root: &Path, _project: Option<&Path>, service: Option<&str>) -> Result<()> {
     let opts = DeployOpts::default_for_user();
     if let Some(name) = service {
         undeploy_instance(name, &opts).await?;

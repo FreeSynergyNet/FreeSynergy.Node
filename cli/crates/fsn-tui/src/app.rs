@@ -12,7 +12,7 @@ use ratatui::backend::CrosstermBackend;
 
 use fsn_core::config::project::{ProjectConfig, ServiceInstanceConfig};
 use fsn_core::config::host::HostConfig;
-use fsn_core::config::{AppSettings, StoreConfig};
+use fsn_core::config::AppSettings;
 use fsn_core::error::FsnError;
 use fsn_core::resource::{HostResource, ProjectResource, Resource, ServiceResource};
 use fsn_core::store::StoreEntry;
@@ -525,8 +525,12 @@ pub enum OverlayLayer {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfirmAction {
     DeleteProject,
-    /// Delete the service instance whose name is stored alongside (via overlay message field).
+    /// Delete the service config whose name is stored in the overlay's `data` field.
     DeleteService,
+    /// Delete the host whose slug is stored in the overlay's `data` field.
+    DeleteHost,
+    /// Stop a running container (name in `data`). Does NOT delete the config.
+    StopService,
     /// Leave a resource form (Screen::NewProject) discarding unsaved changes.
     LeaveForm,
     /// Leave the task wizard discarding unsaved changes.

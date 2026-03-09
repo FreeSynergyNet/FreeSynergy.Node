@@ -2,7 +2,6 @@
 
 use anyhow::Result;
 use fsn_core::state::actual::{HealthStatus, RunState};
-use serde::Deserialize;
 
 #[derive(Debug, Clone)]
 pub struct ContainerInfo {
@@ -15,14 +14,14 @@ pub struct ContainerInfo {
 
 /// List all containers whose names match the FSN naming convention.
 /// In Phase 1, returns empty (Ansible owns this).
-pub async fn list_fsn_containers(project_name: &str) -> Result<Vec<ContainerInfo>> {
+pub async fn list_fsn_containers(_project_name: &str) -> Result<Vec<ContainerInfo>> {
     // Phase 2: run `podman ps --format json --filter label=fsn.project={project_name}`
     // and parse output
     Ok(Vec::new())
 }
 
 /// Get info for a single container by name.
-pub async fn container_info(name: &str) -> Result<Option<ContainerInfo>> {
+pub async fn container_info(_name: &str) -> Result<Option<ContainerInfo>> {
     // Phase 2: `podman inspect {name} --format json`
     Ok(None)
 }

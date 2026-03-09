@@ -18,7 +18,7 @@ use axum::{
 };
 use fsn_core::config::service::FieldType;
 use fsn_podman::systemd::{self, UnitStatus};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::sync::Arc;
 
 // ── Shared application state ──────────────────────────────────────────────────
@@ -315,7 +315,7 @@ fn field_type_str(ft: &FieldType) -> &'static str {
     }
 }
 
-fn read_version_marker(name: &str, root: &std::path::Path) -> String {
+fn read_version_marker(name: &str, _root: &std::path::Path) -> String {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/root".to_string());
     let path = std::path::PathBuf::from(home)
         .join(".local/share/fsn/deployed")
