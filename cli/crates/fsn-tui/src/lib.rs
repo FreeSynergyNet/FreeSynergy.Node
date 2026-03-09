@@ -8,14 +8,20 @@ pub const BUILD_TIME: &str = env!("FSN_BUILD_TIME");
 /// Short git commit hash (set by build.rs, e.g. "a1b2c3d").
 pub const GIT_HASH:   &str = env!("FSN_GIT_HASH");
 
+pub mod actions;
 pub mod app;
 pub mod bot_form;
+pub mod deploy_thread;
 pub mod events;
+pub mod handles;
 pub mod host_form;
 pub mod i18n;
+pub mod mouse;
 pub mod project_form;
+pub mod resource_form;
 pub mod schema_form;
 pub mod service_form;
+pub mod submit;
 pub mod sysinfo;
 pub mod task_queue;
 pub mod ui;
@@ -34,7 +40,8 @@ use crossterm::{
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
 
-use app::{AppState, HostHandle, ProjectHandle, RunState, ServiceHandle};
+use app::AppState;
+use handles::{HostHandle, ProjectHandle, RunState, ServiceHandle};
 use sysinfo::SysInfo;
 
 // ── Background reconciler ─────────────────────────────────────────────────────

@@ -1,43 +1,47 @@
-// Keyboard and mouse event handling.
+// Keyboard event handling.
 //
-// The form event handler no longer checks field types directly.
-// Instead it calls `form.handle_key(key)` which dispatches to the focused
-// FormNode. Each node type handles its own input and returns a FormAction.
-// This makes adding new field types zero-boilerplate in events.rs.
+// Dispatches key events to the active screen or topmost overlay.
+// Heavy logic is delegated to focused modules:
+//   - submit.rs   — form validation and config persistence
+//   - actions.rs  — CRUD operations (delete, stop, reload)
+//   - deploy_thread.rs — background deploy/export thread
+//   - mouse.rs    — mouse events
 
 use std::path::Path;
 
 use anyhow::Result;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::app::{
-    AppState, ConfirmAction, DashFocus, DeployMsg, DeployState, LogsState,
-    NEW_RESOURCE_ITEMS, OverlayLayer, ResourceKind, RunState, Screen, SidebarAction, SidebarItem,
+    AppState, ConfirmAction, DashFocus, LogsState,
+    NEW_RESOURCE_ITEMS, OverlayLayer, ResourceKind, Screen, SidebarAction, SidebarItem,
 };
 use crate::ui::form_node::FormAction;
+use crate::actions::{
+    delete_selected_project, delete_selected_host, delete_service_by_name,
+    fetch_logs, podman_status, stop_service_container, sync_sidebar_selection,
+};
+use crate::deploy_thread::trigger_deploy;
+use crate::submit::{handle_form_submit, handle_wizard_submit};
 
 pub fn handle(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()> {
     state.ctrl_hint = key.modifiers.contains(KeyModifiers::CONTROL);
 
-    // Ctrl-C always quits
     if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
         state.should_quit = true;
         return Ok(());
     }
 
-    // F1 toggles help sidebar globally (works on all screens, even with overlay)
     if key.code == KeyCode::F(1) {
         state.help_visible = !state.help_visible;
         return Ok(());
     }
 
-    // Esc closes help sidebar first (priority over screen-specific Esc)
     if key.code == KeyCode::Esc && state.help_visible {
         state.help_visible = false;
         return Ok(());
     }
 
-    // Topmost overlay layer captures all input (Ebene system)
     if state.has_overlay() {
         return handle_overlay(key, state, root);
     }
@@ -54,12 +58,11 @@ pub fn handle(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()> {
 // ── Overlay layer handler ─────────────────────────────────────────────────────
 
 fn handle_overlay(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()> {
-    // Peek at the topmost overlay type before potentially popping it
     let overlay_kind = state.top_overlay().map(|o| match o {
         OverlayLayer::Logs(_)          => "logs",
-        OverlayLayer::Confirm{..}      => "confirm",
+        OverlayLayer::Confirm { .. }   => "confirm",
         OverlayLayer::Deploy(_)        => "deploy",
-        OverlayLayer::NewResource{..}  => "new_resource",
+        OverlayLayer::NewResource { .. } => "new_resource",
     });
 
     match overlay_kind {
@@ -81,7 +84,6 @@ fn handle_overlay(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()
             }
         }
         Some("confirm") => {
-            // Extract data BEFORE popping — overlay is gone afterwards.
             let (data, yes_action) = {
                 let (_, d, a) = state.confirm_overlay().unwrap();
                 (d.map(|s| s.to_string()), a)
@@ -105,24 +107,19 @@ fn handle_overlay(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()
                             state.task_queue = None;
                             state.screen = Screen::Dashboard;
                         }
-                        ConfirmAction::Quit => {
-                            state.should_quit = true;
-                        }
+                        ConfirmAction::Quit => { state.should_quit = true; }
                         ConfirmAction::DeleteService => {
-                            // Service name was stored in the overlay's data field.
                             delete_service_by_name(state, root, data.unwrap_or_default())?;
                         }
                         ConfirmAction::StopService => {
-                            // Container name stored in data field.
                             stop_service_container(state, data.unwrap_or_default());
                         }
                     }
                 }
-                _ => { state.pop_overlay(); } // any other key = cancel
+                _ => { state.pop_overlay(); }
             }
         }
         Some("deploy") => {
-            // Only closeable once done
             let done = state.top_overlay().map(|o| {
                 if let OverlayLayer::Deploy(ref d) = o { d.done } else { false }
             }).unwrap_or(false);
@@ -139,13 +136,11 @@ fn handle_overlay(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()
     Ok(())
 }
 
-/// Handle keyboard input for the new-resource selector popup.
 fn handle_new_resource_overlay(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()> {
     let count = NEW_RESOURCE_ITEMS.len();
 
     match key.code {
         KeyCode::Esc => { state.pop_overlay(); }
-
         KeyCode::Up => {
             if let Some(OverlayLayer::NewResource { selected }) = state.top_overlay_mut() {
                 *selected = selected.checked_sub(1).unwrap_or(count - 1);
@@ -156,7 +151,6 @@ fn handle_new_resource_overlay(key: KeyEvent, state: &mut AppState, root: &Path)
                 *selected = (*selected + 1) % count;
             }
         }
-
         KeyCode::Enter => {
             let idx = match state.top_overlay() {
                 Some(OverlayLayer::NewResource { selected }) => *selected,
@@ -165,20 +159,17 @@ fn handle_new_resource_overlay(key: KeyEvent, state: &mut AppState, root: &Path)
             state.pop_overlay();
             open_new_resource_form(idx, state, root);
         }
-
         _ => {}
     }
     Ok(())
 }
 
-/// Open the form for the resource type at `item_idx` in `NEW_RESOURCE_ITEMS`.
 fn open_new_resource_form(item_idx: usize, state: &mut AppState, root: &Path) {
     let Some(&(_, kind)) = NEW_RESOURCE_ITEMS.get(item_idx) else { return };
     match kind {
         ResourceKind::Project => {
             let queue = crate::task_queue::TaskQueue::new(
-                crate::task_queue::TaskKind::NewProject,
-                state,
+                crate::task_queue::TaskKind::NewProject, state,
             );
             state.task_queue = Some(queue);
             state.screen = Screen::TaskWizard;
@@ -199,7 +190,7 @@ fn open_new_resource_form(item_idx: usize, state: &mut AppState, root: &Path) {
             state.screen = Screen::NewProject;
         }
     }
-    let _ = root; // used by callers for context; form submit uses root separately
+    let _ = root;
 }
 
 // ── Welcome screen ────────────────────────────────────────────────────────────
@@ -223,7 +214,6 @@ fn handle_welcome(key: KeyEvent, state: &mut AppState) -> Result<()> {
 // ── Generic resource form handler ─────────────────────────────────────────────
 
 fn handle_resource_form(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()> {
-    // Dispatch to the focused FormNode — it handles its own input and navigation
     let action = if let Some(ref mut form) = state.current_form {
         form.handle_key(key)
     } else {
@@ -241,1141 +231,348 @@ fn handle_resource_form(key: KeyEvent, state: &mut AppState, root: &Path) -> Res
                 });
             } else {
                 state.current_form = None;
-                state.screen = if state.projects.is_empty() {
-                    Screen::Welcome
-                } else {
-                    Screen::Dashboard
-                };
+                state.screen = if state.projects.is_empty() { Screen::Welcome } else { Screen::Dashboard };
             }
         }
-
         FormAction::LangToggle => state.lang = state.lang.toggle(),
-
-        FormAction::Submit => handle_form_submit(state, root)?,
-
-        FormAction::Consumed => {} // node handled it, nothing to do
-
-        FormAction::Unhandled => {
-            match key.code {
-                KeyCode::Char('l') | KeyCode::Char('L') => state.lang = state.lang.toggle(),
-                _ => {}
+        FormAction::Submit     => handle_form_submit(state, root)?,
+        FormAction::Consumed   => {}
+        FormAction::Unhandled  => {
+            if let KeyCode::Char('l') | KeyCode::Char('L') = key.code {
+                state.lang = state.lang.toggle();
             }
         }
-
-        // These are resolved inside ResourceForm::handle_key before returning
         FormAction::FocusNext | FormAction::FocusPrev
         | FormAction::TabNext  | FormAction::TabPrev
         | FormAction::ValueChanged => {}
-
         FormAction::Quit => state.should_quit = true,
     }
     Ok(())
 }
 
-fn handle_form_submit(state: &mut AppState, root: &Path) -> Result<()> {
-    let Some(ref form) = state.current_form else { return Ok(()); };
-    let missing_t = form.tab_missing_count(form.active_tab);
-
-    if missing_t > 0 {
-        let msg = format!(
-            "{} {}",
-            missing_t,
-            if missing_t == 1 { "Pflichtfeld fehlt" } else { "Pflichtfelder fehlen" }
-        );
-        if let Some(ref mut f) = state.current_form { f.error = Some(msg); }
-        return Ok(());
-    }
-
-    if !form.is_last_tab() {
-        if let Some(ref mut f) = state.current_form { f.error = None; f.next_tab(); }
-        return Ok(());
-    }
-
-    let missing = form.missing_required();
-    if !missing.is_empty() {
-        let msg = format!("{} Pflichtfeld(er) auf anderen Tabs fehlen", missing.len());
-        if let Some(ref mut f) = state.current_form { f.error = Some(msg); }
-        return Ok(());
-    }
-
-    // All good — dispatch to resource-specific submit
-    let kind = state.current_form.as_ref().map(|f| f.kind);
-    match kind {
-        Some(ResourceKind::Project) => submit_project(state, root)?,
-        Some(ResourceKind::Service) => submit_service(state, root)?,
-        Some(ResourceKind::Host)    => submit_host(state, root)?,
-        Some(ResourceKind::Bot)     => submit_bot(state, root)?,
-        None => {}
-    }
-    Ok(())
-}
-
-// ── Task Wizard ───────────────────────────────────────────────────────────────
+// ── Task wizard ───────────────────────────────────────────────────────────────
 
 fn handle_wizard(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()> {
     let action = if let Some(ref mut queue) = state.task_queue {
         if let Some(task) = queue.tasks.get_mut(queue.active) {
-            if let Some(ref mut form) = task.form {
-                form.handle_key(key)
-            } else {
-                FormAction::Unhandled
-            }
-        } else {
-            FormAction::Unhandled
-        }
-    } else {
-        FormAction::Unhandled
-    };
+            if let Some(ref mut form) = task.form { form.handle_key(key) }
+            else { FormAction::Unhandled }
+        } else { FormAction::Unhandled }
+    } else { FormAction::Unhandled };
 
     match action {
-        FormAction::Cancel => {
-            let dirty = state.task_queue.as_ref().and_then(|q| {
-                q.tasks.get(q.active)?.form.as_ref().map(|f| f.is_dirty())
-            }).unwrap_or(false);
-            if dirty {
-                state.push_overlay(OverlayLayer::Confirm {
-                    message:    "form.confirm.leave".into(),
-                    data:       None,
-                    yes_action: ConfirmAction::LeaveWizard,
-                });
-            } else {
-                state.task_queue = None;
-                state.screen = Screen::Dashboard;
-            }
-        }
-
+        FormAction::Cancel => confirm_leave_wizard(state),
         FormAction::LangToggle => state.lang = state.lang.toggle(),
-
-        FormAction::Submit => handle_wizard_submit(state, root)?,
-
-        FormAction::Consumed => {}
-
-        FormAction::Unhandled => {
+        FormAction::Submit     => handle_wizard_submit(state, root)?,
+        FormAction::Consumed   => {}
+        FormAction::Unhandled  => {
             match key.code {
-                KeyCode::Esc => {
-                    let dirty = state.task_queue.as_ref().and_then(|q| {
-                        q.tasks.get(q.active)?.form.as_ref().map(|f| f.is_dirty())
-                    }).unwrap_or(false);
-                    if dirty {
-                        state.push_overlay(OverlayLayer::Confirm {
-                            message:    "form.confirm.leave".into(),
-                            data:       None,
-                            yes_action: ConfirmAction::LeaveWizard,
-                        });
-                    } else {
-                        state.task_queue = None;
-                        state.screen = Screen::Dashboard;
-                    }
-                }
+                KeyCode::Esc => confirm_leave_wizard(state),
                 KeyCode::Char('l') | KeyCode::Char('L') => state.lang = state.lang.toggle(),
                 _ => {}
             }
         }
-
         FormAction::FocusNext | FormAction::FocusPrev
         | FormAction::TabNext  | FormAction::TabPrev
         | FormAction::ValueChanged => {}
-
         FormAction::Quit => state.should_quit = true,
     }
     Ok(())
 }
 
-fn handle_wizard_submit(state: &mut AppState, root: &Path) -> Result<()> {
-    // Validate: check missing required fields on active tab first
-    let (missing_tab, is_last, missing_all, kind) = {
-        let Some(ref queue) = state.task_queue else { return Ok(()); };
-        let Some(task) = queue.tasks.get(queue.active) else { return Ok(()); };
-        let Some(ref form) = task.form else { return Ok(()); };
-        (
-            form.tab_missing_count(form.active_tab),
-            form.is_last_tab(),
-            form.missing_required().len(),
-            task.kind.resource_kind(),
-        )
-    };
-
-    if missing_tab > 0 {
-        let msg = format!(
-            "{} {}",
-            missing_tab,
-            if missing_tab == 1 { "Pflichtfeld fehlt" } else { "Pflichtfelder fehlen" }
-        );
-        if let Some(ref mut queue) = state.task_queue {
-            if let Some(task) = queue.tasks.get_mut(queue.active) {
-                if let Some(ref mut form) = task.form { form.error = Some(msg); }
-            }
-        }
-        return Ok(());
-    }
-
-    if !is_last {
-        if let Some(ref mut queue) = state.task_queue {
-            if let Some(task) = queue.tasks.get_mut(queue.active) {
-                if let Some(ref mut form) = task.form { form.error = None; form.next_tab(); }
-            }
-        }
-        return Ok(());
-    }
-
-    if missing_all > 0 {
-        let msg = format!("{} Pflichtfeld(er) auf anderen Tabs fehlen", missing_all);
-        if let Some(ref mut queue) = state.task_queue {
-            if let Some(task) = queue.tasks.get_mut(queue.active) {
-                if let Some(ref mut form) = task.form { form.error = Some(msg); }
-            }
-        }
-        return Ok(());
-    }
-
-    // Extract the form, run it through the normal submit path, then advance the queue
-    let form = if let Some(ref mut queue) = state.task_queue {
-        if let Some(task) = queue.tasks.get_mut(queue.active) {
-            task.form.take()
-        } else { None }
-    } else { None };
-
-    let Some(form) = form else { return Ok(()); };
-    state.current_form = Some(form);
-
-    let submit_result = match kind {
-        ResourceKind::Project => submit_project(state, root),
-        ResourceKind::Host    => submit_host(state, root),
-        ResourceKind::Service => submit_service(state, root),
-        ResourceKind::Bot     => submit_bot(state, root),
-    };
-
-    // Put form back if submit failed (error displayed)
-    if let Some(ref mut queue) = state.task_queue {
-        if let Some(task) = queue.tasks.get_mut(queue.active) {
-            if task.form.is_none() {
-                task.form = state.current_form.take();
-            }
-        }
-    }
-
-    submit_result?;
-
-    // If submit succeeded, current_form is None (cleared by submit_*).
-    // Advance the wizard queue (take + put back to avoid borrow conflict).
-    let more = if let Some(mut queue) = state.task_queue.take() {
-        let has_more = queue.on_task_saved(state);
-        state.task_queue = Some(queue);
-        has_more
+fn confirm_leave_wizard(state: &mut AppState) {
+    let dirty = state.task_queue.as_ref().and_then(|q| {
+        q.tasks.get(q.active)?.form.as_ref().map(|f| f.is_dirty())
+    }).unwrap_or(false);
+    if dirty {
+        state.push_overlay(OverlayLayer::Confirm {
+            message:    "form.confirm.leave".into(),
+            data:       None,
+            yes_action: ConfirmAction::LeaveWizard,
+        });
     } else {
-        false
-    };
-
-    if !more {
-        // Wizard complete — return to dashboard
         state.task_queue = None;
         state.screen = Screen::Dashboard;
-    } else {
-        // Stay on wizard screen, next task is now active
-        state.screen = Screen::TaskWizard;
     }
-    state.current_form = None;
-    Ok(())
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
 fn handle_dashboard(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()> {
     match state.dash_focus {
-        // ── Sidebar ────────────────────────────────────────────────────────
-        DashFocus::Sidebar => match key.code {
-            KeyCode::Char('q') | KeyCode::Esc => {
+        DashFocus::Sidebar => handle_dashboard_sidebar(key, state, root),
+        DashFocus::Services => handle_dashboard_services(key, state, root),
+    }
+}
+
+fn handle_dashboard_sidebar(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()> {
+    match key.code {
+        KeyCode::Char('q') | KeyCode::Esc => {
+            state.push_overlay(OverlayLayer::Confirm {
+                message:    "confirm.quit".into(),
+                data:       None,
+                yes_action: ConfirmAction::Quit,
+            });
+        }
+        KeyCode::Char('L') => state.lang = state.lang.toggle(),
+        KeyCode::Tab => state.dash_focus = DashFocus::Services,
+
+        KeyCode::Up => {
+            let cur = state.sidebar_cursor;
+            let prev = (0..cur).rev().find(|&i| state.sidebar_items[i].is_selectable());
+            if let Some(prev) = prev {
+                state.sidebar_cursor = prev;
+                sync_sidebar_selection(state, root);
+            }
+        }
+        KeyCode::Down => {
+            let cur = state.sidebar_cursor;
+            let len = state.sidebar_items.len();
+            let next = (cur + 1..len).find(|&i| state.sidebar_items[i].is_selectable());
+            if let Some(next) = next {
+                state.sidebar_cursor = next;
+                sync_sidebar_selection(state, root);
+            }
+        }
+
+        KeyCode::Char('S') => {
+            state.settings_cursor = 0;
+            state.screen = Screen::Settings;
+        }
+        KeyCode::Char('n') => {
+            state.push_overlay(OverlayLayer::NewResource { selected: 0 });
+        }
+
+        KeyCode::Char('e') => {
+            open_sidebar_edit_form(state);
+        }
+        KeyCode::Enter => {
+            open_sidebar_action_or_edit(state, root);
+        }
+
+        KeyCode::Char('s') => {
+            sidebar_start_resource(state, root);
+        }
+        KeyCode::Char('x') | KeyCode::Delete => {
+            sidebar_confirm_delete(state);
+        }
+
+        _ => {}
+    }
+    Ok(())
+}
+
+fn handle_dashboard_services(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()> {
+    match key.code {
+        KeyCode::Char('q') | KeyCode::Esc => {
+            state.push_overlay(OverlayLayer::Confirm {
+                message:    "confirm.quit".into(),
+                data:       None,
+                yes_action: ConfirmAction::Quit,
+            });
+        }
+        KeyCode::Char('L') => state.lang = state.lang.toggle(),
+        KeyCode::Tab => state.dash_focus = DashFocus::Sidebar,
+
+        KeyCode::Up   => { if state.selected > 0 { state.selected -= 1; } }
+        KeyCode::Down => {
+            if state.selected + 1 < state.services.len() { state.selected += 1; }
+        }
+
+        KeyCode::Char('n') => {
+            state.push_overlay(OverlayLayer::NewResource { selected: 0 });
+        }
+        KeyCode::Char('l') => {
+            if let Some(svc) = state.services.get(state.selected) {
+                let lines = fetch_logs(&svc.name);
+                state.push_overlay(OverlayLayer::Logs(LogsState {
+                    service_name: svc.name.clone(), lines, scroll: 0,
+                }));
+            }
+        }
+        KeyCode::Char('d') => {
+            if let Some(proj) = state.projects.get(state.selected_project).cloned() {
+                let host = state.hosts.first().map(|h| h.config.clone());
+                trigger_deploy(state, root, proj.slug.clone(), proj.config.clone(), host);
+            }
+        }
+        KeyCode::Char('r') => {
+            if let Some(svc) = state.services.get(state.selected) {
+                let _ = std::process::Command::new("podman")
+                    .args(["restart", &svc.name]).output();
+                if let Some(row) = state.services.get_mut(state.selected) {
+                    row.status = podman_status(&row.name);
+                }
+            }
+        }
+        KeyCode::Char('x') => {
+            if let Some(svc) = state.services.get(state.selected) {
                 state.push_overlay(OverlayLayer::Confirm {
-                    message:    "confirm.quit".into(),
-                    data:       None,
-                    yes_action: ConfirmAction::Quit,
+                    message:    "confirm.stop.service".into(),
+                    data:       Some(svc.name.clone()),
+                    yes_action: ConfirmAction::StopService,
                 });
             }
-            KeyCode::Char('L') => state.lang = state.lang.toggle(),
-            KeyCode::Tab => state.dash_focus = DashFocus::Services,
-
-            KeyCode::Up => {
-                let cur = state.sidebar_cursor;
-                let prev = (0..cur).rev().find(|&i| state.sidebar_items[i].is_selectable());
-                if let Some(prev) = prev {
-                    state.sidebar_cursor = prev;
-                    sync_sidebar_selection(state, root);
+        }
+        KeyCode::Char('s') => {
+            if let Some(svc) = state.services.get(state.selected).cloned() {
+                let _ = std::process::Command::new("systemctl")
+                    .args(["--user", "start", &format!("{}.service", svc.name)])
+                    .output();
+                if let Some(row) = state.services.iter_mut().find(|s| s.name == svc.name) {
+                    row.status = podman_status(&svc.name);
                 }
             }
-            KeyCode::Down => {
-                let cur = state.sidebar_cursor;
-                let len = state.sidebar_items.len();
-                let next = (cur + 1..len).find(|&i| state.sidebar_items[i].is_selectable());
-                if let Some(next) = next {
-                    state.sidebar_cursor = next;
-                    sync_sidebar_selection(state, root);
-                }
-            }
-
-            // 'S' (uppercase) — open Settings screen.
-            KeyCode::Char('S') => {
-                state.settings_cursor = 0;
-                state.screen = Screen::Settings;
-            }
-
-            // 'n' — open the new-resource selector (Project / Host / Service / Bot).
-            KeyCode::Char('n') => {
-                state.push_overlay(OverlayLayer::NewResource { selected: 0 });
-            }
-
-            // Context-aware 'e': edit the item under the cursor (project, host, or service).
-            KeyCode::Char('e') => {
-                let item = state.current_sidebar_item().cloned();
-                match item {
-                    Some(SidebarItem::Project { slug, .. }) => {
-                        if let Some(proj) = state.projects.iter().find(|p| p.slug == slug).cloned() {
-                            state.current_form = Some(crate::project_form::edit_project_form(&proj));
-                            state.screen = Screen::NewProject;
-                        }
-                    }
-                    Some(SidebarItem::Host { slug, .. }) => {
-                        if let Some(host) = state.hosts.iter().find(|h| h.slug == slug).cloned() {
-                            let project_slugs = state.projects.iter().map(|p| p.slug.clone()).collect();
-                            state.current_form = Some(crate::host_form::edit_host_form(&host, project_slugs));
-                            state.screen = Screen::NewProject;
-                        }
-                    }
-                    Some(SidebarItem::Service { name, .. }) => {
-                        if let Some(proj) = state.projects.get(state.selected_project).cloned() {
-                            if let Some(entry) = proj.config.load.services.get(&name).cloned() {
-                                let slug = crate::app::slugify(&name);
-                                state.current_form = Some(
-                                    crate::service_form::edit_service_form(&name, &entry, slug)
-                                );
-                                state.screen = Screen::NewProject;
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
-
-            // Enter = "Eintreten" — opens the edit form for the item under the cursor.
-            // Action items open the create form (consistent: Enter always starts an interaction).
-            KeyCode::Enter => {
-                let item = state.current_sidebar_item().cloned();
-                match item {
-                    Some(SidebarItem::Action { kind: SidebarAction::NewProject, .. }) => {
-                        let queue = crate::task_queue::TaskQueue::new(
-                            crate::task_queue::TaskKind::NewProject, state,
-                        );
-                        state.task_queue = Some(queue);
-                        state.screen = Screen::TaskWizard;
-                    }
-                    Some(SidebarItem::Action { kind: SidebarAction::NewHost, .. }) => {
-                        let project_slugs = state.projects.iter().map(|p| p.slug.clone()).collect();
-                        let current = state.projects.get(state.selected_project)
-                            .map(|p| p.slug.as_str()).unwrap_or("");
-                        state.current_form = Some(crate::host_form::new_host_form(project_slugs, current));
-                        state.screen = Screen::NewProject;
-                    }
-                    Some(SidebarItem::Action { kind: SidebarAction::NewService, .. }) => {
-                        state.current_form = Some(crate::service_form::new_service_form());
-                        state.screen = Screen::NewProject;
-                    }
-                    Some(SidebarItem::Project { slug, .. }) => {
-                        if let Some(proj) = state.projects.iter().find(|p| p.slug == slug).cloned() {
-                            state.current_form = Some(crate::project_form::edit_project_form(&proj));
-                            state.screen = Screen::NewProject;
-                        }
-                    }
-                    Some(SidebarItem::Host { slug, .. }) => {
-                        if let Some(host) = state.hosts.iter().find(|h| h.slug == slug).cloned() {
-                            let project_slugs = state.projects.iter().map(|p| p.slug.clone()).collect();
-                            state.current_form = Some(crate::host_form::edit_host_form(&host, project_slugs));
-                            state.screen = Screen::NewProject;
-                        }
-                    }
-                    Some(SidebarItem::Service { name, .. }) => {
-                        if let Some(proj) = state.projects.get(state.selected_project).cloned() {
-                            if let Some(entry) = proj.config.load.services.get(&name).cloned() {
-                                let slug = crate::app::slugify(&name);
-                                state.current_form = Some(
-                                    crate::service_form::edit_service_form(&name, &entry, slug)
-                                );
-                                state.screen = Screen::NewProject;
-                            }
-                        }
-                    }
-                    _ => {}
-                }
-            }
-
-            // Context-aware 's': start the focused resource.
-            // Project → deploy all services; Host → start services on this host;
-            // Service → start individual service container.
-            KeyCode::Char('s') => {
-                let item = state.current_sidebar_item().cloned();
-                match item {
-                    Some(SidebarItem::Project { slug, .. }) => {
-                        if let Some(proj) = state.projects.iter().find(|p| p.slug == slug).cloned() {
-                            let host = state.hosts.first().map(|h| h.config.clone());
-                            trigger_deploy(state, root, proj.slug.clone(), proj.config.clone(), host);
-                        }
-                    }
-                    Some(SidebarItem::Host { slug, .. }) => {
-                        // Start all services assigned to this host
-                        if let Some(proj) = state.projects.get(state.selected_project).cloned() {
-                            let host_cfg = state.hosts.iter()
-                                .find(|h| h.slug == slug)
-                                .map(|h| h.config.clone());
-                            trigger_deploy(state, root, proj.slug.clone(), proj.config.clone(), host_cfg);
-                        }
-                    }
-                    Some(SidebarItem::Service { name, .. }) => {
-                        // Start individual service container
-                        let _ = std::process::Command::new("systemctl")
-                            .args(["--user", "start", &format!("{}.service", name)])
-                            .output();
-                        if let Some(row) = state.services.iter_mut().find(|s| s.name == name) {
-                            row.status = podman_status(&name);
-                        }
-                    }
-                    _ => {}
-                }
-            }
-
-            // Context-aware 'x': delete project, host, or service config.
-            KeyCode::Char('x') | KeyCode::Delete => {
-                let item = state.current_sidebar_item().cloned();
-                match item {
-                    Some(SidebarItem::Project { .. }) if !state.projects.is_empty() => {
-                        state.push_overlay(OverlayLayer::Confirm {
-                            message:    "confirm.delete.project".into(),
-                            data:       None,
-                            yes_action: ConfirmAction::DeleteProject,
-                        });
-                    }
-                    Some(SidebarItem::Host { slug, .. }) => {
-                        state.push_overlay(OverlayLayer::Confirm {
-                            message:    "confirm.delete.host".into(),
-                            data:       Some(slug.clone()),
-                            yes_action: ConfirmAction::DeleteHost,
-                        });
-                    }
-                    Some(SidebarItem::Service { name, .. }) => {
-                        state.push_overlay(OverlayLayer::Confirm {
-                            message:    "confirm.delete.service".into(),
-                            data:       Some(name.clone()),
-                            yes_action: ConfirmAction::DeleteService,
-                        });
-                    }
-                    _ => {}
-                }
-            }
-
-            _ => {}
-        },
-
-        // ── Services ───────────────────────────────────────────────────────
-        DashFocus::Services => match key.code {
-            KeyCode::Char('q') | KeyCode::Esc => {
-                state.push_overlay(OverlayLayer::Confirm {
-                    message:    "confirm.quit".into(),
-                    data:       None,
-                    yes_action: ConfirmAction::Quit,
-                });
-            }
-            KeyCode::Char('L') => state.lang = state.lang.toggle(),
-            KeyCode::Tab => state.dash_focus = DashFocus::Sidebar,
-
-            KeyCode::Up   => { if state.selected > 0 { state.selected -= 1; } }
-            KeyCode::Down => {
-                if state.selected + 1 < state.services.len() { state.selected += 1; }
-            }
-
-            // 'n' — open the new-resource selector (same as sidebar).
-            KeyCode::Char('n') => {
-                state.push_overlay(OverlayLayer::NewResource { selected: 0 });
-            }
-
-            KeyCode::Char('l') => {
-                if let Some(svc) = state.services.get(state.selected) {
-                    let lines = fetch_logs(&svc.name);
-                    state.push_overlay(OverlayLayer::Logs(LogsState {
-                        service_name: svc.name.clone(), lines, scroll: 0,
-                    }));
-                }
-            }
-
-            KeyCode::Char('d') => {
-                if let Some(proj) = state.projects.get(state.selected_project).cloned() {
-                    let host = state.hosts.first().map(|h| h.config.clone());
-                    trigger_deploy(state, root, proj.slug.clone(), proj.config.clone(), host);
-                }
-            }
-
-            KeyCode::Char('r') => {
-                if let Some(svc) = state.services.get(state.selected) {
-                    let _ = std::process::Command::new("podman")
-                        .args(["restart", &svc.name]).output();
-                    if let Some(row) = state.services.get_mut(state.selected) {
-                        row.status = podman_status(&row.name);
-                    }
-                }
-            }
-
-            KeyCode::Char('x') => {
-                if let Some(svc) = state.services.get(state.selected) {
-                    state.push_overlay(OverlayLayer::Confirm {
-                        message:    "confirm.stop.service".into(),
-                        data:       Some(svc.name.clone()),
-                        yes_action: ConfirmAction::StopService,
-                    });
-                }
-            }
-
-            // 's' — start the selected service container.
-            KeyCode::Char('s') => {
-                if let Some(svc) = state.services.get(state.selected).cloned() {
-                    let _ = std::process::Command::new("systemctl")
-                        .args(["--user", "start", &format!("{}.service", svc.name)])
-                        .output();
-                    if let Some(row) = state.services.iter_mut().find(|s| s.name == svc.name) {
-                        row.status = podman_status(&svc.name);
-                    }
-                }
-            }
-
-            _ => {}
-        },
+        }
+        _ => {}
     }
     Ok(())
 }
 
-// ── Deploy (background thread) ────────────────────────────────────────────────
-//
-// Phase 1: Compose export (distributable templates for Docker/Podman Compose)
-// Phase 2: Quadlet generation (systemd units for local Podman deployment)
-//
-// Both phases run in a single background thread — no async needed
-// since all I/O is synchronous (registry scanning, file writes).
+// ── Sidebar action helpers ────────────────────────────────────────────────────
 
-/// Spawn a background deploy thread. Generates Compose + Quadlet files and
-/// reports each step via the deploy progress overlay.
-fn trigger_deploy(
-    state:       &mut AppState,
-    root:        &Path,
-    slug:        String,
-    project_cfg: fsn_core::config::ProjectConfig,
-    host_cfg:    Option<fsn_core::config::HostConfig>,
-) {
-    let (tx, rx) = std::sync::mpsc::channel::<DeployMsg>();
-    state.deploy_rx = Some(rx);
-    state.push_overlay(OverlayLayer::Deploy(DeployState {
-        target:  project_cfg.project.name.clone(),
-        log:     Vec::new(),
-        done:    false,
-        success: false,
-    }));
-
-    let project_dir = root.join("projects").join(&slug);
-    let modules_dir = root.join("modules");
-
-    std::thread::spawn(move || {
-        // ── Phase 1: Compose export ───────────────────────────────────────────
-        let compose_dir = project_dir.join("compose");
-        let _ = tx.send(DeployMsg::Log("── Compose-Export ──".into()));
-
-        if let Err(e) = std::fs::create_dir_all(&compose_dir) {
-            let _ = tx.send(DeployMsg::Done { success: false, error: Some(e.to_string()) });
-            return;
-        }
-
-        let compose_content = fsn_engine::generate::compose::generate_compose(&project_cfg);
-        if let Err(e) = std::fs::write(compose_dir.join("compose.yml"), &compose_content) {
-            let _ = tx.send(DeployMsg::Done { success: false, error: Some(format!("compose.yml: {e}")) });
-            return;
-        }
-        let _ = tx.send(DeployMsg::Log("✓ compose/compose.yml".into()));
-
-        let env_content = fsn_engine::generate::compose::generate_env_example(&project_cfg);
-        if let Err(e) = std::fs::write(compose_dir.join(".env.example"), &env_content) {
-            let _ = tx.send(DeployMsg::Done { success: false, error: Some(format!(".env.example: {e}")) });
-            return;
-        }
-        let _ = tx.send(DeployMsg::Log("✓ compose/.env.example".into()));
-
-        // ── Phase 2: Quadlet generation ───────────────────────────────────────
-        let _ = tx.send(DeployMsg::Log("── Quadlet-Generierung ──".into()));
-
-        // Load module registry
-        let registry = match fsn_core::config::ServiceRegistry::load(&modules_dir) {
-            Ok(r)  => r,
-            Err(e) => {
-                let _ = tx.send(DeployMsg::Log(format!("✗ Registry: {e}")));
-                let _ = tx.send(DeployMsg::Done { success: false, error: Some("Registry konnte nicht geladen werden".into()) });
-                return;
-            }
-        };
-
-        // Need a HostConfig for resolve_desired — use provided host or a minimal default
-        let host = match host_cfg {
-            Some(h) => h,
-            None => {
-                let _ = tx.send(DeployMsg::Log("! Kein Host konfiguriert — Quadlets übersprungen".into()));
-                let _ = tx.send(DeployMsg::Log("  → Bitte zuerst einen Host anlegen (Sidebar → n)".into()));
-                let _ = tx.send(DeployMsg::Done { success: true, error: None });
-                return;
-            }
-        };
-
-        // Load vault (empty if not found)
-        let vault = fsn_core::config::VaultConfig::load(&project_dir, None)
-            .unwrap_or_default();
-
-        // Resolve desired state (cross-service vars, env expansion, sub-services, volumes)
-        let data_root = project_dir.join("data");
-        let desired = match fsn_engine::resolve::resolve_desired(&project_cfg, &host, &registry, &vault, Some(&data_root)) {
-            Ok(d)  => d,
-            Err(e) => {
-                let _ = tx.send(DeployMsg::Done { success: false, error: Some(format!("Resolve: {e}")) });
-                return;
-            }
-        };
-
-        // Write Quadlet files to project_dir/quadlets/
-        let quadlet_dir = project_dir.join("quadlets");
-        if let Err(e) = std::fs::create_dir_all(&quadlet_dir) {
-            let _ = tx.send(DeployMsg::Done { success: false, error: Some(e.to_string()) });
-            return;
-        }
-
-        let network_name = format!("fsn-{}", project_cfg.project.name.to_lowercase().replace(' ', "-"));
-
-        // Write network unit
-        let net_content = fsn_engine::generate::quadlet::generate_network(&network_name, &project_cfg.project.name);
-        if let Err(e) = std::fs::write(quadlet_dir.join(format!("{network_name}.network")), &net_content) {
-            let _ = tx.send(DeployMsg::Log(format!("✗ {network_name}.network: {e}")));
-        } else {
-            let _ = tx.send(DeployMsg::Log(format!("✓ {network_name}.network")));
-        }
-
-        // Flatten all instances (sub-services first, then parents)
-        let mut all_instances = Vec::new();
-        for svc in &desired.services {
-            for sub in &svc.sub_services {
-                all_instances.push(sub);
-            }
-            all_instances.push(svc);
-        }
-
-        for instance in &all_instances {
-            match fsn_engine::generate::quadlet::generate(instance, Some(&network_name)) {
-                Ok(content) => {
-                    let fname = format!("{}.container", instance.name);
-                    if let Err(e) = std::fs::write(quadlet_dir.join(&fname), &content) {
-                        let _ = tx.send(DeployMsg::Log(format!("✗ {fname}: {e}")));
-                    } else {
-                        let _ = tx.send(DeployMsg::Log(format!("✓ {fname}")));
-                    }
-
-                    // Write env file
-                    let env_fname = format!("{}.env", instance.name);
-                    let env_lines: String = instance.resolved_env.iter()
-                        .map(|(k, v)| format!("{k}={v}\n"))
-                        .collect();
-                    if let Err(e) = std::fs::write(quadlet_dir.join(&env_fname), &env_lines) {
-                        let _ = tx.send(DeployMsg::Log(format!("✗ {env_fname}: {e}")));
-                    } else {
-                        let _ = tx.send(DeployMsg::Log(format!("✓ {env_fname}")));
-                    }
-                }
-                Err(e) => {
-                    let _ = tx.send(DeployMsg::Log(format!("✗ {}: {e}", instance.name)));
-                }
-            }
-        }
-
-        let _ = tx.send(DeployMsg::Done { success: true, error: None });
-    });
-}
-
-fn delete_selected_project(state: &mut AppState, root: &Path) -> Result<()> {
-    let Some(proj) = state.projects.get(state.selected_project) else { return Ok(()); };
-    let project_dir = root.join("projects").join(&proj.slug);
-    let _ = std::fs::remove_dir_all(&project_dir);
-    state.projects.remove(state.selected_project);
-    if state.selected_project > 0 && state.selected_project >= state.projects.len() {
-        state.selected_project -= 1;
-    }
-    state.hosts.clear();
-    state.rebuild_sidebar();
-    state.rebuild_services();
-    if state.projects.is_empty() { state.screen = Screen::Welcome; }
-    Ok(())
-}
-
-/// Delete a host config file from the project directory.
-/// `slug` is the host slug (passed from the confirm overlay's data field).
-fn delete_selected_host(state: &mut AppState, root: &Path) -> Result<()> {
-    let slug = match state.hosts.get(state.selected_host) {
-        Some(h) => h.slug.clone(),
-        None    => return Ok(()),
-    };
-    if let Some(proj) = state.projects.get(state.selected_project) {
-        let host_file = root
-            .join("projects")
-            .join(&proj.slug)
-            .join(format!("{}.host.toml", slug));
-        let _ = std::fs::remove_file(&host_file);
-    }
-    state.hosts.remove(state.selected_host);
-    if state.selected_host > 0 && state.selected_host >= state.hosts.len() {
-        state.selected_host -= 1;
-    }
-    state.rebuild_sidebar();
-    Ok(())
-}
-
-/// Stop a running container without deleting its config.
-/// Called when the user confirms a stop action from the Services panel.
-fn stop_service_container(state: &mut AppState, name: String) {
-    if name.is_empty() { return; }
-    let _ = std::process::Command::new("podman").args(["stop", &name]).output();
-    let _ = std::process::Command::new("podman").args(["rm",   &name]).output();
-    // Refresh status from podman
-    if let Some(row) = state.services.iter_mut().find(|s| s.name == name) {
-        row.status = podman_status(&name);
-    }
-}
-
-/// Delete a service config (TOML file) and its project.toml entry.
-/// `name` is the service instance name (passed from the confirm overlay's data field).
-fn delete_service_by_name(state: &mut AppState, root: &Path, name: String) -> Result<()> {
-    if name.is_empty() { return Ok(()); }
-
-    let Some(proj) = state.projects.get(state.selected_project).cloned() else { return Ok(()); };
-    let project_dir  = root.join("projects").join(&proj.slug);
-    let services_dir = project_dir.join("services");
-    let slug         = crate::app::slugify(&name);
-
-    // Remove the .service.toml file
-    let svc_file = services_dir.join(format!("{slug}.service.toml"));
-    let _ = std::fs::remove_file(&svc_file);
-
-    // Remove the [load.services.{slug}] block from project.toml
-    if let Ok(content) = std::fs::read_to_string(&proj.toml_path) {
-        let filtered = remove_toml_table_block(&content, &format!("load.services.{slug}"));
-        let _ = std::fs::write(&proj.toml_path, filtered);
-    }
-
-    state.projects = crate::load_projects(root);
-    state.rebuild_services();
-    state.rebuild_sidebar();
-    Ok(())
-}
-
-/// Remove all lines belonging to `[table_path]` and `[table_path.*]` from TOML text.
-/// Simple line-based approach — sufficient for our flat project.toml structure.
-fn remove_toml_table_block(content: &str, table_path: &str) -> String {
-    let header_exact  = format!("[{table_path}]");
-    let header_prefix = format!("[{table_path}.");
-    let mut out = String::new();
-    let mut skip = false;
-    for line in content.lines() {
-        let trimmed = line.trim();
-        if trimmed.starts_with('[') {
-            // New table header — re-evaluate skip
-            skip = trimmed == header_exact
-                || trimmed.starts_with(&header_prefix);
-        }
-        if !skip {
-            out.push_str(line);
-            out.push('\n');
-        }
-    }
-    out
-}
-
-fn reload_hosts(state: &mut AppState, root: &Path) {
-    if let Some(proj) = state.projects.get(state.selected_project) {
-        state.hosts = crate::load_hosts(&root.join("projects").join(&proj.slug));
-        state.rebuild_sidebar();
-    }
-}
-
-/// Called after `sidebar_cursor` moves — syncs `selected_project` / `selected_host`
-/// and reloads dependent data when a Project item is selected.
-fn sync_sidebar_selection(state: &mut AppState, root: &Path) {
-    match state.current_sidebar_item().cloned() {
+fn open_sidebar_edit_form(state: &mut AppState) {
+    let item = state.current_sidebar_item().cloned();
+    match item {
         Some(SidebarItem::Project { slug, .. }) => {
-            if let Some(idx) = state.projects.iter().position(|p| p.slug == slug) {
-                if state.selected_project != idx {
-                    state.selected_project = idx;
-                    reload_hosts(state, root);
-                    state.rebuild_services();
-                    state.rebuild_sidebar();
-                }
+            if let Some(proj) = state.projects.iter().find(|p| p.slug == slug).cloned() {
+                state.current_form = Some(crate::project_form::edit_project_form(&proj));
+                state.screen = Screen::NewProject;
             }
         }
         Some(SidebarItem::Host { slug, .. }) => {
-            if let Some(idx) = state.hosts.iter().position(|h| h.slug == slug) {
-                state.selected_host = idx;
+            if let Some(host) = state.hosts.iter().find(|h| h.slug == slug).cloned() {
+                let project_slugs = state.projects.iter().map(|p| p.slug.clone()).collect();
+                state.current_form = Some(crate::host_form::edit_host_form(&host, project_slugs));
+                state.screen = Screen::NewProject;
             }
         }
-        // When cursor lands on a service, ensure selected_project is the right one.
-        // Services in the sidebar always belong to selected_project, so no change needed —
-        // but we still call rebuild_services() to sync the right panel.
-        Some(SidebarItem::Service { .. }) => {
-            state.rebuild_services();
+        Some(SidebarItem::Service { name, .. }) => {
+            if let Some(proj) = state.projects.get(state.selected_project).cloned() {
+                if let Some(entry) = proj.config.load.services.get(&name).cloned() {
+                    let slug = crate::resource_form::slugify(&name);
+                    state.current_form = Some(crate::service_form::edit_service_form(&name, &entry, slug));
+                    state.screen = Screen::NewProject;
+                }
+            }
         }
         _ => {}
     }
 }
 
-// ── Form submit dispatch ──────────────────────────────────────────────────────
-
-fn submit_project(state: &mut AppState, root: &Path) -> Result<()> {
-    let result = state.current_form.as_ref()
-        .map(|form| crate::project_form::submit_project_form(form, root));
-
-    match result {
-        Some(Ok(())) => {
-            state.projects = crate::load_projects(root);
-            if let Some(ref form) = state.current_form {
-                let slug = form.edit_id.clone()
-                    .unwrap_or_else(|| crate::app::slugify(&form.field_value("name")));
-                state.selected_project = state.projects.iter()
-                    .position(|p| p.slug == slug).unwrap_or(0);
+fn open_sidebar_action_or_edit(state: &mut AppState, root: &Path) {
+    let item = state.current_sidebar_item().cloned();
+    match item {
+        Some(SidebarItem::Action { kind: SidebarAction::NewProject, .. }) => {
+            let queue = crate::task_queue::TaskQueue::new(
+                crate::task_queue::TaskKind::NewProject, state,
+            );
+            state.task_queue = Some(queue);
+            state.screen = Screen::TaskWizard;
+        }
+        Some(SidebarItem::Action { kind: SidebarAction::NewHost, .. }) => {
+            let project_slugs = state.projects.iter().map(|p| p.slug.clone()).collect();
+            let current = state.projects.get(state.selected_project)
+                .map(|p| p.slug.as_str()).unwrap_or("");
+            state.current_form = Some(crate::host_form::new_host_form(project_slugs, current));
+            state.screen = Screen::NewProject;
+        }
+        Some(SidebarItem::Action { kind: SidebarAction::NewService, .. }) => {
+            state.current_form = Some(crate::service_form::new_service_form());
+            state.screen = Screen::NewProject;
+        }
+        Some(SidebarItem::Project { slug, .. }) => {
+            if let Some(proj) = state.projects.iter().find(|p| p.slug == slug).cloned() {
+                state.current_form = Some(crate::project_form::edit_project_form(&proj));
+                state.screen = Screen::NewProject;
             }
-            state.rebuild_services();
-            state.rebuild_sidebar();
-            state.screen     = Screen::Dashboard;
-            state.dash_focus = DashFocus::Sidebar;
-            state.current_form = None;
         }
-        Some(Err(e)) => {
-            if let Some(ref mut form) = state.current_form {
-                form.error = Some(format!("{}", e));
+        Some(SidebarItem::Host { slug, .. }) => {
+            if let Some(host) = state.hosts.iter().find(|h| h.slug == slug).cloned() {
+                let project_slugs = state.projects.iter().map(|p| p.slug.clone()).collect();
+                state.current_form = Some(crate::host_form::edit_host_form(&host, project_slugs));
+                state.screen = Screen::NewProject;
             }
         }
-        None => {}
-    }
-    Ok(())
-}
-
-fn submit_service(state: &mut AppState, root: &Path) -> Result<()> {
-    let Some(proj) = state.projects.get(state.selected_project).cloned() else {
-        if let Some(ref mut f) = state.current_form {
-            f.error = Some("Kein Projekt ausgewählt".into());
-        }
-        return Ok(());
-    };
-
-    let project_dir  = root.join("projects").join(&proj.slug);
-    let services_dir = project_dir.join("services");
-    std::fs::create_dir_all(&services_dir)?;
-
-    let result = state.current_form.as_ref()
-        .map(|form| crate::service_form::submit_service_form(form, &services_dir, &proj.slug));
-
-    match result {
-        Some(Ok(())) => {
-            // Also register in project.toml [load.services.{slug}]
-            if let Some(ref form) = state.current_form {
-                let svc_name  = form.field_value("name");
-                let svc_class = form.field_value("class");
-                let slug      = crate::app::slugify(&svc_name);
-                let mut proj_content = std::fs::read_to_string(&proj.toml_path)?;
-                if !proj_content.contains(&format!("[load.services.{}]", slug)) {
-                    let version  = form.field_value("version");
-                    let ver      = if version.is_empty() { "latest".to_string() } else { version };
-                    let svc_env  = form.field_value("env");
-
-                    proj_content.push_str(&format!(
-                        "\n[load.services.{slug}]\nservice_class = \"{svc_class}\"\nversion       = \"{ver}\"\n"
-                    ));
-
-                    // Instance-level env overrides → [load.services.{slug}.env]
-                    let env_pairs: Vec<String> = svc_env.lines()
-                        .filter_map(|line| {
-                            let (k, v) = line.split_once('=')?;
-                            let k = k.trim();
-                            if k.is_empty() { return None; }
-                            Some(format!("{k} = \"{}\"", v.trim()))
-                        })
-                        .collect();
-                    if !env_pairs.is_empty() {
-                        proj_content.push_str(&format!(
-                            "\n[load.services.{slug}.env]\n{}\n",
-                            env_pairs.join("\n")
-                        ));
-                    }
-
-                    std::fs::write(&proj.toml_path, proj_content)?;
+        Some(SidebarItem::Service { name, .. }) => {
+            if let Some(proj) = state.projects.get(state.selected_project).cloned() {
+                if let Some(entry) = proj.config.load.services.get(&name).cloned() {
+                    let slug = crate::resource_form::slugify(&name);
+                    state.current_form = Some(crate::service_form::edit_service_form(&name, &entry, slug));
+                    state.screen = Screen::NewProject;
                 }
-            }
-            state.projects = crate::load_projects(root);
-            state.rebuild_services();
-            state.rebuild_sidebar();
-            state.screen      = Screen::Dashboard;
-            state.dash_focus  = DashFocus::Services;
-            state.current_form = None;
-        }
-        Some(Err(e)) => {
-            if let Some(ref mut form) = state.current_form {
-                form.error = Some(format!("{e}"));
-            }
-        }
-        None => {}
-    }
-    Ok(())
-}
-
-fn submit_host(state: &mut AppState, root: &Path) -> Result<()> {
-    let Some(proj) = state.projects.get(state.selected_project) else {
-        if let Some(ref mut f) = state.current_form {
-            f.error = Some("Kein Projekt ausgewählt".into());
-        }
-        return Ok(());
-    };
-    let project_dir = root.join("projects").join(&proj.slug);
-
-    let result = state.current_form.as_ref()
-        .map(|form| crate::host_form::submit_host_form(form, &project_dir));
-
-    match result {
-        Some(Ok(())) => {
-            state.hosts = crate::load_hosts(&project_dir);
-            state.rebuild_sidebar();
-            state.screen     = Screen::Dashboard;
-            state.dash_focus = DashFocus::Sidebar;
-            state.current_form = None;
-        }
-        Some(Err(e)) => {
-            if let Some(ref mut form) = state.current_form {
-                form.error = Some(format!("{}", e));
-            }
-        }
-        None => {}
-    }
-    Ok(())
-}
-
-fn submit_bot(state: &mut AppState, root: &Path) -> Result<()> {
-    let Some(proj) = state.projects.get(state.selected_project).cloned() else {
-        if let Some(ref mut f) = state.current_form {
-            f.error = Some("Kein Projekt ausgewählt".into());
-        }
-        return Ok(());
-    };
-    let project_dir = root.join("projects").join(&proj.slug);
-
-    let result = state.current_form.as_ref()
-        .map(|form| crate::bot_form::submit_bot_form(form, &project_dir, &proj.slug));
-
-    match result {
-        Some(Ok(())) => {
-            state.screen      = Screen::Dashboard;
-            state.dash_focus  = DashFocus::Services;
-            state.current_form = None;
-        }
-        Some(Err(e)) => {
-            if let Some(ref mut form) = state.current_form {
-                form.error = Some(format!("{e}"));
-            }
-        }
-        None => {}
-    }
-    Ok(())
-}
-
-// ── Mouse events ──────────────────────────────────────────────────────────────
-
-pub fn handle_mouse(event: MouseEvent, state: &mut AppState, root: &Path) -> Result<()> {
-    let (tw, _) = crossterm::terminal::size().unwrap_or((80, 24));
-
-    // Overlay scroll support
-    match event.kind {
-        MouseEventKind::ScrollDown => {
-            if let Some(logs) = state.logs_overlay_mut() {
-                let max = logs.lines.len().saturating_sub(1);
-                if logs.scroll < max { logs.scroll += 1; }
-                return Ok(());
-            }
-        }
-        MouseEventKind::ScrollUp => {
-            if let Some(logs) = state.logs_overlay_mut() {
-                if logs.scroll > 0 { logs.scroll -= 1; }
-                return Ok(());
             }
         }
         _ => {}
     }
+    let _ = root;
+}
 
-    match event.kind {
-        MouseEventKind::ScrollDown | MouseEventKind::ScrollUp => {
-            if state.screen == Screen::NewProject {
-                if let Some(ref mut form) = state.current_form {
-                    // Find focused SelectInputNode and cycle its options
-                    if let Some(idx) = form.focused_node_global_idx() {
-                        use crossterm::event::KeyCode;
-                        let fake_key = crossterm::event::KeyEvent::new(
-                            if matches!(event.kind, MouseEventKind::ScrollDown) {
-                                KeyCode::Down
-                            } else {
-                                KeyCode::Up
-                            },
-                            KeyModifiers::empty(),
-                        );
-                        form.nodes[idx].handle_key(fake_key);
-                    }
-                }
+fn sidebar_start_resource(state: &mut AppState, root: &Path) {
+    let item = state.current_sidebar_item().cloned();
+    match item {
+        Some(SidebarItem::Project { slug, .. }) => {
+            if let Some(proj) = state.projects.iter().find(|p| p.slug == slug).cloned() {
+                let host = state.hosts.first().map(|h| h.config.clone());
+                trigger_deploy(state, root, proj.slug.clone(), proj.config.clone(), host);
             }
         }
-
-        MouseEventKind::Down(_) => {
-            // Effective width: shrink by help sidebar if visible
-            let eff_w = if state.help_visible && tw > crate::ui::help_sidebar::SIDEBAR_WIDTH {
-                tw - crate::ui::help_sidebar::SIDEBAR_WIDTH
-            } else {
-                tw
-            };
-
-            // Language button — top-right of the main content area
-            if event.column >= eff_w.saturating_sub(6) && event.column < eff_w && event.row <= 2 {
-                state.lang = state.lang.toggle();
-                return Ok(());
-            }
-
-            if state.screen == Screen::NewProject {
-                handle_form_click(event.column, event.row, state, eff_w);
-            } else if state.screen == Screen::Dashboard && !state.has_overlay() {
-                handle_dashboard_click(event.column, event.row, state, root);
+        Some(SidebarItem::Host { slug, .. }) => {
+            if let Some(proj) = state.projects.get(state.selected_project).cloned() {
+                let host_cfg = state.hosts.iter()
+                    .find(|h| h.slug == slug)
+                    .map(|h| h.config.clone());
+                trigger_deploy(state, root, proj.slug.clone(), proj.config.clone(), host_cfg);
             }
         }
-
+        Some(SidebarItem::Service { name, .. }) => {
+            let _ = std::process::Command::new("systemctl")
+                .args(["--user", "start", &format!("{}.service", name)])
+                .output();
+            if let Some(row) = state.services.iter_mut().find(|s| s.name == name) {
+                row.status = podman_status(&name);
+            }
+        }
         _ => {}
     }
-    Ok(())
 }
 
-fn handle_form_click(col: u16, row: u16, state: &mut AppState, term_w: u16) {
-    let Some(ref mut form) = state.current_form else { return };
-
-    // The form inner area mirrors new_project.rs: 90% centered, header(3)+tabs(3) from top
-    let inner_x = term_w * 5 / 100;
-    let inner_w = term_w * 90 / 100;
-    let inner   = ratatui::layout::Rect { x: inner_x, y: 6, width: inner_w, height: 200 };
-
-    // First: let the focused field handle the click (open/close dropdown, select item).
-    // click_overlay returns true when the click was fully consumed by the overlay.
-    if let Some(global_idx) = form.focused_node_global_idx() {
-        if form.nodes[global_idx].click_overlay(col, row, inner) {
-            return;
+fn sidebar_confirm_delete(state: &mut AppState) {
+    let item = state.current_sidebar_item().cloned();
+    match item {
+        Some(SidebarItem::Project { .. }) if !state.projects.is_empty() => {
+            state.push_overlay(OverlayLayer::Confirm {
+                message:    "confirm.delete.project".into(),
+                data:       None,
+                yes_action: ConfirmAction::DeleteProject,
+            });
         }
-    }
-
-    // Then: focus whichever field was clicked
-    form.click_focus(col, row);
-}
-
-// ── Dashboard click handler ───────────────────────────────────────────────────
-
-fn handle_dashboard_click(col: u16, row: u16, state: &mut AppState, root: &Path) {
-    const SIDEBAR_W: u16 = 28;
-    const HEADER_H:  u16 = 3;
-
-    if row < HEADER_H { return; }
-    let body_row = row - HEADER_H;
-
-    if col < SIDEBAR_W {
-        state.dash_focus = DashFocus::Sidebar;
-        // inner area starts 1 row below the block (top padding in render_sidebar)
-        const INNER_OFFSET: u16 = 1;
-        if body_row < INNER_OFFSET { return; }
-        let item_idx = (body_row - INNER_OFFSET) as usize;
-        if let Some(item) = state.sidebar_items.get(item_idx).cloned() {
-            if item.is_selectable() {
-                state.sidebar_cursor = item_idx;
-                // If an Action item was clicked, open the form immediately.
-                match &item {
-                    SidebarItem::Action { kind: SidebarAction::NewProject, .. } => {
-                        let queue = crate::task_queue::TaskQueue::new(
-                            crate::task_queue::TaskKind::NewProject, state,
-                        );
-                        state.task_queue = Some(queue);
-                        state.screen = Screen::TaskWizard;
-                    }
-                    SidebarItem::Action { kind: SidebarAction::NewHost, .. } => {
-                        let project_slugs = state.projects.iter().map(|p| p.slug.clone()).collect();
-                        let current = state.projects.get(state.selected_project)
-                            .map(|p| p.slug.as_str()).unwrap_or("").to_string();
-                        state.current_form = Some(crate::host_form::new_host_form(project_slugs, &current));
-                        state.screen = Screen::NewProject;
-                    }
-                    SidebarItem::Action { kind: SidebarAction::NewService, .. } => {
-                        state.current_form = Some(crate::service_form::new_service_form());
-                        state.screen = Screen::NewProject;
-                    }
-                    SidebarItem::Project { slug, .. } => {
-                        if let Some(idx) = state.projects.iter().position(|p| p.slug == *slug) {
-                            state.selected_project = idx;
-                            reload_hosts(state, root);
-                            state.rebuild_services();
-                        }
-                    }
-                    _ => {}
-                }
-            }
+        Some(SidebarItem::Host { slug, .. }) => {
+            state.push_overlay(OverlayLayer::Confirm {
+                message:    "confirm.delete.host".into(),
+                data:       Some(slug.clone()),
+                yes_action: ConfirmAction::DeleteHost,
+            });
         }
-    } else {
-        state.dash_focus = DashFocus::Services;
-        const TABLE_HEADER: u16 = 1;
-        if body_row <= TABLE_HEADER { return; }
-        let svc_row = (body_row - TABLE_HEADER - 1) as usize;
-        if svc_row < state.services.len() {
-            state.selected = svc_row;
+        Some(SidebarItem::Service { name, .. }) => {
+            state.push_overlay(OverlayLayer::Confirm {
+                message:    "confirm.delete.service".into(),
+                data:       Some(name.clone()),
+                yes_action: ConfirmAction::DeleteService,
+            });
         }
+        _ => {}
     }
 }
 
-// ── Podman helpers ────────────────────────────────────────────────────────────
-
-pub fn podman_status(name: &str) -> RunState {
-    let out = std::process::Command::new("podman")
-        .args(["inspect", "--format", "{{.State.Status}}", name])
-        .output();
-    match out {
-        Ok(o) => match String::from_utf8_lossy(&o.stdout).trim() {
-            "running"            => RunState::Running,
-            "exited" | "stopped" => RunState::Stopped,
-            "error"              => RunState::Failed,
-            _                    => RunState::Missing,
-        },
-        Err(_) => RunState::Missing,
-    }
-}
-
-fn fetch_logs(name: &str) -> Vec<String> {
-    let out = std::process::Command::new("podman")
-        .args(["logs", "--tail", "100", name])
-        .output();
-    match out {
-        Ok(o) => {
-            let text = if o.stdout.is_empty() { o.stderr } else { o.stdout };
-            String::from_utf8_lossy(&text).lines().map(|l| l.to_string()).collect()
-        }
-        Err(_) => vec!["[Logs nicht verfügbar]".into()],
-    }
-}
-
-// ── Settings screen handler ───────────────────────────────────────────────────
+// ── Settings screen ───────────────────────────────────────────────────────────
 
 fn handle_settings(key: KeyEvent, state: &mut AppState) -> Result<()> {
-    use crossterm::event::KeyCode;
     use fsn_core::config::StoreConfig;
 
     let n_stores = state.settings.stores.len();
 
     match key.code {
-        // Navigate store list
         KeyCode::Up => {
             if state.settings_cursor > 0 { state.settings_cursor -= 1; }
         }
@@ -1384,29 +581,21 @@ fn handle_settings(key: KeyEvent, state: &mut AppState) -> Result<()> {
                 state.settings_cursor += 1;
             }
         }
-
-        // Toggle enable / disable
         KeyCode::Char(' ') => {
             if let Some(store) = state.settings.stores.get_mut(state.settings_cursor) {
                 store.enabled = !store.enabled;
                 let _ = state.settings.save();
             }
         }
-
-        // Delete selected store
         KeyCode::Char('d') | KeyCode::Char('D') | KeyCode::Delete => {
             if !state.settings.stores.is_empty() {
                 state.settings.stores.remove(state.settings_cursor);
-                if state.settings_cursor >= state.settings.stores.len()
-                    && state.settings_cursor > 0
-                {
+                if state.settings_cursor >= state.settings.stores.len() && state.settings_cursor > 0 {
                     state.settings_cursor -= 1;
                 }
                 let _ = state.settings.save();
             }
         }
-
-        // Add a new store (pre-fill with placeholder — real input via overlay later)
         KeyCode::Char('a') | KeyCode::Char('A') => {
             state.settings.stores.push(StoreConfig {
                 name:    "New Store".into(),
@@ -1416,12 +605,9 @@ fn handle_settings(key: KeyEvent, state: &mut AppState) -> Result<()> {
             state.settings_cursor = state.settings.stores.len().saturating_sub(1);
             let _ = state.settings.save();
         }
-
-        // Back to Dashboard
         KeyCode::Esc | KeyCode::Char('q') => {
             state.screen = Screen::Dashboard;
         }
-
         _ => {}
     }
     Ok(())
