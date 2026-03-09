@@ -2,10 +2,10 @@
 //
 // Dispatches key events to the active screen or topmost overlay.
 // Heavy logic is delegated to focused modules:
-//   - submit.rs   — form validation and config persistence
-//   - actions.rs  — CRUD operations (delete, stop, reload)
+//   - submit.rs        — form validation and config persistence
+//   - actions.rs       — CRUD operations (delete, stop, reload)
 //   - deploy_thread.rs — background deploy/export thread
-//   - mouse.rs    — mouse events
+//   - mouse.rs         — mouse events
 
 use std::path::Path;
 
@@ -14,7 +14,8 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::app::{
     AppState, ConfirmAction, DashFocus, LogsState,
-    NEW_RESOURCE_ITEMS, OverlayLayer, ResourceKind, Screen, SidebarAction, SidebarItem,
+    NEW_RESOURCE_ITEMS, OverlayKind, OverlayLayer, ResourceKind, Screen,
+    SidebarAction, SidebarItem,
 };
 use crate::ui::form_node::FormAction;
 use crate::actions::{
@@ -27,21 +28,22 @@ use crate::submit::{handle_form_submit, handle_wizard_submit};
 pub fn handle(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()> {
     state.ctrl_hint = key.modifiers.contains(KeyModifiers::CONTROL);
 
+    // Global shortcuts that work on all screens and with overlays open.
     if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c') {
         state.should_quit = true;
         return Ok(());
     }
-
     if key.code == KeyCode::F(1) {
         state.help_visible = !state.help_visible;
         return Ok(());
     }
-
+    // Help sidebar Esc has priority over screen-specific Esc.
     if key.code == KeyCode::Esc && state.help_visible {
         state.help_visible = false;
         return Ok(());
     }
 
+    // Topmost overlay layer captures all input (Ebene system).
     if state.has_overlay() {
         return handle_overlay(key, state, root);
     }
@@ -58,15 +60,12 @@ pub fn handle(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()> {
 // ── Overlay layer handler ─────────────────────────────────────────────────────
 
 fn handle_overlay(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()> {
-    let overlay_kind = state.top_overlay().map(|o| match o {
-        OverlayLayer::Logs(_)          => "logs",
-        OverlayLayer::Confirm { .. }   => "confirm",
-        OverlayLayer::Deploy(_)        => "deploy",
-        OverlayLayer::NewResource { .. } => "new_resource",
-    });
+    // Read the discriminant first — this ends the immutable borrow so we can
+    // mutate state freely inside each arm without borrow-checker conflicts.
+    let overlay_kind = state.top_overlay().map(|o| o.kind());
 
     match overlay_kind {
-        Some("logs") => {
+        Some(OverlayKind::Logs) => {
             match key.code {
                 KeyCode::Char('q') | KeyCode::Esc => { state.pop_overlay(); }
                 KeyCode::Up => {
@@ -83,12 +82,14 @@ fn handle_overlay(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()
                 _ => {}
             }
         }
-        Some("confirm") => {
+        Some(OverlayKind::Confirm) => {
+            // Extract data BEFORE popping — the overlay is gone afterwards.
             let (data, yes_action) = {
                 let (_, d, a) = state.confirm_overlay().unwrap();
                 (d.map(|s| s.to_string()), a)
             };
             match key.code {
+                // Accept: j/J (German "Ja") or y/Y (English "Yes").
                 KeyCode::Char('j') | KeyCode::Char('J')
                 | KeyCode::Char('y') | KeyCode::Char('Y') => {
                     state.pop_overlay();
@@ -116,31 +117,34 @@ fn handle_overlay(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()
                         }
                     }
                 }
+                // Any other key = cancel (close overlay, take no action).
                 _ => { state.pop_overlay(); }
             }
         }
-        Some("deploy") => {
-            let done = state.top_overlay().map(|o| {
-                if let OverlayLayer::Deploy(ref d) = o { d.done } else { false }
-            }).unwrap_or(false);
+        Some(OverlayKind::Deploy) => {
+            // Only closeable once the background thread has finished.
+            let done = state.top_overlay()
+                .map(|o| if let OverlayLayer::Deploy(ref d) = o { d.done } else { false })
+                .unwrap_or(false);
             if done && matches!(key.code, KeyCode::Char('q') | KeyCode::Esc) {
                 state.pop_overlay();
                 state.deploy_rx = None;
             }
         }
-        Some("new_resource") => {
+        Some(OverlayKind::NewResource) => {
             handle_new_resource_overlay(key, state, root)?;
         }
-        _ => { state.pop_overlay(); }
+        None => { state.pop_overlay(); }
     }
     Ok(())
 }
 
 fn handle_new_resource_overlay(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()> {
     let count = NEW_RESOURCE_ITEMS.len();
-
     match key.code {
         KeyCode::Esc => { state.pop_overlay(); }
+
+        // Circular navigation: Up wraps from 0 → last, Down wraps from last → 0.
         KeyCode::Up => {
             if let Some(OverlayLayer::NewResource { selected }) = state.top_overlay_mut() {
                 *selected = selected.checked_sub(1).unwrap_or(count - 1);
@@ -175,10 +179,9 @@ fn open_new_resource_form(item_idx: usize, state: &mut AppState, root: &Path) {
             state.screen = Screen::TaskWizard;
         }
         ResourceKind::Host => {
-            let project_slugs = state.projects.iter().map(|p| p.slug.clone()).collect();
-            let current = state.projects.get(state.selected_project)
-                .map(|p| p.slug.as_str()).unwrap_or("");
-            state.current_form = Some(crate::host_form::new_host_form(project_slugs, current));
+            let slugs   = project_slugs(state);
+            let current = current_project_slug(state).to_string();
+            state.current_form = Some(crate::host_form::new_host_form(slugs, &current));
             state.screen = Screen::NewProject;
         }
         ResourceKind::Service => {
@@ -199,6 +202,7 @@ fn handle_welcome(key: KeyEvent, state: &mut AppState) -> Result<()> {
     match key.code {
         KeyCode::Char('q') => state.should_quit = true,
         KeyCode::Char('l') | KeyCode::Char('L') => state.lang = state.lang.toggle(),
+        // Toggle between the two buttons (New Project / Open Project).
         KeyCode::Left | KeyCode::Right => state.welcome_focus = 1 - state.welcome_focus,
         KeyCode::Enter => {
             if state.welcome_focus == 0 {
@@ -242,6 +246,7 @@ fn handle_resource_form(key: KeyEvent, state: &mut AppState, root: &Path) -> Res
                 state.lang = state.lang.toggle();
             }
         }
+        // Navigation and value changes are resolved inside ResourceForm::handle_key.
         FormAction::FocusNext | FormAction::FocusPrev
         | FormAction::TabNext  | FormAction::TabPrev
         | FormAction::ValueChanged => {}
@@ -261,7 +266,7 @@ fn handle_wizard(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()>
     } else { FormAction::Unhandled };
 
     match action {
-        FormAction::Cancel => confirm_leave_wizard(state),
+        FormAction::Cancel     => confirm_leave_wizard(state),
         FormAction::LangToggle => state.lang = state.lang.toggle(),
         FormAction::Submit     => handle_wizard_submit(state, root)?,
         FormAction::Consumed   => {}
@@ -281,9 +286,9 @@ fn handle_wizard(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()>
 }
 
 fn confirm_leave_wizard(state: &mut AppState) {
-    let dirty = state.task_queue.as_ref().and_then(|q| {
-        q.tasks.get(q.active)?.form.as_ref().map(|f| f.is_dirty())
-    }).unwrap_or(false);
+    let dirty = state.task_queue.as_ref()
+        .and_then(|q| q.tasks.get(q.active)?.form.as_ref().map(|f| f.is_dirty()))
+        .unwrap_or(false);
     if dirty {
         state.push_overlay(OverlayLayer::Confirm {
             message:    "form.confirm.leave".into(),
@@ -300,8 +305,8 @@ fn confirm_leave_wizard(state: &mut AppState) {
 
 fn handle_dashboard(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()> {
     match state.dash_focus {
-        DashFocus::Sidebar => handle_dashboard_sidebar(key, state, root),
-        DashFocus::Services => handle_dashboard_services(key, state, root),
+        DashFocus::Sidebar   => handle_dashboard_sidebar(key, state, root),
+        DashFocus::Services  => handle_dashboard_services(key, state, root),
     }
 }
 
@@ -309,9 +314,7 @@ fn handle_dashboard_sidebar(key: KeyEvent, state: &mut AppState, root: &Path) ->
     match key.code {
         KeyCode::Char('q') | KeyCode::Esc => {
             state.push_overlay(OverlayLayer::Confirm {
-                message:    "confirm.quit".into(),
-                data:       None,
-                yes_action: ConfirmAction::Quit,
+                message: "confirm.quit".into(), data: None, yes_action: ConfirmAction::Quit,
             });
         }
         KeyCode::Char('L') => state.lang = state.lang.toggle(),
@@ -319,8 +322,7 @@ fn handle_dashboard_sidebar(key: KeyEvent, state: &mut AppState, root: &Path) ->
 
         KeyCode::Up => {
             let cur = state.sidebar_cursor;
-            let prev = (0..cur).rev().find(|&i| state.sidebar_items[i].is_selectable());
-            if let Some(prev) = prev {
+            if let Some(prev) = (0..cur).rev().find(|&i| state.sidebar_items[i].is_selectable()) {
                 state.sidebar_cursor = prev;
                 sync_sidebar_selection(state, root);
             }
@@ -328,8 +330,7 @@ fn handle_dashboard_sidebar(key: KeyEvent, state: &mut AppState, root: &Path) ->
         KeyCode::Down => {
             let cur = state.sidebar_cursor;
             let len = state.sidebar_items.len();
-            let next = (cur + 1..len).find(|&i| state.sidebar_items[i].is_selectable());
-            if let Some(next) = next {
+            if let Some(next) = (cur + 1..len).find(|&i| state.sidebar_items[i].is_selectable()) {
                 state.sidebar_cursor = next;
                 sync_sidebar_selection(state, root);
             }
@@ -343,19 +344,21 @@ fn handle_dashboard_sidebar(key: KeyEvent, state: &mut AppState, root: &Path) ->
             state.push_overlay(OverlayLayer::NewResource { selected: 0 });
         }
 
+        // 'e' = explicit edit (same as Enter on a resource item, but not on Action items).
         KeyCode::Char('e') => {
-            open_sidebar_edit_form(state);
+            if let Some(item) = state.current_sidebar_item().cloned() {
+                open_edit_form_for_item(&item, state);
+            }
         }
+        // Enter = "activate": opens create form for Action items, edit form for resources.
         KeyCode::Enter => {
-            open_sidebar_action_or_edit(state, root);
+            if let Some(item) = state.current_sidebar_item().cloned() {
+                activate_sidebar_item(item, state, root);
+            }
         }
 
-        KeyCode::Char('s') => {
-            sidebar_start_resource(state, root);
-        }
-        KeyCode::Char('x') | KeyCode::Delete => {
-            sidebar_confirm_delete(state);
-        }
+        KeyCode::Char('s') => sidebar_start_resource(state, root),
+        KeyCode::Char('x') | KeyCode::Delete => sidebar_confirm_delete(state),
 
         _ => {}
     }
@@ -366,9 +369,7 @@ fn handle_dashboard_services(key: KeyEvent, state: &mut AppState, root: &Path) -
     match key.code {
         KeyCode::Char('q') | KeyCode::Esc => {
             state.push_overlay(OverlayLayer::Confirm {
-                message:    "confirm.quit".into(),
-                data:       None,
-                yes_action: ConfirmAction::Quit,
+                message: "confirm.quit".into(), data: None, yes_action: ConfirmAction::Quit,
             });
         }
         KeyCode::Char('L') => state.lang = state.lang.toggle(),
@@ -393,7 +394,7 @@ fn handle_dashboard_services(key: KeyEvent, state: &mut AppState, root: &Path) -
         KeyCode::Char('d') => {
             if let Some(proj) = state.projects.get(state.selected_project).cloned() {
                 let host = state.hosts.first().map(|h| h.config.clone());
-                trigger_deploy(state, root, proj.slug.clone(), proj.config.clone(), host);
+                trigger_deploy(state, root, proj, host);
             }
         }
         KeyCode::Char('r') => {
@@ -431,27 +432,28 @@ fn handle_dashboard_services(key: KeyEvent, state: &mut AppState, root: &Path) -
 
 // ── Sidebar action helpers ────────────────────────────────────────────────────
 
-fn open_sidebar_edit_form(state: &mut AppState) {
-    let item = state.current_sidebar_item().cloned();
+/// Open the edit form for an existing resource (Project, Host, or Service).
+/// Does nothing for Section and Action items — they have no edit form.
+fn open_edit_form_for_item(item: &SidebarItem, state: &mut AppState) {
     match item {
-        Some(SidebarItem::Project { slug, .. }) => {
-            if let Some(proj) = state.projects.iter().find(|p| p.slug == slug).cloned() {
+        SidebarItem::Project { slug, .. } => {
+            if let Some(proj) = state.projects.iter().find(|p| p.slug == *slug).cloned() {
                 state.current_form = Some(crate::project_form::edit_project_form(&proj));
                 state.screen = Screen::NewProject;
             }
         }
-        Some(SidebarItem::Host { slug, .. }) => {
-            if let Some(host) = state.hosts.iter().find(|h| h.slug == slug).cloned() {
-                let project_slugs = state.projects.iter().map(|p| p.slug.clone()).collect();
-                state.current_form = Some(crate::host_form::edit_host_form(&host, project_slugs));
+        SidebarItem::Host { slug, .. } => {
+            if let Some(host) = state.hosts.iter().find(|h| h.slug == *slug).cloned() {
+                let slugs = project_slugs(state);
+                state.current_form = Some(crate::host_form::edit_host_form(&host, slugs));
                 state.screen = Screen::NewProject;
             }
         }
-        Some(SidebarItem::Service { name, .. }) => {
+        SidebarItem::Service { name, .. } => {
             if let Some(proj) = state.projects.get(state.selected_project).cloned() {
-                if let Some(entry) = proj.config.load.services.get(&name).cloned() {
-                    let slug = crate::resource_form::slugify(&name);
-                    state.current_form = Some(crate::service_form::edit_service_form(&name, &entry, slug));
+                if let Some(entry) = proj.config.load.services.get(name).cloned() {
+                    let slug = crate::resource_form::slugify(name);
+                    state.current_form = Some(crate::service_form::edit_service_form(name, &entry, slug));
                     state.screen = Screen::NewProject;
                 }
             }
@@ -460,50 +462,33 @@ fn open_sidebar_edit_form(state: &mut AppState) {
     }
 }
 
-fn open_sidebar_action_or_edit(state: &mut AppState, root: &Path) {
-    let item = state.current_sidebar_item().cloned();
+/// Activate a sidebar item — the single source of truth for "what happens when
+/// an item is selected by keyboard or mouse".
+///
+/// For Action items: opens the corresponding create form or wizard.
+/// For resource items (Project, Host, Service): opens the edit form.
+/// Called by both keyboard Enter and mouse click handlers.
+pub fn activate_sidebar_item(item: SidebarItem, state: &mut AppState, root: &Path) {
     match item {
-        Some(SidebarItem::Action { kind: SidebarAction::NewProject, .. }) => {
+        SidebarItem::Action { kind: SidebarAction::NewProject, .. } => {
             let queue = crate::task_queue::TaskQueue::new(
                 crate::task_queue::TaskKind::NewProject, state,
             );
             state.task_queue = Some(queue);
             state.screen = Screen::TaskWizard;
         }
-        Some(SidebarItem::Action { kind: SidebarAction::NewHost, .. }) => {
-            let project_slugs = state.projects.iter().map(|p| p.slug.clone()).collect();
-            let current = state.projects.get(state.selected_project)
-                .map(|p| p.slug.as_str()).unwrap_or("");
-            state.current_form = Some(crate::host_form::new_host_form(project_slugs, current));
+        SidebarItem::Action { kind: SidebarAction::NewHost, .. } => {
+            let slugs   = project_slugs(state);
+            let current = current_project_slug(state).to_string();
+            state.current_form = Some(crate::host_form::new_host_form(slugs, &current));
             state.screen = Screen::NewProject;
         }
-        Some(SidebarItem::Action { kind: SidebarAction::NewService, .. }) => {
+        SidebarItem::Action { kind: SidebarAction::NewService, .. } => {
             state.current_form = Some(crate::service_form::new_service_form());
             state.screen = Screen::NewProject;
         }
-        Some(SidebarItem::Project { slug, .. }) => {
-            if let Some(proj) = state.projects.iter().find(|p| p.slug == slug).cloned() {
-                state.current_form = Some(crate::project_form::edit_project_form(&proj));
-                state.screen = Screen::NewProject;
-            }
-        }
-        Some(SidebarItem::Host { slug, .. }) => {
-            if let Some(host) = state.hosts.iter().find(|h| h.slug == slug).cloned() {
-                let project_slugs = state.projects.iter().map(|p| p.slug.clone()).collect();
-                state.current_form = Some(crate::host_form::edit_host_form(&host, project_slugs));
-                state.screen = Screen::NewProject;
-            }
-        }
-        Some(SidebarItem::Service { name, .. }) => {
-            if let Some(proj) = state.projects.get(state.selected_project).cloned() {
-                if let Some(entry) = proj.config.load.services.get(&name).cloned() {
-                    let slug = crate::resource_form::slugify(&name);
-                    state.current_form = Some(crate::service_form::edit_service_form(&name, &entry, slug));
-                    state.screen = Screen::NewProject;
-                }
-            }
-        }
-        _ => {}
+        // Resource items: open their edit form (same behavior as 'e' key).
+        other => open_edit_form_for_item(&other, state),
     }
     let _ = root;
 }
@@ -514,7 +499,7 @@ fn sidebar_start_resource(state: &mut AppState, root: &Path) {
         Some(SidebarItem::Project { slug, .. }) => {
             if let Some(proj) = state.projects.iter().find(|p| p.slug == slug).cloned() {
                 let host = state.hosts.first().map(|h| h.config.clone());
-                trigger_deploy(state, root, proj.slug.clone(), proj.config.clone(), host);
+                trigger_deploy(state, root, proj, host);
             }
         }
         Some(SidebarItem::Host { slug, .. }) => {
@@ -522,7 +507,7 @@ fn sidebar_start_resource(state: &mut AppState, root: &Path) {
                 let host_cfg = state.hosts.iter()
                     .find(|h| h.slug == slug)
                     .map(|h| h.config.clone());
-                trigger_deploy(state, root, proj.slug.clone(), proj.config.clone(), host_cfg);
+                trigger_deploy(state, root, proj, host_cfg);
             }
         }
         Some(SidebarItem::Service { name, .. }) => {
@@ -542,22 +527,19 @@ fn sidebar_confirm_delete(state: &mut AppState) {
     match item {
         Some(SidebarItem::Project { .. }) if !state.projects.is_empty() => {
             state.push_overlay(OverlayLayer::Confirm {
-                message:    "confirm.delete.project".into(),
-                data:       None,
+                message: "confirm.delete.project".into(), data: None,
                 yes_action: ConfirmAction::DeleteProject,
             });
         }
         Some(SidebarItem::Host { slug, .. }) => {
             state.push_overlay(OverlayLayer::Confirm {
-                message:    "confirm.delete.host".into(),
-                data:       Some(slug.clone()),
+                message: "confirm.delete.host".into(), data: Some(slug),
                 yes_action: ConfirmAction::DeleteHost,
             });
         }
         Some(SidebarItem::Service { name, .. }) => {
             state.push_overlay(OverlayLayer::Confirm {
-                message:    "confirm.delete.service".into(),
-                data:       Some(name.clone()),
+                message: "confirm.delete.service".into(), data: Some(name),
                 yes_action: ConfirmAction::DeleteService,
             });
         }
@@ -571,7 +553,6 @@ fn handle_settings(key: KeyEvent, state: &mut AppState) -> Result<()> {
     use fsn_core::config::StoreConfig;
 
     let n_stores = state.settings.stores.len();
-
     match key.code {
         KeyCode::Up => {
             if state.settings_cursor > 0 { state.settings_cursor -= 1; }
@@ -590,7 +571,9 @@ fn handle_settings(key: KeyEvent, state: &mut AppState) -> Result<()> {
         KeyCode::Char('d') | KeyCode::Char('D') | KeyCode::Delete => {
             if !state.settings.stores.is_empty() {
                 state.settings.stores.remove(state.settings_cursor);
-                if state.settings_cursor >= state.settings.stores.len() && state.settings_cursor > 0 {
+                if state.settings_cursor >= state.settings.stores.len()
+                    && state.settings_cursor > 0
+                {
                     state.settings_cursor -= 1;
                 }
                 let _ = state.settings.save();
@@ -598,9 +581,7 @@ fn handle_settings(key: KeyEvent, state: &mut AppState) -> Result<()> {
         }
         KeyCode::Char('a') | KeyCode::Char('A') => {
             state.settings.stores.push(StoreConfig {
-                name:    "New Store".into(),
-                url:     "https://".into(),
-                enabled: false,
+                name: "New Store".into(), url: "https://".into(), enabled: false,
             });
             state.settings_cursor = state.settings.stores.len().saturating_sub(1);
             let _ = state.settings.save();
@@ -611,4 +592,18 @@ fn handle_settings(key: KeyEvent, state: &mut AppState) -> Result<()> {
         _ => {}
     }
     Ok(())
+}
+
+// ── Small helpers ─────────────────────────────────────────────────────────────
+
+/// Collect all project slugs — used when building host form dropdowns.
+fn project_slugs(state: &AppState) -> Vec<String> {
+    state.projects.iter().map(|p| p.slug.clone()).collect()
+}
+
+/// Slug of the currently selected project, or empty string.
+fn current_project_slug(state: &AppState) -> &str {
+    state.projects.get(state.selected_project)
+        .map(|p| p.slug.as_str())
+        .unwrap_or("")
 }

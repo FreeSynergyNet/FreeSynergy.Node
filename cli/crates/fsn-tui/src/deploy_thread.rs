@@ -8,28 +8,34 @@
 
 use std::path::Path;
 
-use crate::app::{AppState, DeployMsg, DeployState, OverlayLayer};
+use fsn_core::config::HostConfig;
 
-/// Spawn a background deploy thread. Generates Compose + Quadlet files and
-/// reports each step via the deploy progress overlay.
+use crate::app::{AppState, DeployMsg, DeployState, OverlayLayer};
+use crate::handles::ProjectHandle;
+
+/// Spawn a background deploy thread for the given project.
+///
+/// Accepts a full `ProjectHandle` (slug + config in one object) instead of
+/// separate fields — the caller already has the handle, so there's no reason
+/// to destructure it just to pass individual pieces.
 pub fn trigger_deploy(
-    state:       &mut AppState,
-    root:        &Path,
-    slug:        String,
-    project_cfg: fsn_core::config::ProjectConfig,
-    host_cfg:    Option<fsn_core::config::HostConfig>,
+    state:    &mut AppState,
+    root:     &Path,
+    project:  ProjectHandle,
+    host_cfg: Option<HostConfig>,
 ) {
     let (tx, rx) = std::sync::mpsc::channel::<DeployMsg>();
     state.deploy_rx = Some(rx);
     state.push_overlay(OverlayLayer::Deploy(DeployState {
-        target:  project_cfg.project.name.clone(),
+        target:  project.config.project.name.clone(),
         log:     Vec::new(),
         done:    false,
         success: false,
     }));
 
-    let project_dir = root.join("projects").join(&slug);
+    let project_dir = root.join("projects").join(&project.slug);
     let modules_dir = root.join("modules");
+    let project_cfg = project.config;
 
     std::thread::spawn(move || {
         // ── Phase 1: Compose export ───────────────────────────────────────────
@@ -62,11 +68,15 @@ pub fn trigger_deploy(
             Ok(r)  => r,
             Err(e) => {
                 let _ = tx.send(DeployMsg::Log(format!("✗ Registry: {e}")));
-                let _ = tx.send(DeployMsg::Done { success: false, error: Some("Registry konnte nicht geladen werden".into()) });
+                let _ = tx.send(DeployMsg::Done {
+                    success: false,
+                    error:   Some("Registry konnte nicht geladen werden".into()),
+                });
                 return;
             }
         };
 
+        // Without a host config we can't resolve desired state — skip Quadlets.
         let host = match host_cfg {
             Some(h) => h,
             None => {
@@ -81,7 +91,9 @@ pub fn trigger_deploy(
             .unwrap_or_default();
 
         let data_root = project_dir.join("data");
-        let desired = match fsn_engine::resolve::resolve_desired(&project_cfg, &host, &registry, &vault, Some(&data_root)) {
+        let desired = match fsn_engine::resolve::resolve_desired(
+            &project_cfg, &host, &registry, &vault, Some(&data_root),
+        ) {
             Ok(d)  => d,
             Err(e) => {
                 let _ = tx.send(DeployMsg::Done { success: false, error: Some(format!("Resolve: {e}")) });
@@ -95,16 +107,22 @@ pub fn trigger_deploy(
             return;
         }
 
-        let network_name = format!("fsn-{}", project_cfg.project.name.to_lowercase().replace(' ', "-"));
+        let network_name = format!(
+            "fsn-{}",
+            project_cfg.project.name.to_lowercase().replace(' ', "-")
+        );
 
-        let net_content = fsn_engine::generate::quadlet::generate_network(&network_name, &project_cfg.project.name);
+        let net_content = fsn_engine::generate::quadlet::generate_network(
+            &network_name, &project_cfg.project.name,
+        );
         if let Err(e) = std::fs::write(quadlet_dir.join(format!("{network_name}.network")), &net_content) {
             let _ = tx.send(DeployMsg::Log(format!("✗ {network_name}.network: {e}")));
         } else {
             let _ = tx.send(DeployMsg::Log(format!("✓ {network_name}.network")));
         }
 
-        // Flatten all instances (sub-services first, then parents)
+        // Flatten all instances: sub-services must be written before their parent
+        // so that systemd ordering directives (After=) refer to existing units.
         let mut all_instances = Vec::new();
         for svc in &desired.services {
             for sub in &svc.sub_services { all_instances.push(sub); }

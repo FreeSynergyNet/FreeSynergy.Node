@@ -123,12 +123,35 @@ pub struct DeployState {
     pub success: bool,
 }
 
+/// Discriminant for the overlay variant — used for type-safe dispatch in event handlers.
+/// Avoids string-matching while still allowing borrow-safe inspection (reading kind,
+/// then taking a mutable borrow separately for the actual handling).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OverlayKind {
+    Logs,
+    Confirm,
+    Deploy,
+    NewResource,
+}
+
 #[derive(Debug, Clone)]
 pub enum OverlayLayer {
     Logs(LogsState),
     Confirm { message: String, data: Option<String>, yes_action: ConfirmAction },
     Deploy(DeployState),
     NewResource { selected: usize },
+}
+
+impl OverlayLayer {
+    /// Returns the discriminant without borrowing the inner data.
+    pub fn kind(&self) -> OverlayKind {
+        match self {
+            OverlayLayer::Logs(_)          => OverlayKind::Logs,
+            OverlayLayer::Confirm { .. }   => OverlayKind::Confirm,
+            OverlayLayer::Deploy(_)        => OverlayKind::Deploy,
+            OverlayLayer::NewResource { .. } => OverlayKind::NewResource,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

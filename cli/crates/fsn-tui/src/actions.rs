@@ -115,6 +115,11 @@ pub fn sync_sidebar_selection(state: &mut AppState, root: &Path) {
 // ── TOML helper ───────────────────────────────────────────────────────────────
 
 /// Remove all lines belonging to `[table_path]` and `[table_path.*]` from TOML text.
+///
+/// Uses a simple skip-flag: when a matching section header is encountered the flag
+/// is set to true; when any OTHER header appears it resets to false. This means
+/// the entire section (key-value pairs + sub-tables) is consumed greedily until
+/// the next non-matching header. Sufficient for our flat project.toml structure.
 pub fn remove_toml_table_block(content: &str, table_path: &str) -> String {
     let header_exact  = format!("[{table_path}]");
     let header_prefix = format!("[{table_path}.");
@@ -123,6 +128,8 @@ pub fn remove_toml_table_block(content: &str, table_path: &str) -> String {
     for line in content.lines() {
         let trimmed = line.trim();
         if trimmed.starts_with('[') {
+            // Every header line re-evaluates the skip flag — this resets it
+            // when we leave the target section and enter an unrelated one.
             skip = trimmed == header_exact || trimmed.starts_with(&header_prefix);
         }
         if !skip {

@@ -97,7 +97,9 @@ pub fn handle_wizard_submit(state: &mut AppState, root: &Path) -> Result<()> {
         return Ok(());
     }
 
-    // Extract form, run submit, then advance queue
+    // The submit_* functions read from state.current_form, not task_queue.
+    // Temporarily move the form out of the task and into current_form so the
+    // same submit code path works for both the wizard and the standalone form screen.
     let form = if let Some(ref mut queue) = state.task_queue {
         queue.tasks.get_mut(queue.active).and_then(|t| t.form.take())
     } else { None };
@@ -112,7 +114,8 @@ pub fn handle_wizard_submit(state: &mut AppState, root: &Path) -> Result<()> {
         ResourceKind::Bot     => submit_bot(state, root),
     };
 
-    // Put form back if submit failed (error shown)
+    // If submit failed, put the form back so the user sees the error message.
+    // submit_* clears current_form on success, so a None here means success.
     if let Some(ref mut queue) = state.task_queue {
         if let Some(task) = queue.tasks.get_mut(queue.active) {
             if task.form.is_none() {
