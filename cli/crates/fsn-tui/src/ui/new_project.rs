@@ -1,8 +1,16 @@
 // Generic resource editor screen.
 //
 // Renders any `ResourceForm`. Each field node renders itself via `node.render()`.
-// After all nodes are rendered, the focused node gets `render_overlay()` so
-// that dropdowns appear on top of other fields — no special-casing needed here.
+// After all nodes are rendered every node gets `render_overlay()` — dropdowns
+// appear on top of other fields without any special-casing here.
+//
+// Mouse registration (ClickMap):
+//   render_header  → ClickTarget::LangToggle
+//   render_fields  → ClickTarget::FormField (one per visible field)
+//                    ClickTarget::FormSubmit (when on last tab)
+//
+// The click_map is taken from state (std::mem::take) to avoid borrow conflicts
+// while `form` (which borrows state.current_form) is live.
 
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -12,6 +20,7 @@ use ratatui::{
 };
 use rat_widget::paragraph::{Paragraph, ParagraphState};
 
+use crate::click_map::{ClickMap, ClickTarget};
 use crate::ui::render_ctx::RenderCtx;
 
 use crate::app::{AppState, ResourceForm};
@@ -33,11 +42,12 @@ pub fn render(f: &mut RenderCtx<'_>, state: &mut AppState, area: Rect) {
         ])
         .split(area);
 
-    render_header(f, state.lang, form, outer[0]);
-    // Store lang-button rect for mouse hit-testing (same formula as render_header).
-    state.lang_button_area = Some(Rect {
-        x: outer[0].right().saturating_sub(6), y: outer[0].y + 1, width: 4, height: 1,
-    });
+    // Take click_map from state — avoids borrow conflict while `form` is live.
+    // Disjoint field borrows: form→state.current_form, cmap→state.click_map.
+    let mut cmap = std::mem::take(&mut state.click_map);
+    cmap.clear();
+
+    render_header(f, state.lang, form, outer[0], &mut cmap);
     if tab_bar_h > 0 {
         render_tabs(f, state.lang, form, outer[1]);
     }
@@ -49,14 +59,24 @@ pub fn render(f: &mut RenderCtx<'_>, state: &mut AppState, area: Rect) {
         .split(outer[2]);
     let inner = padding[1];
 
-    render_fields(f, form, inner, state.lang);
+    render_fields(f, form, inner, state.lang, &mut cmap);
+
+    // Return click_map to state — render_error and render_hint don't need it.
+    state.click_map = cmap;
+
     render_error(f, state.lang, form, outer[3]);
     render_hint(f, state, outer[4]);
 }
 
 // ── Header ────────────────────────────────────────────────────────────────────
 
-fn render_header(f: &mut RenderCtx<'_>, lang: crate::app::Lang, form: &ResourceForm, area: Rect) {
+fn render_header(
+    f:    &mut RenderCtx<'_>,
+    lang: crate::app::Lang,
+    form: &ResourceForm,
+    area: Rect,
+    cmap: &mut ClickMap,
+) {
     let title_key = form.title_key();
 
     let title = Line::from(vec![
@@ -74,13 +94,14 @@ fn render_header(f: &mut RenderCtx<'_>, lang: crate::app::Lang, form: &ResourceF
         &mut ParagraphState::new(),
     );
 
-    // Language button top-right
+    // Language button top-right — render + register in click_map.
     let lang_area = Rect { x: area.right().saturating_sub(6), y: area.y + 1, width: 4, height: 1 };
     f.render_stateful_widget(
         Paragraph::new(Line::from(widgets::lang_button_raw(lang))),
         lang_area,
         &mut ParagraphState::new(),
     );
+    cmap.push(lang_area, ClickTarget::LangToggle);
 }
 
 // ── Tab bar ───────────────────────────────────────────────────────────────────
@@ -123,16 +144,18 @@ pub(crate) fn render_tabs(f: &mut RenderCtx<'_>, lang: crate::app::Lang, form: &
 
 // ── Form fields ───────────────────────────────────────────────────────────────
 
-pub(crate) fn render_fields(f: &mut RenderCtx<'_>, form: &mut ResourceForm, inner: Rect, lang: crate::app::Lang) {
+pub(crate) fn render_fields(
+    f:    &mut RenderCtx<'_>,
+    form: &mut ResourceForm,
+    inner: Rect,
+    lang: crate::app::Lang,
+    cmap: &mut ClickMap,
+) {
     use ratatui::layout::{Constraint, Direction, Layout};
 
     let tab_indices = form.current_tab_indices();
 
     let mut y = inner.y;
-    let mut overlay_slot: Option<usize> = None; // which slot needs render_overlay
-
-    // Clear hit-test table — rebuilt every frame.
-    form.field_rects.clear();
 
     // ── 12-column row grouping ─────────────────────────────────────────────
     //
@@ -196,8 +219,10 @@ pub(crate) fn render_fields(f: &mut RenderCtx<'_>, form: &mut ResourceForm, inne
             let (slot, node_idx) = row[0];
             let focused = form.active_field == slot;
             form.nodes[node_idx].render(f, row_rect, focused, lang);
-            form.field_rects.push((slot, node_idx, row_rect));
-            if focused { overlay_slot = Some(slot); }
+            // Register in click_map only for focusable nodes.
+            if form.nodes[node_idx].is_focusable() {
+                cmap.push(row_rect, ClickTarget::FormField { slot, node_idx, rect: row_rect });
+            }
         } else {
             // Split the row proportionally by col_span.
             let constraints: Vec<Constraint> = row.iter()
@@ -214,13 +239,14 @@ pub(crate) fn render_fields(f: &mut RenderCtx<'_>, form: &mut ResourceForm, inne
             for (i, &(slot, node_idx)) in row.iter().enumerate() {
                 let focused = form.active_field == slot;
                 form.nodes[node_idx].render(f, cols[i], focused, lang);
-                form.field_rects.push((slot, node_idx, cols[i]));
-                if focused { overlay_slot = Some(slot); }
+                if form.nodes[node_idx].is_focusable() {
+                    cmap.push(cols[i], ClickTarget::FormField { slot, node_idx, rect: cols[i] });
+                }
             }
         }
     }
 
-    // Submit button on the last tab
+    // Submit button on the last tab — render + register in click_map.
     if form.is_last_tab() {
         let btn_y = y + 1;
         if btn_y + 3 <= inner.bottom() {
@@ -238,6 +264,11 @@ pub(crate) fn render_fields(f: &mut RenderCtx<'_>, form: &mut ResourceForm, inne
                 btn_area,
                 &mut ParagraphState::new(),
             );
+            // Only register as clickable when not disabled — clicking a greyed-out
+            // button would trigger validation errors which feels unexpected.
+            if !disabled {
+                cmap.push(btn_area, ClickTarget::FormSubmit);
+            }
         }
     }
 
@@ -247,7 +278,6 @@ pub(crate) fn render_fields(f: &mut RenderCtx<'_>, form: &mut ResourceForm, inne
     for &node_idx in &tab_indices {
         form.nodes[node_idx].render_overlay(f, inner, lang);
     }
-    let _ = overlay_slot; // suppresses unused-variable warning
 }
 
 // ── Error line ────────────────────────────────────────────────────────────────

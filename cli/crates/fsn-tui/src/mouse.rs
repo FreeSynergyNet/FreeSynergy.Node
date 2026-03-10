@@ -22,6 +22,7 @@ use crate::app::{
     AppState, ConfirmAction, ContextAction, DashFocus, LogsState, NotifKind,
     OverlayLayer, RunState, SidebarItem,
 };
+use crate::click_map::ClickTarget;
 use crate::actions::{fetch_logs, podman_status};
 use crate::deploy_thread::trigger_deploy;
 use crate::events_dashboard::activate_sidebar_item;
@@ -37,6 +38,15 @@ const SCROLL_STEP: usize = 3;
 // ── Entry point ───────────────────────────────────────────────────────────────
 
 pub fn handle_mouse(event: MouseEvent, state: &mut AppState, root: &Path) -> Result<()> {
+    // LangToggle is global — works on every screen/overlay state.
+    // Checked first so it is never blocked by overlays or form popups.
+    if event.kind == MouseEventKind::Down(MouseButton::Left) {
+        if let Some(ClickTarget::LangToggle) = state.click_map.hit(event.column, event.row) {
+            state.lang = state.lang.toggle();
+            return Ok(());
+        }
+    }
+
     // Never handle mouse while a non-context overlay is open (keyboard takes over).
     if state.has_overlay() {
         return handle_overlay_mouse(event, state);
@@ -44,7 +54,7 @@ pub fn handle_mouse(event: MouseEvent, state: &mut AppState, root: &Path) -> Res
 
     // Form screen — delegate entirely to the form handler.
     if state.current_form.is_some() {
-        return handle_mouse_form(event, state);
+        return handle_mouse_form(event, state, root);
     }
 
     match event.kind {
@@ -87,59 +97,57 @@ fn handle_overlay_mouse(event: MouseEvent, state: &mut AppState) -> Result<()> {
 //
 // Called when `state.current_form.is_some()` and no overlay is open.
 // Strategy:
-//   1. Hit-test `form.field_rects` — find which node the cursor is over.
-//   2. Focus that node (update active_field).
-//   3. Delegate the raw event to the node's `handle_mouse()`.
-//      TextInputNode → rat-widget places cursor at click position.
-//      SelectInputNode / MultiSelectInputNode → opens popup.
+//   1. Popup layer — any open popup intercepts all events.
+//   2. ClickMap dispatch — hit-test the registry built during the last render.
+//      FormField → focus + delegate to node.handle_mouse().
+//      FormSubmit → call form submit handler.
+//
+// LangToggle is handled before this function is reached (in handle_mouse).
 
-fn handle_mouse_form(event: MouseEvent, state: &mut AppState) -> Result<()> {
+fn handle_mouse_form(event: MouseEvent, state: &mut AppState, root: &Path) -> Result<()> {
     use crate::ui::form_node::FormAction;
-
-    let col = event.column;
-    let row = event.row;
-
-    // ── Language button hit-test (top-right of header) ────────────────────
-    if let Some(lang_rect) = state.lang_button_area {
-        if event.kind == MouseEventKind::Down(MouseButton::Left)
-            && col >= lang_rect.x && col < lang_rect.right()
-            && row >= lang_rect.y && row < lang_rect.bottom()
-        {
-            state.lang = state.lang.toggle();
-            return Ok(());
-        }
-    }
-
-    let form = match state.current_form.as_mut() { Some(f) => f, None => return Ok(()) };
 
     // ── Open-popup layer — intercept all events while any popup is visible ─
     //
     // Popup is its own layer: scroll and clicks go to the popup first.
-    // `handle_popup_mouse` returns Some if the popup consumed the event.
     // Single-select: click-outside = cancel.  Multi-select: click-outside = accept.
-    let popup_idx = form.nodes.iter().position(|n| n.has_open_popup());
-    if let Some(idx) = popup_idx {
-        let action = form.nodes[idx].handle_popup_mouse(event);
-        if matches!(action, Some(FormAction::ValueChanged) | Some(FormAction::AcceptAndNext)) {
-            let key = form.nodes[idx].key();
-            (form.on_change)(&mut form.nodes, key);
+    {
+        let form = match state.current_form.as_mut() { Some(f) => f, None => return Ok(()) };
+        let popup_idx = form.nodes.iter().position(|n| n.has_open_popup());
+        if let Some(idx) = popup_idx {
+            let action = form.nodes[idx].handle_popup_mouse(event);
+            if matches!(action, Some(FormAction::ValueChanged) | Some(FormAction::AcceptAndNext)) {
+                let key = form.nodes[idx].key();
+                (form.on_change)(&mut form.nodes, key);
+            }
+            return Ok(());
         }
-        return Ok(());
     }
 
-    // ── Normal field hit-test ─────────────────────────────────────────────
-    let hit = form.field_rects.iter()
-        .find(|&&(_, _, rect)| col >= rect.x && col < rect.right() && row >= rect.y && row < rect.bottom())
-        .copied();
+    // ── ClickMap dispatch ─────────────────────────────────────────────────
+    //
+    // Clone the target so we drop the immutable borrow on state.click_map
+    // before mutably borrowing state.current_form below.
+    let target = state.click_map.hit(event.column, event.row).cloned();
 
-    if let Some((slot, idx, rect)) = hit {
-        form.active_field = slot;
-        form.touched = true;
-        let action = form.nodes[idx].handle_mouse(event, rect);
-        if action == FormAction::ValueChanged {
-            let key = form.nodes[idx].key();
-            (form.on_change)(&mut form.nodes, key);
+    match target {
+        Some(ClickTarget::FormField { slot, node_idx, rect }) => {
+            if let Some(form) = state.current_form.as_mut() {
+                form.active_field = slot;
+                form.touched = true;
+                let action = form.nodes[node_idx].handle_mouse(event, rect);
+                if action == FormAction::ValueChanged {
+                    let key = form.nodes[node_idx].key();
+                    (form.on_change)(&mut form.nodes, key);
+                }
+            }
         }
+        Some(ClickTarget::FormSubmit) => {
+            if event.kind == MouseEventKind::Down(MouseButton::Left) {
+                crate::submit::handle_form_submit(state, root)?;
+            }
+        }
+        _ => {}
     }
     Ok(())
 }

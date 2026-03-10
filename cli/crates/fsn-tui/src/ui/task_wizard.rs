@@ -52,6 +52,10 @@ pub fn render(f: &mut RenderCtx<'_>, state: &mut AppState, area: Rect) {
         render_task_bar(f, queue, lang, outer[1]);
     }
 
+    // Take click_map from state before the mutable task_queue borrow below.
+    let mut cmap = std::mem::take(&mut state.click_map);
+    cmap.clear();
+
     // Form rendering — needs mutable access to the active task's form
     let active_idx = state.task_queue.as_ref().map(|q| q.active).unwrap_or(0);
     if let Some(queue) = state.task_queue.as_mut() {
@@ -68,11 +72,13 @@ pub fn render(f: &mut RenderCtx<'_>, state: &mut AppState, area: Rect) {
                     .split(outer[3]);
 
                 super::new_project::render_tabs(f, lang, form, outer[2]);
-                super::new_project::render_fields(f, form, padding[1], lang);
+                super::new_project::render_fields(f, form, padding[1], lang, &mut cmap);
                 super::new_project::render_error(f, lang, form, outer[4]);
             }
         }
     }
+
+    state.click_map = cmap;
 
     render_hint(f, state.ctrl_hint, state.help_visible, lang, outer[5]);
 }

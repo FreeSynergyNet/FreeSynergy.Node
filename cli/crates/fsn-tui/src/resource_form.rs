@@ -72,10 +72,6 @@ pub struct ResourceForm {
     pub edit_id:      Option<String>,
     /// Called after any value change: `(nodes, changed_field_key)`.
     pub on_change:    fn(&mut Vec<Box<dyn FormNode>>, &'static str),
-    /// Rendered field positions — refreshed every frame by render_fields().
-    /// Each entry: (slot_in_tab, global_node_idx, rendered_rect).
-    /// Used by mouse.rs for hit-testing which field was clicked.
-    pub field_rects:  Vec<(usize, usize, ratatui::layout::Rect)>,
 }
 
 impl std::fmt::Debug for ResourceForm {
@@ -97,7 +93,7 @@ impl ResourceForm {
         edit_id:   Option<String>,
         on_change: fn(&mut Vec<Box<dyn FormNode>>, &'static str),
     ) -> Self {
-        Self { kind, tab_keys, active_tab: 0, active_field: 0, nodes, error: None, error_kind: FormErrorKind::Validation, touched: false, edit_id, on_change, field_rects: Vec::new() }
+        Self { kind, tab_keys, active_tab: 0, active_field: 0, nodes, error: None, error_kind: FormErrorKind::Validation, touched: false, edit_id, on_change }
     }
 
     /// i18n key for the form screen header.

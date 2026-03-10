@@ -11,6 +11,7 @@ use fsn_core::health::{self, HealthLevel};
 use fsn_core::resource::Resource;
 use fsn_core::store::StoreEntry;
 
+use crate::click_map::ClickMap;
 use crate::sysinfo::SysInfo;
 
 // Re-export all handle and form types so existing `use crate::app::*` imports keep working.
@@ -269,8 +270,10 @@ pub struct AppState {
     pub sidebar_list_area: Option<Rect>,
     /// Cached services table area (set during render) — used for mouse hit-testing.
     pub services_table_area: Option<Rect>,
-    /// Language toggle button area in the form header — used for mouse hit-testing.
-    pub lang_button_area: Option<Rect>,
+    /// Per-frame registry of all clickable UI elements.
+    /// Cleared and rebuilt by each screen's render function.
+    /// Mouse dispatch queries this once — no per-screen if/else.
+    pub click_map: ClickMap,
 }
 
 impl AppState {
@@ -299,7 +302,7 @@ impl AppState {
             last_click: None,
             sidebar_list_area: None,
             services_table_area: None,
-            lang_button_area: None,
+            click_map: ClickMap::new(),
         };
         s.rebuild_sidebar();
         s
