@@ -170,7 +170,8 @@ fn handle_resource_form(key: KeyEvent, state: &mut AppState, root: &Path) -> Res
             }
         }
         // Navigation and value changes — mark form as touched and run live validation.
-        FormAction::FocusNext | FormAction::FocusPrev
+        FormAction::AcceptAndNext
+        | FormAction::FocusNext | FormAction::FocusPrev
         | FormAction::TabNext  | FormAction::TabPrev
         | FormAction::ValueChanged => {
             if let Some(ref mut form) = state.current_form {
@@ -209,7 +210,8 @@ fn handle_wizard(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()>
                 _ => {}
             }
         }
-        FormAction::FocusNext | FormAction::FocusPrev
+        FormAction::AcceptAndNext
+        | FormAction::FocusNext | FormAction::FocusPrev
         | FormAction::TabNext  | FormAction::TabPrev
         | FormAction::ValueChanged => {}
         FormAction::Quit => state.should_quit = true,

@@ -177,7 +177,7 @@ impl ResourceForm {
             FormAction::Unhandled
         };
 
-        if action == FormAction::ValueChanged {
+        if action == FormAction::ValueChanged || action == FormAction::AcceptAndNext {
             if let Some(idx) = global_idx {
                 let key = self.nodes[idx].key();
                 (self.on_change)(&mut self.nodes, key);
@@ -185,7 +185,7 @@ impl ResourceForm {
         }
 
         match action {
-            FormAction::FocusNext   => { self.focus_next(); self.error = None; FormAction::Consumed }
+            FormAction::FocusNext | FormAction::AcceptAndNext => { self.focus_next(); self.error = None; FormAction::Consumed }
             FormAction::FocusPrev   => { self.focus_prev(); self.error = None; FormAction::Consumed }
             FormAction::TabNext     => { self.next_tab();   self.error = None; FormAction::Consumed }
             FormAction::TabPrev     => { self.prev_tab();   self.error = None; FormAction::Consumed }

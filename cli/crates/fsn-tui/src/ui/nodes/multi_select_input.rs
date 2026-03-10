@@ -174,7 +174,7 @@ impl FormNode for MultiSelectInputNode {
             return match self.popup.handle_key(key, &self.options) {
                 SelectionResult::AcceptedMulti(values) => {
                     self.value = values.join(",");
-                    FormAction::ValueChanged
+                    FormAction::AcceptAndNext
                 }
                 SelectionResult::Rejected | SelectionResult::Consumed => FormAction::Consumed,
                 _ => FormAction::Consumed,
@@ -189,8 +189,8 @@ impl FormNode for MultiSelectInputNode {
                 self.popup.open(0, checked);
                 FormAction::Consumed
             }
-            KeyCode::Tab     => FormAction::TabNext,
-            KeyCode::BackTab => FormAction::TabPrev,
+            KeyCode::Tab     => FormAction::FocusNext,
+            KeyCode::BackTab => FormAction::FocusPrev,
             KeyCode::Esc     => FormAction::Cancel,
             KeyCode::Char('l') | KeyCode::Char('L') => FormAction::LangToggle,
             _ => FormAction::Unhandled,

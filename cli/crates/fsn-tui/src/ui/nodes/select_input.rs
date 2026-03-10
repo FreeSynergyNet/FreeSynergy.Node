@@ -162,7 +162,7 @@ impl FormNode for SelectInputNode {
         // Popup swallows all keys while open — global nav (Ctrl+S etc.) is bypassed too.
         if self.popup.is_open {
             return match self.popup.handle_key(key, &self.options) {
-                SelectionResult::Accepted(v) => { self.value = v; FormAction::ValueChanged }
+                SelectionResult::Accepted(v) => { self.value = v; FormAction::AcceptAndNext }
                 SelectionResult::Rejected    => FormAction::Consumed,
                 SelectionResult::Consumed    => FormAction::Consumed,
                 _                            => FormAction::Consumed,
@@ -178,8 +178,8 @@ impl FormNode for SelectInputNode {
                 self.popup.open(idx, HashSet::new());
                 FormAction::Consumed
             }
-            KeyCode::Tab     => FormAction::TabNext,
-            KeyCode::BackTab => FormAction::TabPrev,
+            KeyCode::Tab     => FormAction::FocusNext,
+            KeyCode::BackTab => FormAction::FocusPrev,
             KeyCode::Esc     => FormAction::Cancel,
             KeyCode::Char('l') | KeyCode::Char('L') => FormAction::LangToggle,
             _ => FormAction::Unhandled,

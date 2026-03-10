@@ -177,8 +177,8 @@ impl FormNode for TextInputNode {
 
         // Meta keys that TextInputState must not consume.
         match key.code {
-            KeyCode::Tab     => return FormAction::TabNext,
-            KeyCode::BackTab => return FormAction::TabPrev,
+            KeyCode::Tab     => return FormAction::FocusNext,
+            KeyCode::BackTab => return FormAction::FocusPrev,
             KeyCode::Esc     => return FormAction::Cancel,
             KeyCode::Enter   => return FormAction::FocusNext,
             _ => {}

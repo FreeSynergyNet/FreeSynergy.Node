@@ -59,6 +59,10 @@ pub enum FormAction {
     FocusNext,
     /// Move focus to the previous node in the current tab.
     FocusPrev,
+    /// Value was modified AND focus should advance to the next field.
+    /// Used by SelectInput / MultiSelectInput after popup confirmation so that
+    /// `on_change` fires and the cursor advances in one step.
+    AcceptAndNext,
     /// Advance to the next form tab (Ctrl+Right).
     TabNext,
     /// Go back to the previous form tab (Ctrl+Left).
