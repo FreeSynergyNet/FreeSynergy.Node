@@ -50,7 +50,6 @@ pub struct EnvTableNode {
     /// Cache: serialized form — always `KEY=value\n...` for non-empty-key rows.
     cache:            String,
     pub dirty:        bool,
-    rect:             Option<Rect>,
 }
 
 impl EnvTableNode {
@@ -68,7 +67,6 @@ impl EnvTableNode {
             visible_rows: DEFAULT_VISIBLE_ROWS,
             cache: String::new(),
             dirty: false,
-            rect: None,
         };
         node.rebuild_cache();
         node
@@ -198,14 +196,10 @@ impl FormNode for EnvTableNode {
     fn is_dirty(&self)       -> bool { self.dirty }
     fn set_dirty(&mut self, v: bool) { self.dirty = v; }
 
-    fn set_rect(&mut self, r: Rect)     { self.rect = Some(r); }
-    fn last_rect(&self) -> Option<Rect> { self.rect }
-
     /// Block(borders=2 + header=1 + rows=N) + hint=1.
     fn preferred_height(&self) -> u16 { self.visible_rows + 4 }
 
     fn render(&mut self, f: &mut RenderCtx<'_>, area: Rect, focused: bool, lang: Lang) {
-        self.set_rect(area);
         if focused { self.update_scroll(); }
 
         let [block_area, hint_area] = {

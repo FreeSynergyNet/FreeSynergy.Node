@@ -17,7 +17,6 @@ pub mod events_dashboard;
 pub mod handles;
 pub mod host_form;
 pub mod i18n;
-pub mod mouse;
 pub mod project_form;
 pub mod resource_form;
 pub mod schema_form;

@@ -37,7 +37,13 @@ use crate::ui::{detail, help_sidebar, widgets};
 
 // ── Navigation tab labels ─────────────────────────────────────────────────────
 
-const TABS: &[&str] = &["Projekte", "Hosts", "Services", "Store", "⚙ Einstellungen"];
+const TAB_KEYS: &[&str] = &[
+    "dash.tab.projects",
+    "dash.tab.hosts",
+    "dash.tab.services",
+    "dash.tab.store",
+    "dash.tab.settings",
+];
 
 // ── Main render ───────────────────────────────────────────────────────────────
 
@@ -137,7 +143,7 @@ fn render_logo_row(f: &mut RenderCtx<'_>, state: &AppState, area: Rect) {
         .projects
         .get(state.selected_project)
         .map(|p| format!("{}  @  {}", p.name(), p.domain()))
-        .unwrap_or_else(|| "Kein Projekt ausgewählt".into());
+        .unwrap_or_else(|| state.t("dash.no_project_selected").to_string());
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(domain_text, Style::new().fg(Color::DarkGray)))),
         info_rows[2],
@@ -156,7 +162,8 @@ fn render_tab_bar(f: &mut RenderCtx<'_>, state: &AppState, area: Rect) {
     let active = active_tab_index(state);
     let mut spans: Vec<Span> = vec![Span::raw(" ")];
 
-    for (i, label) in TABS.iter().enumerate() {
+    for (i, &key) in TAB_KEYS.iter().enumerate() {
+        let label = state.t(key);
         if i == active {
             spans.push(Span::styled(
                 format!(" {} ", label),
@@ -171,7 +178,7 @@ fn render_tab_bar(f: &mut RenderCtx<'_>, state: &AppState, area: Rect) {
                 Style::new().fg(Color::DarkGray),
             ));
         }
-        if i < TABS.len() - 1 {
+        if i < TAB_KEYS.len() - 1 {
             spans.push(Span::styled(" │ ", Style::new().fg(Color::DarkGray)));
         }
     }
@@ -514,7 +521,7 @@ fn render_footer(f: &mut RenderCtx<'_>, state: &AppState, area: Rect) {
                 .map(|i| i.hint_key())
                 .unwrap_or("dash.hint"),
         };
-        format!("{}  F1=Hilfe  q=Ende  ", state.t(key))
+        format!("{}  {}  {}  ", state.t(key), state.t("dash.hint.f1"), state.t("dash.hint.quit"))
     };
 
     let hint_style = if has_confirm {

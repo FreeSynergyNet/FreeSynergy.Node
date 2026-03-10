@@ -72,8 +72,6 @@ pub struct ResourceForm {
     pub edit_id:      Option<String>,
     /// Called after any value change: `(nodes, changed_field_key)`.
     pub on_change:    fn(&mut Vec<Box<dyn FormNode>>, &'static str),
-    /// Screen rect of the submit button — set during render, used for mouse hit-testing.
-    pub submit_btn_rect: Option<ratatui::layout::Rect>,
 }
 
 impl std::fmt::Debug for ResourceForm {
@@ -95,7 +93,7 @@ impl ResourceForm {
         edit_id:   Option<String>,
         on_change: fn(&mut Vec<Box<dyn FormNode>>, &'static str),
     ) -> Self {
-        Self { kind, tab_keys, active_tab: 0, active_field: 0, nodes, error: None, error_kind: FormErrorKind::Validation, touched: false, edit_id, on_change, submit_btn_rect: None }
+        Self { kind, tab_keys, active_tab: 0, active_field: 0, nodes, error: None, error_kind: FormErrorKind::Validation, touched: false, edit_id, on_change }
     }
 
     /// i18n key for the form screen header.
@@ -229,19 +227,6 @@ impl ResourceForm {
         }
     }
 
-    // ── Mouse click ────────────────────────────────────────────────────────
-
-    /// Try to focus the node that was clicked. Returns its slot index on the tab.
-    pub fn click_focus(&mut self, col: u16, row: u16) -> Option<usize> {
-        let tab_indices = self.current_tab_indices();
-        for (slot, &global_idx) in tab_indices.iter().enumerate() {
-            if self.nodes[global_idx].hit_test(col, row) {
-                self.active_field = slot;
-                return Some(slot);
-            }
-        }
-        None
-    }
 }
 
 // ── Slugify helper ────────────────────────────────────────────────────────────

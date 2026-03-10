@@ -31,7 +31,6 @@ pub struct TextInputNode {
     pub secret:    bool,
     /// Maximum allowed character count (0 = unlimited).
     pub max_len:   usize,
-    rect:          Option<Rect>,
 }
 
 impl TextInputNode {
@@ -44,7 +43,7 @@ impl TextInputNode {
         Self {
             key, label_key, hint_key: None, tab, required,
             value: String::new(), default: String::new(),
-            cursor: 0, dirty: false, secret: false, max_len: 0, rect: None,
+            cursor: 0, dirty: false, secret: false, max_len: 0,
         }
     }
 
@@ -145,14 +144,9 @@ impl FormNode for TextInputNode {
     fn is_dirty(&self) -> bool     { self.dirty }
     fn set_dirty(&mut self, v: bool) { self.dirty = v; }
 
-    fn set_rect(&mut self, r: Rect)     { self.rect = Some(r); }
-    fn last_rect(&self) -> Option<Rect> { self.rect }
-
     fn preferred_height(&self) -> u16 { 4 } // box-with-title(3) + hint(1)
 
     fn render(&mut self, f: &mut RenderCtx<'_>, area: Rect, focused: bool, lang: Lang) {
-        self.set_rect(area);
-
         let rows = Layout::default()
             .direction(Direction::Vertical)
             .constraints([

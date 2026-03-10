@@ -9,10 +9,11 @@
 //   • Renders itself: label + input box + hint (render)
 //   • Renders overlays that must appear on top of siblings (render_overlay)
 //   • Handles keyboard input, returns a typed FormAction
-//   • Stores its last rendered Rect for mouse hit-testing (hit_test)
 //
 // This eliminates all per-field-type checks from events.rs (no more
 // `is_select_field()`, `is_typing()`, etc.) — correct behavior is built in.
+//
+// Mouse handling is delegated to rat-widget (HandleEvent trait).
 //
 // Future extensions (same FormNode interface, different output backend):
 //   fn render_html(&self, lang: Lang) -> String
@@ -79,11 +80,11 @@ pub enum FormAction {
 /// A UI component analogous to an HTML input element.
 ///
 /// Each FormNode is fully self-contained:
-/// - **State**: owns its value, cursor position, dirty flag, and last rendered `Rect`
+/// - **State**: owns its value, cursor position, dirty flag
 /// - **Render**: draws label + input box + hint; overlays (dropdowns) via `render_overlay`
 /// - **Events**: handles keyboard input and returns a [`FormAction`] — no external dispatch
-/// - **Hit-test**: stores its `Rect` during `render` for mouse click detection next cycle
 ///
+/// Mouse handling will be provided by rat-widget's `HandleEvent` trait.
 /// Adding a new field type = implement `FormNode`. No changes needed in `events.rs`.
 ///
 /// Implementing types: [`super::nodes::TextInputNode`], [`super::nodes::SelectInputNode`].
@@ -122,30 +123,12 @@ pub trait FormNode: std::fmt::Debug {
     fn preferred_height(&self) -> u16 { 4 }
 
     /// Render the field (label-in-title + input box + hint) into `area`.
-    /// Must call `self.set_rect(area)` so hit-testing works.
     fn render(&mut self, f: &mut RenderCtx<'_>, area: Rect, focused: bool, lang: Lang);
 
     /// Render a floating overlay (e.g., dropdown list) below the input box.
     /// Called *after* all fields are rendered so the overlay appears on top.
     /// Default: no-op (text inputs have no overlay).
     fn render_overlay(&mut self, _f: &mut RenderCtx<'_>, _available: Rect, _lang: Lang) {}
-
-    /// Handle a mouse click that may land on this field's overlay (e.g., dropdown).
-    /// Returns `true` when the click was consumed.
-    /// Default: no-op (only SelectInputNode overrides this).
-    fn click_overlay(&mut self, _col: u16, _row: u16, _available: Rect) -> bool { false }
-
-    /// Record the last rendered rect for hit-testing.
-    fn set_rect(&mut self, rect: Rect);
-    /// The last recorded rect, or `None` before first render.
-    fn last_rect(&self) -> Option<Rect>;
-
-    /// Returns `true` when the terminal coordinate falls within this field's area.
-    fn hit_test(&self, col: u16, row: u16) -> bool {
-        self.last_rect()
-            .map(|r| col >= r.x && col < r.right() && row >= r.y && row < r.bottom())
-            .unwrap_or(false)
-    }
 
     // ── Input ──────────────────────────────────────────────────────────────
 

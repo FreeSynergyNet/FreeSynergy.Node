@@ -2,10 +2,9 @@
 //
 // Dropdown lifecycle:
 //   Focused but closed: field shows current value + "▼" hint, no list visible.
-//   ↓ / ↑ / Enter / click on field → opens the dropdown.
+//   ↓ / ↑ / Enter → opens the dropdown.
 //   In dropdown: ↑↓ move the pending highlight, ←/Esc close without change,
-//                →/Enter/click on item accept + close.
-//   Click outside dropdown while open → close without change.
+//                →/Enter accept + close.
 
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
@@ -32,6 +31,7 @@ pub struct SelectInputNode {
     pub options:    Vec<String>,
     /// Maps an option code to a human-readable label.
     pub display_fn: Option<fn(&str) -> &'static str>,
+    /// Last rendered area — used by `dropdown_rect` to position the overlay.
     rect:           Option<Rect>,
     /// Whether the dropdown list is currently visible.
     is_open:        bool,
@@ -99,7 +99,7 @@ impl SelectInputNode {
         self.is_open = false;
     }
 
-    /// Geometry of the dropdown list (shared by render and click-test).
+    /// Geometry of the dropdown list used by `render_overlay`.
     fn dropdown_rect(&self, available: Rect) -> Option<Rect> {
         let input_rect      = self.rect?;
         let input_box_bottom = input_rect.y + 3;
@@ -129,13 +129,10 @@ impl FormNode for SelectInputNode {
     fn is_dirty(&self)  -> bool      { false }
     fn set_dirty(&mut self, _v: bool) {}
 
-    fn set_rect(&mut self, r: Rect)     { self.rect = Some(r); }
-    fn last_rect(&self) -> Option<Rect> { self.rect }
-
     fn preferred_height(&self) -> u16 { 4 }
 
     fn render(&mut self, f: &mut RenderCtx<'_>, area: Rect, focused: bool, lang: Lang) {
-        self.set_rect(area);
+        self.rect = Some(area);
 
         let rows = Layout::default()
             .direction(Direction::Vertical)
@@ -255,33 +252,4 @@ impl FormNode for SelectInputNode {
         }
     }
 
-    fn click_overlay(&mut self, col: u16, row: u16, available: Rect) -> bool {
-        if !self.is_open {
-            // Click on the field → open dropdown
-            if let Some(r) = self.rect {
-                if col >= r.x && col < r.right() && row >= r.y && row < r.bottom() {
-                    self.open();
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        // Dropdown is open — check if click landed on an item
-        if let Some(dropdown) = self.dropdown_rect(available) {
-            if col >= dropdown.x && col < dropdown.right()
-                && row > dropdown.y && row < dropdown.bottom()
-            {
-                let item_row = (row - dropdown.y - 1) as usize;
-                if item_row < self.options.len() {
-                    self.pending_idx = item_row;
-                    self.close_accept();
-                    return true;
-                }
-            }
-        }
-        // Click outside → close without change
-        self.close_reject();
-        false
-    }
 }

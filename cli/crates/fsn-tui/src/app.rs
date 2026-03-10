@@ -443,7 +443,7 @@ use rat_salsa::timer::{TimeOut, TimerDef};
 /// Events dispatched by rat-salsa to the application.
 #[derive(Debug)]
 pub enum AppEvent {
-    /// Raw crossterm event (keyboard, mouse, resize).
+    /// Raw crossterm event (keyboard, resize, etc.).
     Crossterm(crossterm::event::Event),
     /// Periodic tick — polls background channels and refreshes sysinfo.
     Tick(TimeOut),
@@ -460,7 +460,7 @@ impl From<TimeOut> for AppEvent {
 /// Global state accessible from all rat-salsa callbacks (init/render/event/error).
 pub struct AppGlobal {
     ctx:  SalsaAppContext<AppEvent, anyhow::Error>,
-    /// Root path of the FSN workspace — forwarded to events::handle / mouse::handle_mouse.
+    /// Root path of the FSN workspace — forwarded to events::handle.
     pub root: PathBuf,
 }
 
@@ -513,14 +513,10 @@ fn fsn_event(
 ) -> anyhow::Result<Control<AppEvent>> {
     match event {
         AppEvent::Crossterm(e) => {
-            match e {
-                crossterm::event::Event::Key(key) => {
-                    crate::events::handle(*key, state, ctx.root.as_path())?;
-                }
-                crossterm::event::Event::Mouse(mouse) => {
-                    crate::mouse::handle_mouse(*mouse, state, ctx.root.as_path())?;
-                }
-                _ => {}
+            // Mouse events are handled natively by rat-widget widgets.
+            // Keyboard events route through the existing event chain.
+            if let crossterm::event::Event::Key(key) = e {
+                crate::events::handle(*key, state, ctx.root.as_path())?;
             }
             if state.should_quit { return Ok(Control::Quit); }
             Ok(Control::Changed)

@@ -40,7 +40,6 @@ pub struct TextAreaNode {
     /// How many text rows are visible in the rendered box.
     pub visible_lines: u16,
     scroll_offset:     usize,
-    rect:              Option<Rect>,
     pub dirty:         bool,
 }
 
@@ -58,7 +57,6 @@ impl TextAreaNode {
             cursor_line: 0, cursor_col: 0,
             visible_lines: DEFAULT_ROWS,
             scroll_offset: 0,
-            rect: None,
             dirty: false,
         }
     }
@@ -175,9 +173,6 @@ impl FormNode for TextAreaNode {
     fn is_dirty(&self)        -> bool { self.dirty }
     fn set_dirty(&mut self, v: bool)  { self.dirty = v; }
 
-    fn set_rect(&mut self, r: Rect)     { self.rect = Some(r); }
-    fn last_rect(&self) -> Option<Rect> { self.rect }
-
     fn is_filled(&self) -> bool {
         self.lines.iter().any(|l| !l.trim().is_empty())
     }
@@ -187,7 +182,6 @@ impl FormNode for TextAreaNode {
     }
 
     fn render(&mut self, f: &mut RenderCtx<'_>, area: Rect, focused: bool, lang: Lang) {
-        self.set_rect(area);
         self.clamp_cursor();
         self.ensure_scroll_visible();
 

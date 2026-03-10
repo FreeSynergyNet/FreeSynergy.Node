@@ -6,7 +6,7 @@
 // are handled once, not duplicated in each branch.
 //
 // Entry point: handle_dashboard() — called from events.rs Screen::Dashboard arm.
-// activate_sidebar_item() is pub so mouse.rs can reuse the same activation logic.
+// activate_sidebar_item() is pub(crate) — shared by keyboard and future rat-widget mouse handlers.
 
 use std::path::Path;
 
@@ -323,12 +323,11 @@ fn open_edit_form_for_item(item: &SidebarItem, state: &mut AppState) {
 }
 
 /// Activate a sidebar item — the single source of truth for "what happens when
-/// an item is selected by keyboard or mouse".
+/// an item is selected".
 ///
 /// For Action items: opens the corresponding create form or wizard.
 /// For resource items (Project, Host, Service): opens the edit form.
-/// Called by both keyboard Enter and mouse click handlers.
-pub fn activate_sidebar_item(item: SidebarItem, state: &mut AppState, root: &Path) {
+pub(crate) fn activate_sidebar_item(item: SidebarItem, state: &mut AppState, root: &Path) {
     match item {
         SidebarItem::Action { kind: SidebarAction::NewProject, .. } => {
             let queue = crate::task_queue::TaskQueue::new(

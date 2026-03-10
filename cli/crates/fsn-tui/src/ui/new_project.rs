@@ -129,8 +129,6 @@ pub(crate) fn render_fields(f: &mut RenderCtx<'_>, form: &mut ResourceForm, inne
         let btn_y = y + 1;
         if btn_y + 3 <= inner.bottom() {
             let btn_area = Rect { x: inner.x, y: btn_y, width: inner.width / 3, height: 3 };
-            // Store the rect so mouse.rs can hit-test clicks on the button.
-            form.submit_btn_rect = Some(btn_area);
             let missing  = form.missing_required();
             let disabled = !missing.is_empty();
             let submit_key = if form.edit_id.is_some() { "form.submit.edit" } else { form.kind.submit_key() };
@@ -142,8 +140,6 @@ pub(crate) fn render_fields(f: &mut RenderCtx<'_>, form: &mut ResourceForm, inne
                 .alignment(Alignment::Center);
             f.render_widget(btn, btn_area);
         }
-    } else {
-        form.submit_btn_rect = None;
     }
 
     // Dropdown overlay rendered LAST so it appears on top of other fields
@@ -176,7 +172,7 @@ pub(crate) fn render_error(f: &mut RenderCtx<'_>, lang: crate::app::Lang, form: 
         if missing.is_empty() {
             f.render_widget(
                 Paragraph::new(Line::from(Span::styled(
-                    "  ✓ Alle Pflichtfelder ausgefüllt",
+                    format!("  {}", crate::i18n::t(lang, "form.all_required_filled")),
                     Style::default().fg(Color::Green),
                 ))),
                 area,
@@ -186,7 +182,7 @@ pub(crate) fn render_error(f: &mut RenderCtx<'_>, lang: crate::app::Lang, form: 
                 Paragraph::new(Line::from(vec![
                     Span::styled("  ⚠ ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
                     Span::styled(
-                        format!("{} Pflichtfeld(er) noch leer", missing.len()),
+                        format!("{} {}", missing.len(), crate::i18n::t(lang, "form.missing_required")),
                         Style::default().fg(Color::Yellow),
                     ),
                 ])),
