@@ -86,31 +86,8 @@ pub struct ProjectFormData {
     // ── Section: Services ─────────────────────────────────────────────────
     #[form(widget = "section", label = "form.section.services", tab = 0)]
     pub _section_services: String,
-
-    // Service slots — each is a Select from all available services of that type.
-    // Options are populated dynamically at form-build time from loaded service instances.
-    // Multiple services of the same type CAN be installed; this slot designates
-    // which one serves as the "primary" for that role (proxy routing, auto-docs, etc.).
-
-    #[form(label = "form.project.iam", widget = "select", tab = 0, col = 6, min_w = 24,
-           hint = "form.project.iam.hint")]
-    pub iam: String,
-
-    #[form(label = "form.project.wiki", widget = "select", tab = 0, col = 6, min_w = 24,
-           hint = "form.project.wiki.hint")]
-    pub wiki: String,
-
-    #[form(label = "form.project.mail", widget = "select", tab = 0, col = 6, min_w = 24,
-           hint = "form.project.mail.hint")]
-    pub mail: String,
-
-    #[form(label = "form.project.monitoring", widget = "select", tab = 0, col = 6, min_w = 24,
-           hint = "form.project.monitoring.hint")]
-    pub monitoring: String,
-
-    #[form(label = "form.project.git", widget = "select", tab = 0, col = 6, min_w = 24,
-           hint = "form.project.git.hint")]
-    pub git: String,
+    // Service slot nodes (ServiceSlotNode) are appended programmatically
+    // by append_slot_nodes() after build_nodes() — not declared in the schema here.
 }
 
 // ── Display helpers ───────────────────────────────────────────────────────────
@@ -131,75 +108,73 @@ pub fn lang_display(code: &str) -> &'static str {
     }
 }
 
-/// Display label for service-slot select fields.
-/// Returns "" for unknown instance names (SelectInputNode falls back to raw value).
-pub fn slot_display(code: &str) -> &'static str {
-    match code {
-        ""         => "—",
-        "external" => "Externer Service",
-        _          => "",  // raw instance name shown as-is
-    }
-}
-
 const DISPLAY_FNS: &[(&str, fn(&str) -> &'static str)] = &[
-    ("language",   lang_display),
-    ("languages",  lang_display),
-    ("iam",        slot_display),
-    ("wiki",       slot_display),
-    ("mail",       slot_display),
-    ("monitoring", slot_display),
-    ("git",        slot_display),
+    ("language",  lang_display),
+    ("languages", lang_display),
 ];
 
-/// Build the dropdown options for a service slot.
+/// Build the SlotEntry list for a single service slot field.
 ///
-/// Includes (in order):
-///   ""             — not configured (shown as "—")
-///   {instance}     — each locally deployed service whose class starts with `class_prefix`
-///   {module_name}  — each Store entry of matching service_type, not yet deployed locally
-///   "external"     — externally hosted service
-fn slot_options(
+/// Populates (in order):
+///   Configured — local service instances whose class starts with `class_prefix`
+///   Available  — store entries of matching `svc_type` not yet deployed locally
+///   External   — always appended at the end
+fn slot_entries_for(
     class_prefix:  &str,
-    service_type:  &str,
+    svc_type:      &str,
     services:      &[ServiceHandle],
     store_entries: &[StoreEntry],
-) -> Vec<String> {
-    let mut opts = vec!["".to_string()];
+) -> Vec<crate::ui::nodes::service_slot::SlotEntry> {
+    use crate::ui::nodes::service_slot::SlotEntry;
+
+    let mut entries = Vec::new();
 
     // 1. Already-deployed local instances of matching type
     for svc in services {
         if svc.config.service.service_class.starts_with(class_prefix) {
-            opts.push(svc.name.clone());
+            entries.push(SlotEntry::configured(&svc.name, svc_type));
         }
     }
 
-    // 2. Store modules of matching type that are not already listed
+    // 2. Store modules of matching type not yet deployed locally
     for entry in store_entries {
-        if entry.service_type == service_type {
-            // Extract the module short-name ("iam/kanidm" → "kanidm")
-            let module_name = entry.id.split('/').last().unwrap_or(&entry.id).to_string();
-            if !opts.contains(&module_name) {
-                opts.push(module_name);
+        if entry.service_type == svc_type {
+            let module_name = entry.id.split('/').last().unwrap_or(&entry.id);
+            let already_configured = services.iter()
+                .any(|s| s.config.service.service_class.starts_with(class_prefix)
+                    && s.name == module_name);
+            if !already_configured {
+                entries.push(SlotEntry::available(&entry.id, &entry.name, svc_type));
             }
         }
     }
 
-    opts.push("external".to_string());
-    opts
+    // 3. Always append external option
+    entries.push(SlotEntry::external());
+    entries
 }
 
-/// Build the full dynamic_options slice for all service slot fields.
-fn build_slot_options(
+/// Append ServiceSlotNode instances to a nodes list.
+///
+/// `slot_values` tuples: (key, label_key, class_prefix, svc_type, current_value)
+fn append_slot_nodes(
+    nodes:         &mut Vec<Box<dyn FormNode>>,
     services:      &[ServiceHandle],
     store_entries: &[StoreEntry],
-) -> Vec<(&'static str, Vec<String>)> {
-    vec![
-        ("iam",        slot_options("iam/",        "iam",        services, store_entries)),
-        ("wiki",       slot_options("wiki/",       "wiki",       services, store_entries)),
-        ("mail",       slot_options("mail/",       "mail",       services, store_entries)),
-        ("monitoring", slot_options("monitoring/", "monitoring", services, store_entries)),
-        ("git",        slot_options("git/",        "git",        services, store_entries)),
-    ]
+    slot_values:   &[(&'static str, &'static str, &'static str, &'static str, &str)],
+) {
+    use crate::ui::nodes::service_slot::ServiceSlotNode;
+
+    for &(key, label_key, class_prefix, svc_type, current_val) in slot_values {
+        let entries = slot_entries_for(class_prefix, svc_type, services, store_entries);
+        let mut node = ServiceSlotNode::new(key, label_key, 0, false, entries, svc_type)
+            .col(6)
+            .min_w(24);
+        if !current_val.is_empty() {
+            node = node.with_value(current_val);
+        }
+        nodes.push(Box::new(node));
+    }
 }
 
 // ── Smart-defaults hook ───────────────────────────────────────────────────────
@@ -246,14 +221,20 @@ pub fn new_project_form(services: &[ServiceHandle], store_entries: &[StoreEntry]
     let dynamics: &[(&str, String)] = &[
         ("install_dir", format!("{}/fsn", home)),
     ];
-    let dyn_opts = build_slot_options(services, store_entries);
-    let nodes = schema_form::build_nodes(
+    let mut nodes = schema_form::build_nodes(
         ProjectFormData::schema(),
         &HashMap::new(),
         DISPLAY_FNS,
         dynamics,
-        &dyn_opts,
+        &[],
     );
+    append_slot_nodes(&mut nodes, services, store_entries, &[
+        ("iam",        "form.project.iam",        "iam/",        "iam",        ""),
+        ("wiki",       "form.project.wiki",       "wiki/",       "wiki",       ""),
+        ("mail",       "form.project.mail",       "mail/",       "mail",       ""),
+        ("monitoring", "form.project.monitoring", "monitoring/", "monitoring", ""),
+        ("git",        "form.project.git",        "git/",        "git",        ""),
+    ]);
     ResourceForm::new(ResourceKind::Project, PROJECT_TABS, nodes, None, project_on_change)
 }
 
@@ -275,25 +256,37 @@ pub fn edit_project_form(
         ("languages",     languages_str.as_str()),
         ("install_dir",   handle.install_dir()),
         ("version",       p.version.as_str()),
-        ("iam",           slots.iam.as_deref().unwrap_or("")),
-        ("wiki",          slots.wiki.as_deref().unwrap_or("")),
-        ("mail",          slots.mail.as_deref().unwrap_or("")),
-        ("monitoring",    slots.monitoring.as_deref().unwrap_or("")),
-        ("git",           slots.git.as_deref().unwrap_or("")),
     ].into_iter().filter(|(_, v)| !v.is_empty()).collect();
 
-    let dyn_opts = build_slot_options(services, store_entries);
-    let nodes = schema_form::build_nodes(
+    let mut nodes = schema_form::build_nodes(
         ProjectFormData::schema(),
         &prefill,
         DISPLAY_FNS,
         &[],
-        &dyn_opts,
+        &[],
     );
+    append_slot_nodes(&mut nodes, services, store_entries, &[
+        ("iam",        "form.project.iam",        "iam/",        "iam",        slots.iam.as_deref().unwrap_or("")),
+        ("wiki",       "form.project.wiki",       "wiki/",       "wiki",       slots.wiki.as_deref().unwrap_or("")),
+        ("mail",       "form.project.mail",       "mail/",       "mail",       slots.mail.as_deref().unwrap_or("")),
+        ("monitoring", "form.project.monitoring", "monitoring/", "monitoring", slots.monitoring.as_deref().unwrap_or("")),
+        ("git",        "form.project.git",        "git/",        "git",        slots.git.as_deref().unwrap_or("")),
+    ]);
     ResourceForm::new(ResourceKind::Project, PROJECT_TABS, nodes, Some(handle.slug.clone()), project_on_change)
 }
 
 // ── Submit ────────────────────────────────────────────────────────────────────
+
+/// Returns Some(v) only for values that represent a real assignment
+/// (service name or "external"). Filters out pending "new:" / "store:" values
+/// which are not yet assigned (they trigger task queuing instead).
+fn clean_slot_value(v: &str) -> Option<&str> {
+    if v.is_empty() || v.starts_with("new:") || v.starts_with("store:") {
+        None
+    } else {
+        Some(v)
+    }
+}
 
 pub fn submit_project_form(form: &ResourceForm, root: &Path) -> Result<()> {
     let is_edit = form.edit_id.is_some();
@@ -315,6 +308,7 @@ pub fn submit_project_form(form: &ResourceForm, root: &Path) -> Result<()> {
     let path       = form.field_value("install_dir");
     let version    = form.field_value("version");
     let tags       = form.field_value("tags");
+    // Service slot values — only real assignments are written to TOML.
     let svc_iam    = form.field_value("iam");
     let svc_wiki   = form.field_value("wiki");
     let svc_mail   = form.field_value("mail");
@@ -346,16 +340,22 @@ pub fn submit_project_form(form: &ResourceForm, root: &Path) -> Result<()> {
         file_content.push_str(&format!("\n[project.contact]\nemail = \"{email}\"\n"));
     }
 
-    // Service slots — only write non-empty assignments
-    let has_slots = [svc_iam.as_str(), svc_wiki.as_str(), svc_mail.as_str(), svc_mon.as_str(), svc_git.as_str()]
-        .iter().any(|v| !v.is_empty());
+    // Service slots — only write non-empty, non-pending assignments
+    let clean_iam  = clean_slot_value(&svc_iam);
+    let clean_wiki = clean_slot_value(&svc_wiki);
+    let clean_mail = clean_slot_value(&svc_mail);
+    let clean_mon  = clean_slot_value(&svc_mon);
+    let clean_git  = clean_slot_value(&svc_git);
+
+    let has_slots = [clean_iam, clean_wiki, clean_mail, clean_mon, clean_git]
+        .iter().any(|v| v.is_some());
     if has_slots {
         file_content.push_str("\n[services]\n");
-        if !svc_iam.is_empty()  { file_content.push_str(&format!("iam        = \"{svc_iam}\"\n")); }
-        if !svc_wiki.is_empty() { file_content.push_str(&format!("wiki       = \"{svc_wiki}\"\n")); }
-        if !svc_mail.is_empty() { file_content.push_str(&format!("mail       = \"{svc_mail}\"\n")); }
-        if !svc_mon.is_empty()  { file_content.push_str(&format!("monitoring = \"{svc_mon}\"\n")); }
-        if !svc_git.is_empty()  { file_content.push_str(&format!("git        = \"{svc_git}\"\n")); }
+        if let Some(v) = clean_iam  { file_content.push_str(&format!("iam        = \"{v}\"\n")); }
+        if let Some(v) = clean_wiki { file_content.push_str(&format!("wiki       = \"{v}\"\n")); }
+        if let Some(v) = clean_mail { file_content.push_str(&format!("mail       = \"{v}\"\n")); }
+        if let Some(v) = clean_mon  { file_content.push_str(&format!("monitoring = \"{v}\"\n")); }
+        if let Some(v) = clean_git  { file_content.push_str(&format!("git        = \"{v}\"\n")); }
     }
 
     std::fs::write(&toml_path, file_content)?;

@@ -20,7 +20,7 @@ pub fn handle_form_submit(state: &mut AppState, root: &Path) -> Result<()> {
         let msg = format!(
             "{} {}",
             missing_t,
-            if missing_t == 1 { "Pflichtfeld fehlt" } else { "Pflichtfelder fehlen" }
+            if missing_t == 1 { "required field missing" } else { "required fields missing" }
         );
         if let Some(ref mut f) = state.current_form { f.error = Some(msg); }
         return Ok(());
@@ -33,7 +33,7 @@ pub fn handle_form_submit(state: &mut AppState, root: &Path) -> Result<()> {
 
     let missing = form.missing_required();
     if !missing.is_empty() {
-        let msg = format!("{} Pflichtfeld(er) auf anderen Tabs fehlen", missing.len());
+        let msg = format!("{} required fields on other tabs are missing", missing.len());
         if let Some(ref mut f) = state.current_form { f.error = Some(msg); }
         return Ok(());
     }
@@ -68,7 +68,7 @@ pub fn handle_wizard_submit(state: &mut AppState, root: &Path) -> Result<()> {
         let msg = format!(
             "{} {}",
             missing_tab,
-            if missing_tab == 1 { "Pflichtfeld fehlt" } else { "Pflichtfelder fehlen" }
+            if missing_tab == 1 { "required field missing" } else { "required fields missing" }
         );
         if let Some(ref mut queue) = state.task_queue {
             if let Some(task) = queue.tasks.get_mut(queue.active) {
@@ -88,7 +88,7 @@ pub fn handle_wizard_submit(state: &mut AppState, root: &Path) -> Result<()> {
     }
 
     if missing_all > 0 {
-        let msg = format!("{} Pflichtfeld(er) auf anderen Tabs fehlen", missing_all);
+        let msg = format!("{} required fields on other tabs are missing", missing_all);
         if let Some(ref mut queue) = state.task_queue {
             if let Some(task) = queue.tasks.get_mut(queue.active) {
                 if let Some(ref mut form) = task.form { form.error = Some(msg); }
@@ -154,6 +154,35 @@ pub fn submit_project(state: &mut AppState, root: &Path) -> Result<()> {
     match result {
         Some(Ok(())) => {
             let name = state.current_form.as_ref().map(|f| f.field_value("name")).unwrap_or_default();
+
+            // Extract slot values BEFORE clearing current_form — check for pending service tasks.
+            let queued_tasks: Vec<crate::task_queue::TaskKind> = {
+                let form = state.current_form.as_ref().unwrap();
+                let slug = form.edit_id.clone()
+                    .unwrap_or_else(|| crate::resource_form::slugify(&form.field_value("name")));
+                let slot_keys = ["iam", "wiki", "mail", "monitoring", "git"];
+                slot_keys.iter()
+                    .filter_map(|&k| {
+                        let val = form.field_value(k);
+                        // Strip "new:" prefix (local available class)
+                        if let Some(class) = val.strip_prefix("new:") {
+                            return Some(crate::task_queue::TaskKind::NewService {
+                                class:       class.to_string(),
+                                for_project: slug.clone(),
+                            });
+                        }
+                        // Strip "store:" prefix (store module — treat same as new for now)
+                        if let Some(class) = val.strip_prefix("store:") {
+                            return Some(crate::task_queue::TaskKind::NewService {
+                                class:       class.to_string(),
+                                for_project: slug.clone(),
+                            });
+                        }
+                        None
+                    })
+                    .collect()
+            };
+
             state.projects = crate::load_projects(root);
             if let Some(ref form) = state.current_form {
                 let slug = form.edit_id.clone()
@@ -163,10 +192,24 @@ pub fn submit_project(state: &mut AppState, root: &Path) -> Result<()> {
             }
             state.rebuild_services();
             state.rebuild_sidebar();
-            state.screen      = Screen::Dashboard;
-            state.dash_focus  = DashFocus::Sidebar;
+            state.dash_focus = DashFocus::Sidebar;
             state.current_form = None;
-            state.push_notif(NotifKind::Success, format!("Projekt '{}' gespeichert", name));
+
+            // Queue service tasks if any slot had "new:" or "store:" value
+            if !queued_tasks.is_empty() {
+                use crate::task_queue::{TaskQueue, WorkTask};
+                let mut tasks: Vec<WorkTask> = queued_tasks.into_iter()
+                    .map(WorkTask::new)
+                    .collect();
+                tasks[0].activate(state);
+                let queue = TaskQueue { tasks, active: 0 };
+                state.task_queue = Some(queue);
+                state.screen = Screen::TaskWizard;
+            } else {
+                state.screen = Screen::Dashboard;
+            }
+
+            state.push_notif(NotifKind::Success, format!("Project '{}' saved", name));
         }
         Some(Err(e)) => {
             if let Some(ref mut form) = state.current_form { form.error = Some(format!("{e}")); form.error_kind = FormErrorKind::IoError; }
@@ -178,7 +221,7 @@ pub fn submit_project(state: &mut AppState, root: &Path) -> Result<()> {
 
 pub fn submit_service(state: &mut AppState, root: &Path) -> Result<()> {
     let Some(proj) = state.projects.get(state.selected_project).cloned() else {
-        if let Some(ref mut f) = state.current_form { f.error = Some("Kein Projekt ausgewählt".into()); }
+        if let Some(ref mut f) = state.current_form { f.error = Some("No project selected".into()); }
         return Ok(());
     };
 
@@ -230,7 +273,7 @@ pub fn submit_service(state: &mut AppState, root: &Path) -> Result<()> {
             state.screen      = Screen::Dashboard;
             state.dash_focus  = DashFocus::Services;
             state.current_form = None;
-            state.push_notif(NotifKind::Success, format!("Service '{}' gespeichert", svc_name));
+            state.push_notif(NotifKind::Success, format!("Service '{}' saved", svc_name));
         }
         Some(Err(e)) => {
             if let Some(ref mut form) = state.current_form { form.error = Some(format!("{e}")); form.error_kind = FormErrorKind::IoError; }
@@ -242,7 +285,7 @@ pub fn submit_service(state: &mut AppState, root: &Path) -> Result<()> {
 
 pub fn submit_host(state: &mut AppState, root: &Path) -> Result<()> {
     let Some(proj) = state.projects.get(state.selected_project) else {
-        if let Some(ref mut f) = state.current_form { f.error = Some("Kein Projekt ausgewählt".into()); }
+        if let Some(ref mut f) = state.current_form { f.error = Some("No project selected".into()); }
         return Ok(());
     };
     let project_dir = root.join("projects").join(&proj.slug);
@@ -258,7 +301,7 @@ pub fn submit_host(state: &mut AppState, root: &Path) -> Result<()> {
             state.screen      = Screen::Dashboard;
             state.dash_focus  = DashFocus::Sidebar;
             state.current_form = None;
-            state.push_notif(NotifKind::Success, format!("Host '{}' gespeichert", name));
+            state.push_notif(NotifKind::Success, format!("Host '{}' saved", name));
         }
         Some(Err(e)) => {
             if let Some(ref mut form) = state.current_form { form.error = Some(format!("{e}")); form.error_kind = FormErrorKind::IoError; }
@@ -270,7 +313,7 @@ pub fn submit_host(state: &mut AppState, root: &Path) -> Result<()> {
 
 pub fn submit_bot(state: &mut AppState, root: &Path) -> Result<()> {
     let Some(proj) = state.projects.get(state.selected_project).cloned() else {
-        if let Some(ref mut f) = state.current_form { f.error = Some("Kein Projekt ausgewählt".into()); }
+        if let Some(ref mut f) = state.current_form { f.error = Some("No project selected".into()); }
         return Ok(());
     };
     let project_dir = root.join("projects").join(&proj.slug);
@@ -284,7 +327,7 @@ pub fn submit_bot(state: &mut AppState, root: &Path) -> Result<()> {
             state.screen      = Screen::Dashboard;
             state.dash_focus  = DashFocus::Services;
             state.current_form = None;
-            state.push_notif(NotifKind::Success, format!("Bot '{}' gespeichert", name));
+            state.push_notif(NotifKind::Success, format!("Bot '{}' saved", name));
         }
         Some(Err(e)) => {
             if let Some(ref mut form) = state.current_form { form.error = Some(format!("{e}")); form.error_kind = FormErrorKind::IoError; }
