@@ -79,6 +79,7 @@ impl SlotEntry {
     }
 
     /// An externally hosted service (no local deployment).
+    #[allow(dead_code)]
     pub fn external() -> Self {
         Self {
             display:      "External service".to_string(),
@@ -107,6 +108,8 @@ pub struct ServiceSlotNode {
     /// Filter options: first is always "all", followed by unique service_type strings.
     type_options:    Vec<String>,
     type_filter_idx: usize,
+    /// When a specific type is pre-set, hide the filter row.
+    show_filter:     bool,
 
     pub is_open:    bool,
     /// Whether keyboard focus is on the type-filter row (not the item list).
@@ -149,11 +152,14 @@ impl ServiceSlotNode {
             type_options.iter().position(|t| t == default_type).unwrap_or(0)
         };
 
+        let show_filter = default_type.is_empty();
+
         Self {
             key, label_key, hint_key: None, tab, required,
             value: String::new(),
             col_span: 12, min_width: 0,
             entries, type_options, type_filter_idx,
+            show_filter,
             is_open: false, on_filter_row: false, cursor: 0,
             rendered_rect: None, filter_row_rect: None, item_rects: Vec::new(),
         }
@@ -334,30 +340,35 @@ impl ServiceSlotNode {
             return;
         }
 
-        // Filter row — first line of inner area
-        let filter_rect = Rect { height: 1, ..inner };
-        self.filter_row_rect = Some(filter_rect);
+        // Filter row — only shown when no specific type is pre-set
+        let items_top = if self.show_filter {
+            let filter_rect = Rect { height: 1, ..inner };
+            self.filter_row_rect = Some(filter_rect);
 
-        let current_filter = &self.type_options[self.type_filter_idx];
-        let filter_style = if self.on_filter_row {
-            Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)
+            let current_filter = &self.type_options[self.type_filter_idx];
+            let filter_style = if self.on_filter_row {
+                Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            };
+            let filter_line = Line::from(vec![
+                Span::styled("  Filter: ", Style::default().fg(Color::DarkGray)),
+                Span::styled("◀ ", Style::default().fg(Color::Cyan)),
+                Span::styled(current_filter.clone(), filter_style),
+                Span::styled(" ▶", Style::default().fg(Color::Cyan)),
+            ]);
+            f.render_stateful_widget(
+                Paragraph::new(filter_line),
+                filter_rect,
+                &mut ParagraphState::new(),
+            );
+            inner.y + 1
         } else {
-            Style::default().fg(Color::White)
+            self.filter_row_rect = None;
+            inner.y
         };
-        let filter_line = Line::from(vec![
-            Span::styled("  Filter: ", Style::default().fg(Color::DarkGray)),
-            Span::styled("◀ ", Style::default().fg(Color::Cyan)),
-            Span::styled(current_filter.clone(), filter_style),
-            Span::styled(" ▶", Style::default().fg(Color::Cyan)),
-        ]);
-        f.render_stateful_widget(
-            Paragraph::new(filter_line),
-            filter_rect,
-            &mut ParagraphState::new(),
-        );
 
-        // Items area — below the filter row
-        let items_top = inner.y + 1;
+        // Items area — below the filter row (or at top when filter is hidden)
         if items_top >= inner.bottom() {
             return;
         }
@@ -377,7 +388,7 @@ impl ServiceSlotNode {
             let cat = entry.category;
             if last_category != Some(cat) && row_y < items_area.bottom() {
                 let sep_label = match cat {
-                    SlotCategory::Configured => " ── Configured ──",
+                    SlotCategory::Configured => " ── Services ──",
                     SlotCategory::Available  => " ── Available ──",
                     SlotCategory::Store      => " ── Store ──",
                 };
@@ -416,25 +427,34 @@ impl ServiceSlotNode {
                 Style::default().fg(Color::White)
             };
 
-            // Build item line: "  ◉ Display name                  type  icon"
-            let label_width = items_area.width.saturating_sub(16) as usize;
+            // Build item line: "  ◉ name  ·  type  ·  icon"
+            // Columns: name (left-aligned, truncated) · service_type (DarkGray) · icon (colored)
+            // Separator "  ·  " is DarkGray. If service_type is empty, skip the · type part.
+            let sep_style    = Style::default().fg(Color::DarkGray);
+            let type_style   = Style::default().fg(Color::DarkGray);
+            let icon_style   = Style::default().fg(cat_color);
+
+            // Reserve space: "  ◉ " (4) + "  ·  icon" (7) + optional "  ·  type" (5 + type.len())
+            let type_reserve = if entry.service_type.is_empty() { 0 } else { 5 + entry.service_type.len() };
+            let base_reserve = 4 + 7 + type_reserve;
+            let label_width  = (items_area.width as usize).saturating_sub(base_reserve).max(1);
             let display_truncated = if entry.display.len() > label_width {
                 format!("{:.width$}", entry.display, width = label_width)
             } else {
                 entry.display.clone()
             };
 
-            let type_tag = if entry.service_type.is_empty() {
-                String::new()
-            } else {
-                format!("{:8}", entry.service_type)
-            };
-
-            let line = Line::from(vec![
+            let mut spans = vec![
                 Span::styled(format!("  {}{}", marker, display_truncated), item_style),
-                Span::styled(type_tag, Style::default().fg(Color::DarkGray)),
-                Span::styled(format!("  {}", cat_icon), Style::default().fg(cat_color)),
-            ]);
+            ];
+            if !entry.service_type.is_empty() {
+                spans.push(Span::styled("  ·  ", sep_style));
+                spans.push(Span::styled(entry.service_type.clone(), type_style));
+            }
+            spans.push(Span::styled("  ·  ", sep_style));
+            spans.push(Span::styled(cat_icon, icon_style));
+
+            let line = Line::from(spans);
             f.render_stateful_widget(
                 Paragraph::new(line),
                 item_rect,

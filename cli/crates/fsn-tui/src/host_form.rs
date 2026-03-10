@@ -182,6 +182,11 @@ pub fn submit_host_form(form: &ResourceForm, project_dir: &Path) -> Result<()> {
     let slug = crate::app::slugify(&name);
     let path = project_dir.join(format!("{}.host.toml", slug));
 
+    // Reject duplicate names — host names must be unique.
+    if path.exists() && form.edit_id.is_none() {
+        anyhow::bail!("A host named '{}' already exists", slug);
+    }
+
     let mut content = format!(
         "[host]\nname        = \"{name}\"\naddress     = \"{address}\"\n"
     );

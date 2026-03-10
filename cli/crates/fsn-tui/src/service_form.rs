@@ -158,6 +158,11 @@ pub fn submit_service_form(form: &ResourceForm, services_dir: &Path, project_slu
     let version_val = if version.is_empty() { "latest".to_string() } else { version };
     let path        = services_dir.join(format!("{}.service.toml", slug));
 
+    // Reject duplicate names — service names must be unique within a project.
+    if path.exists() && form.edit_id.is_none() {
+        anyhow::bail!("A service named '{}' already exists in this project", slug);
+    }
+
     let mut content = format!(
         "[service]\nname          = \"{name}\"\nservice_class = \"{class}\"\nproject       = \"{project_slug}\"\nversion       = \"{version_val}\"\n"
     );

@@ -297,7 +297,9 @@ pub fn submit_project_form(form: &ResourceForm, root: &Path) -> Result<()> {
     std::fs::create_dir_all(&project_dir)?;
 
     let toml_path = project_dir.join(format!("{}.project.toml", slug));
-    if !is_edit && toml_path.exists() { return Ok(()); }
+    if !is_edit && toml_path.exists() {
+        anyhow::bail!("A project named '{}' already exists", slug);
+    }
 
     let name       = form.field_value("name");
     let domain     = form.field_value("domain");

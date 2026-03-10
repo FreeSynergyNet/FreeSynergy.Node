@@ -93,7 +93,15 @@ fn handle_dashboard_shared(key: KeyEvent, state: &mut AppState) -> bool {
         }
         KeyCode::Char('L') => { state.lang = state.lang.toggle(); true }
         KeyCode::Char('n') => {
-            state.push_overlay(OverlayLayer::NewResource { selected: 0 });
+            // Show "New Resource" selection menu
+            state.push_overlay(crate::app::OverlayLayer::ContextMenu {
+                x: 10, y: 5,
+                items: vec![
+                    crate::app::ContextAction::AddService,
+                    crate::app::ContextAction::AddHost,
+                ],
+                selected: 0,
+            });
             true
         }
         _ => false,
@@ -351,6 +359,24 @@ pub(crate) fn activate_sidebar_item(item: SidebarItem, state: &mut AppState, roo
             state.current_form = Some(crate::service_form::new_service_form());
             state.screen = Screen::NewProject;
         }
+        // Project items: check for missing required resources and queue setup forms.
+        SidebarItem::Project { .. } => {
+            if state.task_queue.is_none() {
+                let tasks = collect_missing_tasks(state);
+                if !tasks.is_empty() {
+                    use crate::task_queue::{TaskQueue, WorkTask};
+                    let mut task_list: Vec<WorkTask> = tasks.into_iter()
+                        .map(|k| WorkTask::new(k))
+                        .collect();
+                    task_list[0].activate(state);
+                    state.task_queue = Some(TaskQueue { tasks: task_list, active: 0 });
+                    state.screen = crate::app::Screen::TaskWizard;
+                    return;
+                }
+            }
+            // No missing resources — open edit form
+            open_edit_form_for_item(&item, state);
+        }
         // Resource items: open their edit form (same behavior as 'e' key).
         other => open_edit_form_for_item(&other, state),
     }
@@ -526,4 +552,29 @@ fn current_project_slug(state: &AppState) -> &str {
     state.projects.get(state.selected_project)
         .map(|p| p.slug.as_str())
         .unwrap_or("")
+}
+
+/// Check the current project's required resources and return TaskKind entries
+/// for any that are not yet configured.
+fn collect_missing_tasks(state: &AppState) -> Vec<crate::task_queue::TaskKind> {
+    use crate::task_queue::{DependencyKind, TaskKind};
+    let proj = match state.projects.get(state.selected_project) {
+        Some(p) => p,
+        None    => return vec![],
+    };
+    let slug = proj.slug.clone();
+
+    let mut tasks = Vec::new();
+
+    // No host configured → queue NewHost
+    if state.hosts.is_empty() {
+        tasks.push(TaskKind::NewHost { for_project: slug.clone() });
+    }
+
+    // No proxy service → queue NewProxy
+    if !TaskKind::dep_fulfilled(DependencyKind::Proxy, state) {
+        tasks.push(TaskKind::NewProxy { for_host: String::new() });
+    }
+
+    tasks
 }

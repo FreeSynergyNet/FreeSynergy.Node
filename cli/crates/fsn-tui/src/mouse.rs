@@ -306,6 +306,8 @@ fn context_items_for(item: &SidebarItem) -> Vec<ContextAction> {
     match item {
         SidebarItem::Project { .. } => vec![
             ContextAction::Edit,
+            ContextAction::AddService,
+            ContextAction::AddHost,
             ContextAction::Deploy,
             ContextAction::Delete,
         ],
@@ -399,6 +401,17 @@ pub fn execute_context_action(state: &mut AppState, root: &Path, action: Context
                     service_name: name, lines, scroll: 0,
                 }));
             }
+        }
+        ContextAction::AddService => {
+            state.current_form = Some(crate::service_form::new_service_form());
+            state.screen = crate::app::Screen::NewProject;
+        }
+        ContextAction::AddHost => {
+            let slugs   = state.projects.iter().map(|p| p.slug.clone()).collect::<Vec<_>>();
+            let current = state.projects.get(state.selected_project)
+                .map(|p| p.slug.as_str()).unwrap_or("").to_string();
+            state.current_form = Some(crate::host_form::new_host_form(slugs, &current));
+            state.screen = crate::app::Screen::NewProject;
         }
     }
     Ok(())

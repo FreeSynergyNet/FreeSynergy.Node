@@ -189,18 +189,20 @@ pub enum ConfirmAction {
 // events.rs executes the selected action. i18n keys follow "ctx.*" prefix.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ContextAction { Edit, Delete, Deploy, Start, Stop, Logs }
+pub enum ContextAction { Edit, Delete, Deploy, Start, Stop, Logs, AddService, AddHost }
 
 impl ContextAction {
     /// i18n key for this action's label.
     pub fn label_key(self) -> &'static str {
         match self {
-            ContextAction::Edit   => "ctx.edit",
-            ContextAction::Delete => "ctx.delete",
-            ContextAction::Deploy => "ctx.deploy",
-            ContextAction::Start  => "ctx.start",
-            ContextAction::Stop   => "ctx.stop",
-            ContextAction::Logs   => "ctx.logs",
+            ContextAction::Edit       => "ctx.edit",
+            ContextAction::Delete     => "ctx.delete",
+            ContextAction::Deploy     => "ctx.deploy",
+            ContextAction::Start      => "ctx.start",
+            ContextAction::Stop       => "ctx.stop",
+            ContextAction::Logs       => "ctx.logs",
+            ContextAction::AddService => "ctx.add_service",
+            ContextAction::AddHost    => "ctx.add_host",
         }
     }
 
