@@ -20,8 +20,9 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders},
 };
+use rat_widget::paragraph::{Paragraph, ParagraphState};
 use rat_widget::textarea::{TextArea, TextAreaState, handle_events};
 use rat_widget::event::TextOutcome;
 use rat_widget::text::HasScreenCursor;
@@ -154,12 +155,13 @@ impl FormNode for TextAreaNode {
         } else {
             crate::i18n::t(lang, "form.textarea.hint")
         };
-        f.render_widget(
+        f.render_stateful_widget(
             Paragraph::new(Line::from(Span::styled(
                 hint_text,
                 Style::default().fg(Color::DarkGray),
             ))),
             rows[1],
+            &mut ParagraphState::new(),
         );
     }
 

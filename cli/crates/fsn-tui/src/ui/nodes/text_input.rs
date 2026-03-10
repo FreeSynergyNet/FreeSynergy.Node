@@ -18,8 +18,9 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders},
 };
+use rat_widget::paragraph::{Paragraph, ParagraphState};
 use rat_widget::text_input::{TextInput, TextInputState, handle_events};
 use rat_widget::event::TextOutcome;
 use rat_widget::text::HasScreenCursor;
@@ -158,12 +159,13 @@ impl FormNode for TextInputNode {
 
         // Hint line
         if let Some(hk) = self.hint_key {
-            f.render_widget(
+            f.render_stateful_widget(
                 Paragraph::new(Line::from(Span::styled(
                     crate::i18n::t(lang, hk),
                     Style::default().fg(Color::DarkGray),
                 ))),
                 rows[1],
+                &mut ParagraphState::new(),
             );
         }
     }
