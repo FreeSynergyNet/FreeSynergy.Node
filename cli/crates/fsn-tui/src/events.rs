@@ -1,7 +1,7 @@
 // Keyboard event handling — screen router.
 //
 // Design Pattern: Chain of Responsibility — key events bubble through:
-//   1. Global shortcuts (Ctrl+C, F1, Esc-for-help) — always active
+//   1. Global shortcuts (Ctrl+C, F1, Esc-for-help, L-lang-toggle) — always active
 //   2. Topmost overlay — captures all input while open
 //   3. Active screen handler — delegates to screen-specific module
 //
@@ -39,6 +39,20 @@ pub fn handle(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()> {
     // Help sidebar Esc has priority over screen-specific Esc.
     if key.code == KeyCode::Esc && state.help_visible {
         state.help_visible = false;
+        return Ok(());
+    }
+
+    // Global language toggle — Single Source of Truth for 'L' on non-form screens.
+    //
+    // Only uppercase L (Shift+L) is global: lowercase 'l' conflicts with
+    // per-screen shortcuts (e.g. 'l' = logs in the services panel).
+    // Forms and TaskWizard handle L per-node via FormAction::LangToggle.
+    // Sidebar filter must receive all characters — skip while filter is active.
+    if key.code == KeyCode::Char('L')
+        && state.current_form.is_none()
+        && state.sidebar_filter.is_none()
+    {
+        state.lang = state.lang.toggle();
         return Ok(());
     }
 
@@ -124,7 +138,8 @@ fn handle_overlay(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()
 fn handle_welcome(key: KeyEvent, state: &mut AppState) -> Result<()> {
     match key.code {
         KeyCode::Char('q') => state.should_quit = true,
-        KeyCode::Char('l') | KeyCode::Char('L') => state.lang = state.lang.toggle(),
+        // 'l' (lowercase) — uppercase 'L' is handled globally in handle().
+        KeyCode::Char('l') => state.lang = state.lang.toggle(),
         // Toggle between the two buttons (New Project / Open Project).
         KeyCode::Left | KeyCode::Right => state.welcome_focus = 1 - state.welcome_focus,
         KeyCode::Enter => {
@@ -206,7 +221,8 @@ fn handle_wizard(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()>
         FormAction::Unhandled  => {
             match key.code {
                 KeyCode::Esc => confirm_leave_wizard(state),
-                KeyCode::Char('l') | KeyCode::Char('L') => state.lang = state.lang.toggle(),
+                // 'l' (lowercase) for non-text nodes — 'L' is handled globally.
+                KeyCode::Char('l') => state.lang = state.lang.toggle(),
                 _ => {}
             }
         }

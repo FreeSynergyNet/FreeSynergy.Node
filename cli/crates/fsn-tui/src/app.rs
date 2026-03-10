@@ -90,6 +90,48 @@ impl SidebarItem {
             _                           => "dash.hint",
         }
     }
+
+    /// Context menu actions available for this item type.
+    ///
+    /// Single source of truth — to add/remove actions per type: edit only here.
+    /// Called by mouse.rs right-click handler; no duplicate lists anywhere else.
+    pub fn context_actions(&self) -> Vec<ContextAction> {
+        match self {
+            SidebarItem::Project { .. } => vec![
+                ContextAction::Edit,
+                ContextAction::AddService,
+                ContextAction::AddHost,
+                ContextAction::Deploy,
+                ContextAction::Delete,
+            ],
+            SidebarItem::Host { .. } => vec![
+                ContextAction::Edit,
+                ContextAction::Deploy,
+                ContextAction::Delete,
+            ],
+            SidebarItem::Service { status, .. } => {
+                let start_stop = if *status == RunState::Running { ContextAction::Stop } else { ContextAction::Start };
+                vec![start_stop, ContextAction::Logs, ContextAction::Edit, ContextAction::Delete]
+            }
+            _ => vec![],
+        }
+    }
+
+    /// Confirm-overlay parameters for deleting this item, if applicable.
+    ///
+    /// Returns `(message_key, optional_data, yes_action)`.
+    /// Used by `execute_context_action` — add new resource types here only.
+    pub fn delete_confirm(&self) -> Option<(String, Option<String>, ConfirmAction)> {
+        match self {
+            SidebarItem::Project { .. } =>
+                Some(("confirm.delete.project".into(), None, ConfirmAction::DeleteProject)),
+            SidebarItem::Host { slug, .. } =>
+                Some(("confirm.delete.host".into(), Some(slug.clone()), ConfirmAction::DeleteHost)),
+            SidebarItem::Service { name, .. } =>
+                Some(("confirm.delete.service".into(), Some(name.clone()), ConfirmAction::DeleteService)),
+            _ => None,
+        }
+    }
 }
 
 // ── Language ──────────────────────────────────────────────────────────────────
@@ -155,7 +197,8 @@ pub enum OverlayLayer {
     Deploy(DeployState),
     NewResource { selected: usize },
     /// Right-click context menu — rendered at (x, y), navigated with ↑↓/Enter/Esc.
-    ContextMenu { x: u16, y: u16, items: Vec<ContextAction>, selected: usize },
+    /// `source` carries the item that was right-clicked; `None` for generic menus (e.g. 'n').
+    ContextMenu { x: u16, y: u16, items: Vec<ContextAction>, selected: usize, source: Option<ActionSource> },
 }
 
 impl OverlayLayer {
@@ -180,6 +223,18 @@ pub enum ConfirmAction {
     LeaveForm,
     LeaveWizard,
     Quit,
+}
+
+/// Who triggered a context menu — carried inside `OverlayLayer::ContextMenu`.
+///
+/// Design Pattern: Single Source of Truth for context dispatch.
+/// Storing the source at click-time means `execute_context_action` never has
+/// to infer the item from the current sidebar/focus state.
+/// Rule: add variants here if a new clickable area gets its own context menu.
+#[derive(Debug, Clone)]
+pub enum ActionSource {
+    /// A sidebar item was right-clicked.
+    Sidebar(SidebarItem),
 }
 
 // ── Context menu actions — right-click menu ───────────────────────────────────

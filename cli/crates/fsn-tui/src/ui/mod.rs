@@ -305,7 +305,7 @@ fn render_context_menu(f: &mut RenderCtx<'_>, state: &AppState) {
     use crate::app::OverlayLayer;
 
     let (cx, cy, items, selected) = match state.top_overlay() {
-        Some(OverlayLayer::ContextMenu { x, y, items, selected }) => (*x, *y, items, *selected),
+        Some(OverlayLayer::ContextMenu { x, y, items, selected, .. }) => (*x, *y, items, *selected),
         _ => return,
     };
 

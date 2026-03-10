@@ -19,7 +19,7 @@ use anyhow::Result;
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 
 use crate::app::{
-    AppState, ConfirmAction, ContextAction, DashFocus, LogsState, NotifKind,
+    ActionSource, AppState, ConfirmAction, ContextAction, DashFocus, LogsState, NotifKind,
     OverlayLayer, RunState, SidebarItem,
 };
 use crate::click_map::ClickTarget;
@@ -200,31 +200,51 @@ fn handle_left_click(col: u16, row: u16, state: &mut AppState, root: &Path) -> R
 // ── Right click → context menu ────────────────────────────────────────────────
 
 fn handle_right_click(col: u16, row: u16, state: &mut AppState) {
-    // Try sidebar item first
+    // Try sidebar item first.
     if let Some(item_idx) = sidebar_hit(col, row, state) {
-        if let Some(item) = state.sidebar_items.get(item_idx) {
-            let items = context_items_for(item);
+        if let Some(item) = state.sidebar_items.get(item_idx).cloned() {
+            let items = item.context_actions();
             if !items.is_empty() {
                 state.sidebar_cursor = item_idx;
                 state.dash_focus = DashFocus::Sidebar;
                 state.push_overlay(OverlayLayer::ContextMenu {
                     x: col, y: row, items, selected: 0,
+                    source: Some(ActionSource::Sidebar(item)),
                 });
             }
         }
         return;
     }
 
-    // Try services table
+    // Try services table.
+    // Find the matching SidebarItem::Service so we can reuse item.context_actions()
+    // and item.delete_confirm() — Single Source of Truth, no duplicate action lists.
     if let Some(svc_idx) = services_hit(col, row, state) {
         if svc_idx < state.services.len() {
-            let status = state.services[svc_idx].status;
+            let svc_name = state.services[svc_idx].name.clone();
             state.selected = svc_idx;
             state.dash_focus = DashFocus::Services;
-            let items = context_items_for_service(status);
-            state.push_overlay(OverlayLayer::ContextMenu {
-                x: col, y: row, items, selected: 0,
-            });
+
+            // Locate the matching sidebar item (always present for current project's services).
+            let sidebar_item = state.sidebar_items.iter()
+                .find(|i| matches!(i, SidebarItem::Service { name, .. } if name == &svc_name))
+                .cloned();
+
+            let items = sidebar_item.as_ref()
+                .map(|i| i.context_actions())
+                .unwrap_or_else(|| {
+                    // Fallback (should never happen): build actions from raw status.
+                    let ss = if state.services[svc_idx].status == RunState::Running {
+                        ContextAction::Stop } else { ContextAction::Start };
+                    vec![ss, ContextAction::Logs, ContextAction::Edit, ContextAction::Delete]
+                });
+
+            if !items.is_empty() {
+                state.push_overlay(OverlayLayer::ContextMenu {
+                    x: col, y: row, items, selected: 0,
+                    source: sidebar_item.map(ActionSource::Sidebar),
+                });
+            }
         }
     }
 }
@@ -268,8 +288,10 @@ pub fn handle_context_menu_key(
 ) -> Result<()> {
     use crossterm::event::KeyCode;
 
-    let (items, selected) = match state.top_overlay() {
-        Some(OverlayLayer::ContextMenu { items, selected, .. }) => (items.clone(), *selected),
+    let (items, selected, source) = match state.top_overlay() {
+        Some(OverlayLayer::ContextMenu { items, selected, source, .. }) => {
+            (items.clone(), *selected, source.clone())
+        }
         _ => return Ok(()),
     };
 
@@ -287,7 +309,7 @@ pub fn handle_context_menu_key(
         KeyCode::Enter => {
             state.pop_overlay();
             if let Some(&action) = items.get(selected) {
-                execute_context_action(state, root, action)?;
+                execute_context_action(state, root, action, &source)?;
             }
         }
         KeyCode::Esc | KeyCode::Char('q') => {
@@ -298,70 +320,44 @@ pub fn handle_context_menu_key(
     Ok(())
 }
 
-// ── Context menu item lists — change here to adjust menus per item type ───────
+// ── Context action execution ──────────────────────────────────────────────────
+//
+// Single dispatch point — edit only here to change what each action does.
+//
+// `source` carries the item that was right-clicked (set at click-time in
+// handle_right_click).  Using source instead of current_sidebar_item() ensures
+// that Edit/Delete work correctly even when the click was in the services table
+// and the sidebar cursor points to a different item.
 
-/// Actions available when right-clicking a sidebar item.
-/// To add/remove actions per type: edit only this function.
-fn context_items_for(item: &SidebarItem) -> Vec<ContextAction> {
-    match item {
-        SidebarItem::Project { .. } => vec![
-            ContextAction::Edit,
-            ContextAction::AddService,
-            ContextAction::AddHost,
-            ContextAction::Deploy,
-            ContextAction::Delete,
-        ],
-        SidebarItem::Host { .. } => vec![
-            ContextAction::Edit,
-            ContextAction::Deploy,
-            ContextAction::Delete,
-        ],
-        SidebarItem::Service { status, .. } => context_items_for_service(*status),
-        _ => vec![],
-    }
-}
-
-/// Actions for a service row based on its current RunState.
-fn context_items_for_service(status: RunState) -> Vec<ContextAction> {
-    let start_stop = if status == RunState::Running {
-        ContextAction::Stop
-    } else {
-        ContextAction::Start
+/// Execute a context menu action.
+///
+/// `source`: the item that triggered the menu — `None` for generic menus (e.g. 'n' key).
+/// Add new actions here; add new item types to `SidebarItem::context_actions()` in app.rs.
+pub fn execute_context_action(
+    state: &mut AppState,
+    root:  &Path,
+    action: ContextAction,
+    source: &Option<ActionSource>,
+) -> Result<()> {
+    // Helper: resolve the source item, falling back to sidebar cursor if no source stored.
+    let source_item = |state: &AppState| -> Option<SidebarItem> {
+        match source {
+            Some(ActionSource::Sidebar(item)) => Some(item.clone()),
+            None => state.current_sidebar_item().cloned(),
+        }
     };
-    vec![start_stop, ContextAction::Logs, ContextAction::Edit, ContextAction::Delete]
-}
 
-// ── Context action execution — change here to adjust what each action does ────
-
-/// Execute a context menu action. Single dispatch point — edit only here.
-pub fn execute_context_action(state: &mut AppState, root: &Path, action: ContextAction) -> Result<()> {
     match action {
         ContextAction::Edit => {
-            if let Some(item) = state.current_sidebar_item().cloned() {
-                crate::events_dashboard::open_edit_form_for_item_pub(&item, state);
+            if let Some(item) = source_item(state) {
+                item.open_edit_form(state);
             }
         }
         ContextAction::Delete => {
-            match state.current_sidebar_item().cloned() {
-                Some(SidebarItem::Project { .. }) => {
-                    state.push_overlay(OverlayLayer::Confirm {
-                        message: "confirm.delete.project".into(), data: None,
-                        yes_action: ConfirmAction::DeleteProject,
-                    });
+            if let Some(item) = source_item(state) {
+                if let Some((message, data, yes_action)) = item.delete_confirm() {
+                    state.push_overlay(OverlayLayer::Confirm { message, data, yes_action });
                 }
-                Some(SidebarItem::Host { slug, .. }) => {
-                    state.push_overlay(OverlayLayer::Confirm {
-                        message: "confirm.delete.host".into(), data: Some(slug),
-                        yes_action: ConfirmAction::DeleteHost,
-                    });
-                }
-                Some(SidebarItem::Service { name, .. }) => {
-                    state.push_overlay(OverlayLayer::Confirm {
-                        message: "confirm.delete.service".into(), data: Some(name),
-                        yes_action: ConfirmAction::DeleteService,
-                    });
-                }
-                _ => {}
             }
         }
         ContextAction::Deploy => {
@@ -371,8 +367,7 @@ pub fn execute_context_action(state: &mut AppState, root: &Path, action: Context
             }
         }
         ContextAction::Start => {
-            // Works for both sidebar service and services-table selection
-            let name = service_name_at_cursor(state);
+            let name = service_name_from_source(source, state);
             if let Some(name) = name {
                 let _ = std::process::Command::new("systemctl")
                     .args(["--user", "start", &format!("{}.service", name)])
@@ -384,7 +379,7 @@ pub fn execute_context_action(state: &mut AppState, root: &Path, action: Context
             }
         }
         ContextAction::Stop => {
-            let name = service_name_at_cursor(state);
+            let name = service_name_from_source(source, state);
             if let Some(name) = name {
                 state.push_overlay(OverlayLayer::Confirm {
                     message:    "confirm.stop.service".into(),
@@ -394,7 +389,7 @@ pub fn execute_context_action(state: &mut AppState, root: &Path, action: Context
             }
         }
         ContextAction::Logs => {
-            let name = service_name_at_cursor(state);
+            let name = service_name_from_source(source, state);
             if let Some(name) = name {
                 let lines = fetch_logs(&name);
                 state.push_overlay(OverlayLayer::Logs(LogsState {
@@ -453,10 +448,19 @@ fn is_double_click(col: u16, row: u16, state: &AppState) -> bool {
         .unwrap_or(false)
 }
 
-fn service_name_at_cursor(state: &AppState) -> Option<String> {
-    // Prefer sidebar service item, fall back to services table selection
-    match state.current_sidebar_item() {
-        Some(SidebarItem::Service { name, .. }) => Some(name.clone()),
-        _ => state.services.get(state.selected).map(|s| s.name.clone()),
+/// Resolve the service name from the action source, falling back to focus state.
+///
+/// Source is preferred — it was captured at click-time and reflects the actual
+/// item the user interacted with (sidebar or services table).
+fn service_name_from_source(source: &Option<ActionSource>, state: &AppState) -> Option<String> {
+    match source {
+        Some(ActionSource::Sidebar(SidebarItem::Service { name, .. })) => Some(name.clone()),
+        _ => {
+            // Fallback: sidebar cursor or services table selection.
+            match state.current_sidebar_item() {
+                Some(SidebarItem::Service { name, .. }) => Some(name.clone()),
+                _ => state.services.get(state.selected).map(|s| s.name.clone()),
+            }
+        }
     }
 }

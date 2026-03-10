@@ -82,7 +82,8 @@ fn adjust_cursor_to_filter(state: &mut AppState) {
 /// Handle keys that are identical in both sidebar and services focus.
 /// Returns `true` if the key was consumed so the caller can return early.
 ///
-/// Shared keys:  q/Esc → quit confirm  |  L → lang toggle  |  n → new-resource popup
+/// Shared keys:  q/Esc → quit confirm  |  n → new-resource popup
+/// Note: 'L' lang-toggle is handled globally in events.rs before screen dispatch.
 fn handle_dashboard_shared(key: KeyEvent, state: &mut AppState) -> bool {
     match key.code {
         KeyCode::Char('q') | KeyCode::Esc => {
@@ -91,9 +92,9 @@ fn handle_dashboard_shared(key: KeyEvent, state: &mut AppState) -> bool {
             });
             true
         }
-        KeyCode::Char('L') => { state.lang = state.lang.toggle(); true }
         KeyCode::Char('n') => {
-            // Show "New Resource" selection menu
+            // Show "New Resource" selection menu.
+            // source = None: this is a generic creation menu, not an item right-click.
             state.push_overlay(crate::app::OverlayLayer::ContextMenu {
                 x: 10, y: 5,
                 items: vec![
@@ -101,6 +102,7 @@ fn handle_dashboard_shared(key: KeyEvent, state: &mut AppState) -> bool {
                     crate::app::ContextAction::AddHost,
                 ],
                 selected: 0,
+                source:   None,
             });
             true
         }
@@ -149,7 +151,7 @@ fn handle_dashboard_sidebar(key: KeyEvent, state: &mut AppState, root: &Path) ->
         // 'e' = explicit edit (same as Enter on a resource item, but not on Action items).
         KeyCode::Char('e') => {
             if let Some(item) = state.current_sidebar_item().cloned() {
-                open_edit_form_for_item(&item, state);
+                item.open_edit_form(state);
             }
         }
         // Enter = "activate": opens create form for Action items, edit form for resources.
@@ -296,42 +298,48 @@ fn handle_dashboard_services(key: KeyEvent, state: &mut AppState, root: &Path) -
     Ok(())
 }
 
-// ── Sidebar action helpers ────────────────────────────────────────────────────
+// ── SidebarItem::open_edit_form — OOP method, second impl block ───────────────
+//
+// Design Pattern: OOP — behaviour lives on the type, not in standalone functions.
+//
+// This impl block extends SidebarItem (defined in app.rs) with form-opening
+// logic that requires access to form builder functions (project_form, host_form,
+// service_form).  Placing it here avoids circular deps: app.rs does not import
+// form builders, but events_dashboard.rs does.
 
-/// Open the edit form for an existing resource (Project, Host, or Service).
-/// Does nothing for Section and Action items — they have no edit form.
-/// `pub(crate)` so mouse.rs can call it without duplicating the logic.
-pub(crate) fn open_edit_form_for_item_pub(item: &SidebarItem, state: &mut AppState) {
-    open_edit_form_for_item(item, state);
-}
-
-fn open_edit_form_for_item(item: &SidebarItem, state: &mut AppState) {
-    match item {
-        SidebarItem::Project { slug, .. } => {
-            if let Some(proj) = state.projects.iter().find(|p| p.slug == *slug).cloned() {
-                let svcs    = state.svc_handles.clone();
-                let entries = state.store_entries.clone();
-                state.current_form = Some(crate::project_form::edit_project_form(&proj, &svcs, &entries));
-                state.screen = Screen::NewProject;
-            }
-        }
-        SidebarItem::Host { slug, .. } => {
-            if let Some(host) = state.hosts.iter().find(|h| h.slug == *slug).cloned() {
-                let slugs = project_slugs(state);
-                state.current_form = Some(crate::host_form::edit_host_form(&host, slugs));
-                state.screen = Screen::NewProject;
-            }
-        }
-        SidebarItem::Service { name, .. } => {
-            if let Some(proj) = state.projects.get(state.selected_project).cloned() {
-                if let Some(entry) = proj.config.load.services.get(name).cloned() {
-                    let slug = crate::resource_form::slugify(name);
-                    state.current_form = Some(crate::service_form::edit_service_form(name, &entry, slug));
+impl SidebarItem {
+    /// Open the edit form for this resource item.
+    ///
+    /// Noop for `Section` and `Action` variants — they have no edit form.
+    /// Called by `execute_context_action` (mouse.rs) and keyboard 'e' / Enter.
+    pub(crate) fn open_edit_form(&self, state: &mut AppState) {
+        match self {
+            SidebarItem::Project { slug, .. } => {
+                if let Some(proj) = state.projects.iter().find(|p| p.slug == *slug).cloned() {
+                    let svcs    = state.svc_handles.clone();
+                    let entries = state.store_entries.clone();
+                    state.current_form = Some(crate::project_form::edit_project_form(&proj, &svcs, &entries));
                     state.screen = Screen::NewProject;
                 }
             }
+            SidebarItem::Host { slug, .. } => {
+                if let Some(host) = state.hosts.iter().find(|h| h.slug == *slug).cloned() {
+                    let slugs = project_slugs(state);
+                    state.current_form = Some(crate::host_form::edit_host_form(&host, slugs));
+                    state.screen = Screen::NewProject;
+                }
+            }
+            SidebarItem::Service { name, .. } => {
+                if let Some(proj) = state.projects.get(state.selected_project).cloned() {
+                    if let Some(entry) = proj.config.load.services.get(name).cloned() {
+                        let slug = crate::resource_form::slugify(name);
+                        state.current_form = Some(crate::service_form::edit_service_form(name, &entry, slug));
+                        state.screen = Screen::NewProject;
+                    }
+                }
+            }
+            _ => {}
         }
-        _ => {}
     }
 }
 
@@ -374,11 +382,11 @@ pub(crate) fn activate_sidebar_item(item: SidebarItem, state: &mut AppState, roo
                     return;
                 }
             }
-            // No missing resources — open edit form
-            open_edit_form_for_item(&item, state);
+            // No missing resources — open edit form.
+            item.open_edit_form(state);
         }
         // Resource items: open their edit form (same behavior as 'e' key).
-        other => open_edit_form_for_item(&other, state),
+        other => other.open_edit_form(state),
     }
     let _ = root;
 }
