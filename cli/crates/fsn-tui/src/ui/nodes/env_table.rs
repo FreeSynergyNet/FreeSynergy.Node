@@ -80,6 +80,10 @@ impl EnvTableNode {
         self
     }
 
+    // col/min_w accepted but ignored — EnvTable always fills full width.
+    pub fn col(self, _n: u8)    -> Self { self }
+    pub fn min_w(self, _n: u16) -> Self { self }
+
     // ── Internal helpers ───────────────────────────────────────────────────
 
     fn rebuild_cache(&mut self) {

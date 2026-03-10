@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use fsn_form::{FieldMeta, FormSchema, WidgetType};
 
 use crate::ui::form_node::FormNode;
-use crate::ui::nodes::{EnvTableNode, SelectInputNode, TextAreaNode, TextInputNode};
+use crate::ui::nodes::{EnvTableNode, MultiSelectInputNode, SectionNode, SelectInputNode, TextAreaNode, TextInputNode};
 
 /// Build form nodes from a static schema.
 ///
@@ -47,36 +47,53 @@ fn build_node(
     let dyn_val: Option<&str> = dynamics.iter().find(|(k, _)| *k == field.key).map(|(_, v)| v.as_str());
 
     match field.widget {
-        WidgetType::Select | WidgetType::MultiSelect => {
-            let display_fn = display_fns.iter().find(|(k, _)| *k == field.key).map(|(_, f)| *f);
+        WidgetType::Section => {
+            // Separator node — no value, never focused.
+            Box::new(SectionNode::new(field.key, field.label_key, field.tab))
+        }
 
-            // Resolve options: dynamic_options > schema options
+        WidgetType::MultiSelect => {
+            let display_fn = display_fns.iter().find(|(k, _)| *k == field.key).map(|(_, f)| *f);
             let options: Vec<String> = dynamic_options
                 .iter()
                 .find(|(k, _)| *k == field.key)
                 .map(|(_, v)| v.clone())
                 .unwrap_or_else(|| field.options.iter().map(|&s| s.to_string()).collect());
-
-            let mut node = SelectInputNode::new(
-                field.key,
-                field.label_key,
-                field.tab,
-                field.required,
-                options,
+            let mut node = MultiSelectInputNode::new(
+                field.key, field.label_key, field.tab, field.required, options,
             );
             if let Some(f) = display_fn { node = node.display(f); }
             if let Some(h) = field.hint_key { node = node.hint(h); }
-
-            // Priority: prefill > dynamic > schema default
             if let Some(v) = pre_val.or(dyn_val).or(field.default_val) {
                 node = node.default_val(v);
             }
+            node = node.col(field.col).min_w(field.min_w);
+            Box::new(node)
+        }
+
+        WidgetType::Select => {
+            let display_fn = display_fns.iter().find(|(k, _)| *k == field.key).map(|(_, f)| *f);
+            let options: Vec<String> = dynamic_options
+                .iter()
+                .find(|(k, _)| *k == field.key)
+                .map(|(_, v)| v.clone())
+                .unwrap_or_else(|| field.options.iter().map(|&s| s.to_string()).collect());
+            let mut node = SelectInputNode::new(
+                field.key, field.label_key, field.tab, field.required, options,
+            );
+            if let Some(f) = display_fn { node = node.display(f); }
+            if let Some(h) = field.hint_key { node = node.hint(h); }
+            if let Some(v) = pre_val.or(dyn_val).or(field.default_val) {
+                node = node.default_val(v);
+            }
+            node = node.col(field.col).min_w(field.min_w);
             Box::new(node)
         }
 
         WidgetType::Password => {
             let mut node = TextInputNode::new(field.key, field.label_key, field.tab, field.required)
-                .secret();
+                .secret()
+                .col(field.col).min_w(field.min_w);
             if let Some(h) = field.hint_key { node = node.hint(h); }
             if let Some(n) = field.max_len  { node = node.max_len(n); }
             node = apply_text_value(node, pre_val, dyn_val, field.default_val);
@@ -87,7 +104,6 @@ fn build_node(
             let mut node = TextAreaNode::new(field.key, field.label_key, field.tab, field.required);
             if let Some(h) = field.hint_key { node = node.hint(h); }
             if let Some(r) = field.rows     { node = node.rows(r); }
-            // Priority: prefill > dynamic > schema default
             if let Some(v) = pre_val { node = node.pre_filled(v); }
             else if let Some(v) = dyn_val.or(field.default_val) { node = node.default_val(v); }
             Box::new(node)
@@ -101,9 +117,11 @@ fn build_node(
             Box::new(node)
         }
 
-        // Text, Email, IpAddress, Number, Toggle — TextInputNode for now.
+        // Text, Email, IpAddress, Number, Toggle, DirPicker — TextInputNode.
+        // DirPicker renders identically for now; future: F2 opens dir browser popup.
         _ => {
-            let mut node = TextInputNode::new(field.key, field.label_key, field.tab, field.required);
+            let mut node = TextInputNode::new(field.key, field.label_key, field.tab, field.required)
+                .col(field.col).min_w(field.min_w);
             if let Some(h) = field.hint_key { node = node.hint(h); }
             if let Some(n) = field.max_len  { node = node.max_len(n); }
             node = apply_text_value(node, pre_val, dyn_val, field.default_val);

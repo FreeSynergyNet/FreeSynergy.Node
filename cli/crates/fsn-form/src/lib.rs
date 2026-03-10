@@ -41,6 +41,12 @@ pub enum WidgetType {
     TextArea,
     /// Editable key-value-comment table for environment variables.
     EnvTable,
+    /// Directory path input — text field with a 📁 picker button.
+    /// Clicking the button (or pressing F2) opens a directory browser popup.
+    DirPicker,
+    /// Visual section separator — renders a label + horizontal rule.
+    /// Not interactive; focus skips over it automatically.
+    Section,
 }
 
 // ── FieldMeta ─────────────────────────────────────────────────────────────────
@@ -80,6 +86,15 @@ pub struct FieldMeta {
     /// Available choices for `Select` and `MultiSelect` widgets.
     /// Each entry is the stored value (not the display label).
     pub options: Vec<&'static str>,
+
+    /// Column span in a 12-column grid (1–12). Default: 12 (full row).
+    /// Adjacent fields in the same row are laid out side-by-side as long as
+    /// their `col` values sum to ≤ 12 and each meets its `min_w` threshold.
+    pub col: u8,
+
+    /// Minimum rendered width in terminal columns before wrapping this field
+    /// to its own row. 0 = always inline (never wraps). Default: 0.
+    pub min_w: u16,
 }
 
 // ── FormSchema ────────────────────────────────────────────────────────────────

@@ -39,6 +39,8 @@ pub struct MultiSelectInputNode {
     pub options:    Vec<String>,
     /// Maps an option code to a human-readable label.
     pub display_fn: Option<fn(&str) -> &'static str>,
+    pub col_span:   u8,
+    pub min_width:  u16,
     /// Popup state (Strategy).
     popup: SelectionPopup,
 }
@@ -54,6 +56,7 @@ impl MultiSelectInputNode {
         Self {
             key, label_key, hint_key: None, tab, required,
             value: String::new(), options, display_fn: None,
+            col_span: 12, min_width: 0,
             popup: SelectionPopup::multi(),
         }
     }
@@ -71,6 +74,10 @@ impl MultiSelectInputNode {
         self.display_fn = Some(f);
         self
     }
+
+    pub fn col(mut self, n: u8) -> Self { self.col_span = n.min(12).max(1); self }
+
+    pub fn min_w(mut self, n: u16) -> Self { self.min_width = n; self }
 
     // ── Internal ───────────────────────────────────────────────────────────
 
@@ -104,6 +111,8 @@ impl FormNode for MultiSelectInputNode {
     fn hint_key(&self)  -> Option<&'static str> { self.hint_key }
     fn tab(&self)       -> usize                { self.tab }
     fn required(&self)  -> bool                 { self.required }
+    fn col_span(&self)  -> u8                   { self.col_span }
+    fn min_width(&self) -> u16                  { self.min_width }
 
     fn value(&self)           -> &str { &self.value }
     fn effective_value(&self) -> &str { &self.value }

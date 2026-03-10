@@ -36,6 +36,8 @@ pub struct SelectInputNode {
     pub options:    Vec<String>,
     /// Maps an option code to a human-readable label for display.
     pub display_fn: Option<fn(&str) -> &'static str>,
+    pub col_span:   u8,
+    pub min_width:  u16,
     /// Popup state (Strategy).
     popup: SelectionPopup,
 }
@@ -52,6 +54,7 @@ impl SelectInputNode {
         Self {
             key, label_key, hint_key: None, tab, required,
             value, options, display_fn: None,
+            col_span: 12, min_width: 0,
             popup: SelectionPopup::single(),
         }
     }
@@ -69,6 +72,10 @@ impl SelectInputNode {
         self.display_fn = Some(f);
         self
     }
+
+    pub fn col(mut self, n: u8) -> Self { self.col_span = n.min(12).max(1); self }
+
+    pub fn min_w(mut self, n: u16) -> Self { self.min_width = n; self }
 
     // ── Internal ───────────────────────────────────────────────────────────
 
@@ -88,6 +95,8 @@ impl SelectInputNode {
 impl FormNode for SelectInputNode {
     fn key(&self)       -> &'static str         { self.key }
     fn label_key(&self) -> &'static str         { self.label_key }
+    fn col_span(&self)  -> u8                   { self.col_span }
+    fn min_width(&self) -> u16                  { self.min_width }
     fn hint_key(&self)  -> Option<&'static str> { self.hint_key }
     fn tab(&self)       -> usize                { self.tab }
     fn required(&self)  -> bool                 { self.required }

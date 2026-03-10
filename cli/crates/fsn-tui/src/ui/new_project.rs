@@ -120,22 +120,95 @@ pub(crate) fn render_tabs(f: &mut RenderCtx<'_>, lang: crate::app::Lang, form: &
 // ── Form fields ───────────────────────────────────────────────────────────────
 
 pub(crate) fn render_fields(f: &mut RenderCtx<'_>, form: &mut ResourceForm, inner: Rect, lang: crate::app::Lang) {
+    use ratatui::layout::{Constraint, Direction, Layout};
+
     let tab_indices = form.current_tab_indices();
-    
 
     let mut y = inner.y;
     let mut overlay_slot: Option<usize> = None; // which slot needs render_overlay
 
+    // ── 12-column row grouping ─────────────────────────────────────────────
+    //
+    // Strategy: pack consecutive nodes into a row as long as col_span sum ≤ 12
+    // and each node's rendered width ≥ min_width. When a node doesn't fit (sum
+    // would exceed 12) OR its min_width can't be met, flush the current row and
+    // start a new one.
+    //
+    // A "row" is a slice of (slot, node_idx) pairs sharing one horizontal band.
+    // Each band's height = max(preferred_height) of nodes in that row.
+
+    let mut rows: Vec<Vec<(usize, usize)>> = vec![];  // Vec<row>; row = Vec<(slot, node_idx)>
+    let mut current_row: Vec<(usize, usize)> = vec![];
+    let mut col_sum: u8 = 0;
+
     for (slot, &node_idx) in tab_indices.iter().enumerate() {
-        let h = form.nodes[node_idx].preferred_height();
-        if y + h > inner.bottom() { break; }
-        let field_rect = Rect { x: inner.x, y, width: inner.width, height: h };
-        y += h;
+        let node    = &form.nodes[node_idx];
+        let span    = node.col_span();
+        let min_w   = node.min_width();
+        let avail_w = if span < 12 {
+            (inner.width as u32 * span as u32 / 12) as u16
+        } else {
+            inner.width
+        };
 
-        let focused = form.active_field == slot;
-        form.nodes[node_idx].render(f, field_rect, focused, lang);
+        // Section nodes and nodes that can't fit the min_width always start a new row.
+        let force_new = !node.is_focusable() || min_w > 0 && avail_w < min_w;
 
-        if focused { overlay_slot = Some(slot); }
+        if force_new || col_sum + span > 12 {
+            if !current_row.is_empty() {
+                rows.push(std::mem::take(&mut current_row));
+            }
+            col_sum = 0;
+        }
+
+        current_row.push((slot, node_idx));
+        col_sum += span;
+
+        // Non-focusable (section) nodes always get their own row and flush immediately.
+        if force_new {
+            rows.push(std::mem::take(&mut current_row));
+            col_sum = 0;
+        }
+    }
+    if !current_row.is_empty() { rows.push(current_row); }
+
+    // ── Render each row ────────────────────────────────────────────────────
+    for row in &rows {
+        // Row height = max preferred_height across all nodes in this row.
+        let row_h = row.iter()
+            .map(|&(_, ni)| form.nodes[ni].preferred_height())
+            .max()
+            .unwrap_or(0);
+
+        if y + row_h > inner.bottom() { break; }
+        let row_rect = Rect { x: inner.x, y, width: inner.width, height: row_h };
+        y += row_h;
+
+        if row.len() == 1 {
+            // Fast path — no horizontal split needed.
+            let (slot, node_idx) = row[0];
+            let focused = form.active_field == slot;
+            form.nodes[node_idx].render(f, row_rect, focused, lang);
+            if focused { overlay_slot = Some(slot); }
+        } else {
+            // Split the row proportionally by col_span.
+            let constraints: Vec<Constraint> = row.iter()
+                .map(|&(_, ni)| {
+                    let pct = form.nodes[ni].col_span() as u16 * 100 / 12;
+                    Constraint::Percentage(pct)
+                })
+                .collect();
+            let cols = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints(constraints)
+                .split(row_rect);
+
+            for (i, &(slot, node_idx)) in row.iter().enumerate() {
+                let focused = form.active_field == slot;
+                form.nodes[node_idx].render(f, cols[i], focused, lang);
+                if focused { overlay_slot = Some(slot); }
+            }
+        }
     }
 
     // Submit button on the last tab

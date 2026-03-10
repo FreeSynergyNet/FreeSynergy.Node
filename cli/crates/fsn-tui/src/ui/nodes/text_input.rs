@@ -41,6 +41,8 @@ pub struct TextInputNode {
     pub secret:    bool,
     /// Maximum allowed character count (0 = unlimited).
     pub max_len:   usize,
+    pub col_span:  u8,
+    pub min_width: u16,
     /// rat-widget state: owns buffer, cursor, undo history.
     state:         TextInputState,
     /// Mirrors state value — satisfies FormNode::value() -> &str without Cow lifetime issues.
@@ -57,6 +59,7 @@ impl TextInputNode {
         Self {
             key, label_key, hint_key: None, tab, required,
             default: String::new(), dirty: false, secret: false, max_len: 0,
+            col_span: 12, min_width: 0,
             state: TextInputState::new(),
             cache: String::new(),
         }
@@ -84,6 +87,10 @@ impl TextInputNode {
     pub fn secret(mut self) -> Self { self.secret = true; self }
 
     pub fn max_len(mut self, n: usize) -> Self { self.max_len = n; self }
+
+    pub fn col(mut self, n: u8) -> Self { self.col_span = n.min(12).max(1); self }
+
+    pub fn min_w(mut self, n: u16) -> Self { self.min_width = n; self }
 }
 
 impl FormNode for TextInputNode {
@@ -92,6 +99,8 @@ impl FormNode for TextInputNode {
     fn hint_key(&self)  -> Option<&'static str> { self.hint_key }
     fn tab(&self)       -> usize                { self.tab }
     fn required(&self)  -> bool                 { self.required }
+    fn col_span(&self)  -> u8                   { self.col_span }
+    fn min_width(&self) -> u16                  { self.min_width }
 
     fn value(&self) -> &str { &self.cache }
 

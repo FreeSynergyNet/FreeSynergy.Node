@@ -25,50 +25,91 @@ use crate::ui::form_node::FormNode;
 ///
 /// Each field maps to a `FieldMeta` in the generated `FormSchema`.
 /// The actual domain struct (`ProjectMeta`) stays clean — no UI concerns.
+///
+/// Layout uses a 12-column grid — `col` declares the column span.
+/// `min_w` sets the minimum rendered width; if the terminal is too narrow the
+/// field wraps to its own row automatically.
 #[derive(Form)]
 pub struct ProjectFormData {
-    #[form(label = "form.project.name", required, tab = 0, hint = "form.project.name.hint", max_len = 255)]
+    // ── Section: Basis ────────────────────────────────────────────────────
+    #[form(widget = "section", label = "form.section.basis", tab = 0)]
+    pub _section_basis: String,
+
+    // Name (col=7) + Domain (col=5) side-by-side; min_w=28 each so they wrap on tiny terminals.
+    #[form(label = "form.project.name", required, tab = 0, col = 7, min_w = 28,
+           hint = "form.project.name.hint", max_len = 255)]
     pub name: String,
 
-    #[form(label = "form.project.domain", required, tab = 0, hint = "form.project.domain.hint")]
+    #[form(label = "form.project.domain", required, tab = 0, col = 5, min_w = 22,
+           hint = "form.project.domain.hint")]
     pub domain: String,
 
-    #[form(label = "form.project.description", widget = "textarea", rows = 3, tab = 0, hint = "form.project.description.hint")]
-    pub description: String,
+    // Version (col=3) + UI Language (col=4) + Install Path (col=5) in one row.
+    #[form(label = "form.options.version", tab = 0, col = 3, min_w = 14, default = "0.1.0")]
+    pub version: String,
 
-    #[form(label = "form.project.email", required, tab = 0, widget = "email", hint = "form.project.email.hint")]
-    pub contact_email: String,
-
-    #[form(label = "form.options.language", widget = "select", tab = 0,
+    #[form(label = "form.options.language", widget = "select", tab = 0, col = 4, min_w = 18,
            options = "de,en,fr,es,it,pt", default = "de")]
     pub language: String,
 
-    #[form(label = "form.project.path", required, tab = 0, hint = "form.project.path.hint")]
+    #[form(label = "form.project.path", required, tab = 0, col = 5, min_w = 22,
+           widget = "dir_picker", hint = "form.project.path.hint")]
     pub install_dir: String,
 
-    #[form(label = "form.options.version", tab = 0, default = "0.1.0")]
-    pub version: String,
+    // ── Section: Details ──────────────────────────────────────────────────
+    #[form(widget = "section", label = "form.section.details", tab = 0)]
+    pub _section_details: String,
 
-    #[form(label = "form.project.tags", tab = 0, hint = "form.project.tags.hint")]
+    #[form(label = "form.project.description", widget = "textarea", rows = 3, tab = 0,
+           hint = "form.project.description.hint")]
+    pub description: String,
+
+    // Email (col=8) + Tags (col=4) side-by-side.
+    #[form(label = "form.project.email", required, tab = 0, col = 8, min_w = 30,
+           widget = "email", hint = "form.project.email.hint")]
+    pub contact_email: String,
+
+    #[form(label = "form.project.tags", tab = 0, col = 4, min_w = 18,
+           hint = "form.project.tags.hint")]
     pub tags: String,
 
-    // ── Tab 2: Service slots ──────────────────────────────────────────────
-    // Each field references the instance name (slug) that fills the role.
-    // Options are populated dynamically at form-build time from loaded service instances.
+    // ── Section: Sprachen ─────────────────────────────────────────────────
+    #[form(widget = "section", label = "form.section.languages", tab = 0)]
+    pub _section_languages: String,
 
-    #[form(label = "form.project.iam", widget = "select", tab = 0, hint = "form.project.iam.hint")]
+    /// Languages the project content is available in (multi-select).
+    #[form(label = "form.project.languages", widget = "multi_select", tab = 0,
+           hint = "form.project.languages.hint",
+           options = "de,en,fr,es,it,pt,ru,zh,ja,ar")]
+    pub languages: String,
+
+    // ── Section: Services ─────────────────────────────────────────────────
+    #[form(widget = "section", label = "form.section.services", tab = 0)]
+    pub _section_services: String,
+
+    // Service slots — each is a Select from all available services of that type.
+    // Options are populated dynamically at form-build time from loaded service instances.
+    // Multiple services of the same type CAN be installed; this slot designates
+    // which one serves as the "primary" for that role (proxy routing, auto-docs, etc.).
+
+    #[form(label = "form.project.iam", widget = "select", tab = 0, col = 6, min_w = 24,
+           hint = "form.project.iam.hint")]
     pub iam: String,
 
-    #[form(label = "form.project.wiki", widget = "select", tab = 0, hint = "form.project.wiki.hint")]
+    #[form(label = "form.project.wiki", widget = "select", tab = 0, col = 6, min_w = 24,
+           hint = "form.project.wiki.hint")]
     pub wiki: String,
 
-    #[form(label = "form.project.mail", widget = "select", tab = 0, hint = "form.project.mail.hint")]
+    #[form(label = "form.project.mail", widget = "select", tab = 0, col = 6, min_w = 24,
+           hint = "form.project.mail.hint")]
     pub mail: String,
 
-    #[form(label = "form.project.monitoring", widget = "select", tab = 0, hint = "form.project.monitoring.hint")]
+    #[form(label = "form.project.monitoring", widget = "select", tab = 0, col = 6, min_w = 24,
+           hint = "form.project.monitoring.hint")]
     pub monitoring: String,
 
-    #[form(label = "form.project.git", widget = "select", tab = 0, hint = "form.project.git.hint")]
+    #[form(label = "form.project.git", widget = "select", tab = 0, col = 6, min_w = 24,
+           hint = "form.project.git.hint")]
     pub git: String,
 }
 
@@ -82,6 +123,10 @@ pub fn lang_display(code: &str) -> &'static str {
         "es" => "Español",
         "it" => "Italiano",
         "pt" => "Português",
+        "ru" => "Русский",
+        "zh" => "中文",
+        "ja" => "日本語",
+        "ar" => "العربية",
         _    => "—",
     }
 }
@@ -98,6 +143,7 @@ pub fn slot_display(code: &str) -> &'static str {
 
 const DISPLAY_FNS: &[(&str, fn(&str) -> &'static str)] = &[
     ("language",   lang_display),
+    ("languages",  lang_display),
     ("iam",        slot_display),
     ("wiki",       slot_display),
     ("mail",       slot_display),
@@ -219,12 +265,14 @@ pub fn edit_project_form(
     let p    = &handle.config.project;
     let desc = p.description.as_deref().unwrap_or("").to_string();
     let slots = &handle.config.services;
+    let languages_str = p.languages.join(",");
     let prefill: HashMap<&str, &str> = [
         ("name",          p.name.as_str()),
         ("domain",        p.domain.as_str()),
         ("description",   desc.as_str()),
         ("contact_email", handle.email()),
         ("language",      p.language.as_str()),
+        ("languages",     languages_str.as_str()),
         ("install_dir",   handle.install_dir()),
         ("version",       p.version.as_str()),
         ("iam",           slots.iam.as_deref().unwrap_or("")),
@@ -263,6 +311,7 @@ pub fn submit_project_form(form: &ResourceForm, root: &Path) -> Result<()> {
     let desc       = form.field_value("description");
     let email      = form.field_value("contact_email");
     let lang       = form.field_value("language");
+    let languages  = form.field_value("languages");
     let path       = form.field_value("install_dir");
     let version    = form.field_value("version");
     let tags       = form.field_value("tags");
@@ -275,6 +324,14 @@ pub fn submit_project_form(form: &ResourceForm, root: &Path) -> Result<()> {
     let mut file_content = format!(
         "[project]\nname        = \"{name}\"\ndomain      = \"{domain}\"\ndescription = \"{desc}\"\nlanguage    = \"{lang}\"\ninstall_dir = \"{path}\"\nversion     = \"{version}\"\n"
     );
+
+    // Languages — Vec<String> of content languages supported by this project
+    if !languages.is_empty() {
+        let lang_list: String = languages.split(',')
+            .map(|l| format!("\"{}\"", l.trim()))
+            .collect::<Vec<_>>().join(", ");
+        file_content.push_str(&format!("languages   = [{lang_list}]\n"));
+    }
 
     // Tags — Vec<String> field on ProjectMeta
     if !tags.is_empty() {

@@ -126,7 +126,8 @@ impl ResourceForm {
             .collect()
     }
 
-    /// Global index of the focused node, or `None`.
+
+/// Global index of the focused node, or `None`.
     pub fn focused_node_global_idx(&self) -> Option<usize> {
         self.current_tab_indices().get(self.active_field).copied()
     }
@@ -143,25 +144,54 @@ impl ResourceForm {
     // ── Focus movement ─────────────────────────────────────────────────────
 
     pub fn focus_next(&mut self) {
-        let count = self.current_tab_indices().len();
+        let indices = self.current_tab_indices();
+        let count = indices.len();
         if count == 0 { return; }
-        if self.active_field + 1 >= count {
-            // Last field on this tab → advance to the next tab (wraps around).
+
+        // Advance then skip any non-focusable nodes (e.g. SectionNode).
+        let mut next = self.active_field + 1;
+        while next < count && !self.nodes[indices[next]].is_focusable() {
+            next += 1;
+        }
+        if next >= count {
+            // Past the last field on this tab → advance to the next tab.
             self.next_tab();
+            // Skip leading non-focusable nodes on the new tab.
+            let new_indices = self.current_tab_indices();
+            let mut start = 0;
+            while start + 1 < new_indices.len() && !self.nodes[new_indices[start]].is_focusable() {
+                start += 1;
+            }
+            self.active_field = start;
         } else {
-            self.active_field += 1;
+            self.active_field = next;
         }
     }
+
     pub fn focus_prev(&mut self) {
-        let count = self.current_tab_indices().len();
+        let indices = self.current_tab_indices();
+        let count = indices.len();
         if count == 0 { return; }
-        if self.active_field == 0 {
-            // First field on this tab → go to previous tab, last field.
+
+        if self.active_field == 0
+            || (0..self.active_field).all(|i| !self.nodes[indices[i]].is_focusable())
+        {
+            // No focusable field before this one on this tab → go to previous tab.
             self.prev_tab();
-            let new_count = self.current_tab_indices().len();
-            self.active_field = new_count.saturating_sub(1);
+            let new_indices = self.current_tab_indices();
+            // Find the last focusable node on the new tab.
+            let last = new_indices.len().saturating_sub(1);
+            let mut end = last;
+            while end > 0 && !self.nodes[new_indices[end]].is_focusable() {
+                end -= 1;
+            }
+            self.active_field = end;
         } else {
-            self.active_field -= 1;
+            let mut prev = self.active_field - 1;
+            while prev > 0 && !self.nodes[indices[prev]].is_focusable() {
+                prev -= 1;
+            }
+            self.active_field = prev;
         }
     }
 

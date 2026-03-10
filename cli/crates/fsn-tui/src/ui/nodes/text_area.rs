@@ -69,6 +69,9 @@ impl TextAreaNode {
 
     pub fn hint(mut self, k: &'static str) -> Self { self.hint_key = Some(k); self }
     pub fn rows(mut self, n: u16)          -> Self { self.visible_lines = n.max(1); self }
+    // col/min_w accepted but ignored — TextArea always fills full width.
+    pub fn col(self, _n: u8)   -> Self { self }
+    pub fn min_w(self, _n: u16) -> Self { self }
 
     pub fn default_val(mut self, v: &str) -> Self {
         self.state.set_value(v);

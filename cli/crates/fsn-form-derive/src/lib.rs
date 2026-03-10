@@ -34,6 +34,10 @@ struct FieldAttrs {
     rows:        Option<u16>,
     default_val: Option<String>,
     options:     Vec<String>,
+    /// Column span in 12-column grid (default: 12).
+    col:         u8,
+    /// Minimum width in terminal columns before wrapping (default: 0).
+    min_w:       u16,
 }
 
 fn parse_form_attrs(field: &Field) -> FieldAttrs {
@@ -70,6 +74,12 @@ fn parse_form_attrs(field: &Field) -> FieldAttrs {
                 let s = v.parse::<LitStr>()?.value();
                 a.options = s.split(',').map(|p| p.trim().to_string())
                              .filter(|p| !p.is_empty()).collect();
+            } else if meta.path.is_ident("col") {
+                let v = meta.value()?;
+                a.col = v.parse::<LitInt>()?.base10_parse::<u8>().unwrap_or(12).min(12).max(1);
+            } else if meta.path.is_ident("min_w") {
+                let v = meta.value()?;
+                a.min_w = v.parse::<LitInt>()?.base10_parse().unwrap_or(0);
             }
             Ok(())
         });
@@ -90,6 +100,8 @@ fn widget_tokens(widget: &str) -> Ts2 {
         "number"        => quote! { ::fsn_form::WidgetType::Number },
         "textarea"      => quote! { ::fsn_form::WidgetType::TextArea },
         "env_table"     => quote! { ::fsn_form::WidgetType::EnvTable },
+        "dir_picker"    => quote! { ::fsn_form::WidgetType::DirPicker },
+        "section"       => quote! { ::fsn_form::WidgetType::Section },
         _               => quote! { ::fsn_form::WidgetType::Text },
     }
 }
@@ -142,6 +154,8 @@ pub fn derive_form(input: TokenStream) -> TokenStream {
             None    => quote! { None },
         };
         let opts: Vec<&str> = attrs.options.iter().map(|s| s.as_str()).collect();
+        let col  = if attrs.col == 0 { 12u8 } else { attrs.col };
+        let min_w = attrs.min_w;
 
         quote! {
             ::fsn_form::FieldMeta {
@@ -155,6 +169,8 @@ pub fn derive_form(input: TokenStream) -> TokenStream {
                 rows:        #rows_tokens,
                 default_val: #default_tokens,
                 options:     vec![#(#opts),*],
+                col:         #col,
+                min_w:       #min_w,
             }
         }
     }).collect();

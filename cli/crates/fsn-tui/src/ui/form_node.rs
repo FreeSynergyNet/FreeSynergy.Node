@@ -118,6 +118,20 @@ pub trait FormNode: std::fmt::Debug {
     fn is_dirty(&self) -> bool;
     fn set_dirty(&mut self, v: bool);
 
+    // ── Layout ─────────────────────────────────────────────────────────────
+
+    /// Column span in a 12-column grid (1–12). Default: 12 (full row).
+    /// Adjacent fields are placed side-by-side while their spans sum to ≤ 12.
+    fn col_span(&self) -> u8 { 12 }
+
+    /// Minimum rendered width (terminal columns) before this field wraps to
+    /// its own row. 0 = always inline. Default: 0.
+    fn min_width(&self) -> u16 { 0 }
+
+    /// Whether keyboard focus can land on this field.
+    /// `SectionNode` returns `false`; all interactive nodes return `true` (default).
+    fn is_focusable(&self) -> bool { true }
+
     // ── Rendering ──────────────────────────────────────────────────────────
 
     /// How many rows this field needs in the form layout.
