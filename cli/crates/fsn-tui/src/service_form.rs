@@ -18,14 +18,14 @@ use crate::ui::form_node::FormNode;
 // ── Form data struct ──────────────────────────────────────────────────────────
 
 /// Form schema for creating and editing a Service instance.
+/// All fields live on a single tab (tab = 0).
 #[derive(Form)]
 pub struct ServiceFormData {
-    // ── Tab 0: Service ────────────────────────────────────────────────────
     #[form(label = "form.service.name", required, tab = 0, hint = "form.service.name.hint")]
     pub name: String,
 
     #[form(label = "form.service.class", widget = "select", required, tab = 0,
-           options = "proxy/zentinel,git/forgejo,iam/kanidm,mail/stalwart,wiki/outline,chat/matrix,tasks/vikunja,monitoring/netdata",
+           options = "proxy/zentinel,iam/kanidm,mail/stalwart,git/forgejo,wiki/outline,chat/tuwunel,collab/cryptpad,tasks/vikunja,tickets/pretix,maps/umap,monitoring/openobserver,database/postgres,cache/dragonfly",
            default = "proxy/zentinel")]
     pub class: String,
 
@@ -35,18 +35,16 @@ pub struct ServiceFormData {
     #[form(label = "form.service.tags", tab = 0, hint = "form.service.tags.hint")]
     pub tags: String,
 
-    // ── Tab 1: Network ────────────────────────────────────────────────────
-    #[form(label = "form.service.subdomain", tab = 1, hint = "form.service.subdomain.hint")]
+    #[form(label = "form.service.subdomain", tab = 0, hint = "form.service.subdomain.hint")]
     pub subdomain: String,
 
-    #[form(label = "form.service.alias", tab = 1, hint = "form.service.alias.hint")]
+    #[form(label = "form.service.alias", tab = 0, hint = "form.service.alias.hint")]
     pub alias: String,
 
-    #[form(label = "form.service.port", tab = 1)]
+    #[form(label = "form.service.port", tab = 0)]
     pub port: String,
 
-    // ── Tab 2: Env ────────────────────────────────────────────────────────
-    #[form(label = "form.service.env", widget = "env_table", tab = 2, rows = 6,
+    #[form(label = "form.service.env", widget = "env_table", tab = 0, rows = 6,
            hint = "form.service.env.hint")]
     pub env: String,
 }
@@ -55,15 +53,20 @@ pub struct ServiceFormData {
 
 pub fn service_class_display(code: &str) -> &'static str {
     match code {
-        "proxy/zentinel"     => "Zentinel (Proxy)",
-        "git/forgejo"        => "Forgejo (Git)",
-        "iam/kanidm"         => "Kanidm (IAM)",
-        "mail/stalwart"      => "Stalwart (Mail)",
-        "wiki/outline"       => "Outline (Wiki)",
-        "chat/matrix"        => "Matrix (Chat)",
-        "tasks/vikunja"      => "Vikunja (Tasks)",
-        "monitoring/netdata" => "Netdata (Monitoring)",
-        _                    => "—",
+        "proxy/zentinel"          => "Zentinel (Proxy)",
+        "iam/kanidm"              => "Kanidm (IAM)",
+        "mail/stalwart"           => "Stalwart (Mail)",
+        "git/forgejo"             => "Forgejo (Git)",
+        "wiki/outline"            => "Outline (Wiki)",
+        "chat/tuwunel"            => "Tuwunel (Matrix/Chat)",
+        "collab/cryptpad"         => "CryptPad (Collab)",
+        "tasks/vikunja"           => "Vikunja (Tasks)",
+        "tickets/pretix"          => "Pretix (Tickets)",
+        "maps/umap"               => "uMap (Maps)",
+        "monitoring/openobserver" => "OpenObserve (Monitoring)",
+        "database/postgres"       => "PostgreSQL (Database)",
+        "cache/dragonfly"         => "Dragonfly (Cache)",
+        _                         => "—",
     }
 }
 
@@ -84,6 +87,25 @@ fn service_on_change(nodes: &mut Vec<Box<dyn FormNode>>, key: &'static str) {
         if !subdomain_dirty {
             if let Some(n) = nodes.iter_mut().find(|n| n.key() == "subdomain") {
                 n.set_value(&slug);
+            }
+        }
+    }
+
+    // When the class changes, auto-populate env defaults from the plugin TOML
+    // unless the user has already edited the env table manually.
+    if key == "class" {
+        let class = nodes.iter().find(|n| n.key() == "class")
+            .map(|n| n.value().to_string()).unwrap_or_default();
+        let env_dirty = nodes.iter().find(|n| n.key() == "env")
+            .map(|n| n.is_dirty()).unwrap_or(false);
+        if !env_dirty {
+            if let Some(dir) = fsn_core::config::resolve_plugins_dir_no_fallback() {
+                let defaults = load_class_env_defaults(&class, &dir);
+                if !defaults.is_empty() {
+                    if let Some(n) = nodes.iter_mut().find(|n| n.key() == "env") {
+                        n.set_value(&defaults);
+                    }
+                }
             }
         }
     }
@@ -218,16 +240,19 @@ pub fn submit_service_form(form: &ResourceForm, services_dir: &Path, project_slu
         content.push_str(&format!("tags          = [{tag_list}]\n"));
     }
 
-    // Env vars: "KEY=value\n..." → [environment] TOML table
+    // Env vars: "KEY=value\n..." → [environment] TOML table.
+    // Comment lines (# ...) are UI-only metadata — not written to the file.
     let env_raw = form.field_value("env");
     let env_pairs: Vec<(String, String)> = env_raw.lines()
         .filter_map(|line| {
             let line = line.trim();
-            if line.is_empty() { return None; }
+            if line.is_empty() || line.starts_with('#') { return None; }
             let (k, v) = line.split_once('=')?;
             let k = k.trim().to_string();
             if k.is_empty() { return None; }
-            Some((k, v.trim().to_string()))
+            // Escape backslashes and double-quotes for TOML string literals.
+            let v = v.trim().replace('\\', "\\\\").replace('"', "\\\"");
+            Some((k, v))
         })
         .collect();
     if !env_pairs.is_empty() {

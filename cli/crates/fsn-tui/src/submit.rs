@@ -186,10 +186,14 @@ pub fn submit_service(state: &mut AppState, root: &Path) -> Result<()> {
 
                     let env_pairs: Vec<String> = svc_env.lines()
                         .filter_map(|line| {
+                            let line = line.trim();
+                            if line.starts_with('#') || line.is_empty() { return None; }
                             let (k, v) = line.split_once('=')?;
                             let k = k.trim();
                             if k.is_empty() { return None; }
-                            Some(format!("{k} = \"{}\"", v.trim()))
+                            // Escape backslashes and double-quotes for TOML string literals.
+                            let escaped = v.trim().replace('\\', "\\\\").replace('"', "\\\"");
+                            Some(format!("{k} = \"{escaped}\""))
                         })
                         .collect();
                     if !env_pairs.is_empty() {

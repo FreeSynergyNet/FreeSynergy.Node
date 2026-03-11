@@ -144,7 +144,7 @@ pub fn resolve_plugins_dir_no_fallback() -> Option<PathBuf> {
     if let Ok(settings) = AppSettings::load() {
         if let Some(store) = settings.stores.iter().find(|s| s.enabled && s.local_path.is_some()) {
             let base = PathBuf::from(store.local_path.as_deref().unwrap());
-            return Some(base.join("Node"));
+            return Some(base.join("Node").join("modules"));
         }
     }
     None

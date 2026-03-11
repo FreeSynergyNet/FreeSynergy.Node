@@ -1,6 +1,0 @@
-{# Block template: CryptPad sandbox domain (required by CryptPad security model)
-   Variables: service (dict), project_domain
-#}
-sandbox.{{ project_domain }} {
-    reverse_proxy {{ service.container_name }}:{{ service.port }}
-}

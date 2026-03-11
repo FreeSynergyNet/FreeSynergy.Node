@@ -88,11 +88,15 @@ impl EnvTableNode {
     // ── Internal helpers ───────────────────────────────────────────────────
 
     fn rebuild_cache(&mut self) {
-        self.cache = self.rows.iter()
-            .filter(|r| !r[0].trim().is_empty())
-            .map(|r| format!("{}={}", r[0].trim(), r[1].trim()))
-            .collect::<Vec<_>>()
-            .join("\n");
+        let mut lines: Vec<String> = Vec::new();
+        for r in &self.rows {
+            if r[0].trim().is_empty() { continue; }
+            if !r[2].trim().is_empty() {
+                lines.push(format!("# {}", r[2].trim()));
+            }
+            lines.push(format!("{}={}", r[0].trim(), r[1].trim()));
+        }
+        self.cache = lines.join("\n");
     }
 
     fn insert_char(&mut self, c: char) {
@@ -214,11 +218,18 @@ impl FormNode for EnvTableNode {
 
     fn set_value(&mut self, v: &str) {
         self.rows.clear();
+        let mut pending_comment = String::new();
         for line in v.lines() {
             let line = line.trim();
             if line.is_empty() { continue; }
+            if let Some(comment) = line.strip_prefix('#') {
+                // `# comment` line — attach to the next KEY=value row.
+                pending_comment = comment.trim().to_string();
+                continue;
+            }
             let (k, rest) = line.split_once('=').unwrap_or((line, ""));
-            self.rows.push([k.trim().to_string(), rest.trim().to_string(), String::new()]);
+            self.rows.push([k.trim().to_string(), rest.trim().to_string(), pending_comment.clone()]);
+            pending_comment.clear();
         }
         if self.rows.is_empty() {
             self.rows.push(["".to_string(), "".to_string(), "".to_string()]);
