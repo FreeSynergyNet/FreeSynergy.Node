@@ -21,7 +21,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crate::app::{AppState, ConfirmAction, OverlayKind, OverlayLayer, Screen};
 use crate::resource_form::FormErrorKind;
 use crate::ui::form_node::FormAction;
-use crate::events_dashboard::{self, execute_confirm_action, handle_new_resource_overlay};
+use crate::events_dashboard::{self, handle_new_resource_overlay};
 use crate::submit::handle_form_submit;
 
 pub fn handle(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()> {
@@ -101,7 +101,7 @@ fn handle_overlay(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()
                 KeyCode::Char('j') | KeyCode::Char('J')
                 | KeyCode::Char('y') | KeyCode::Char('Y') => {
                     state.pop_overlay();
-                    execute_confirm_action(state, root, data, yes_action)?;
+                    yes_action.execute(state, root, data)?;
                 }
                 _ => { state.pop_overlay(); }
             }

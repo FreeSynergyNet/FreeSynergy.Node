@@ -14,13 +14,7 @@
 //     delegating everything else to TextInputState::handle_events()
 
 use crossterm::event::{Event, KeyCode, KeyEvent};
-use ratatui::{
-    layout::{Constraint, Layout, Rect},
-    style::{Color, Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders},
-};
-use rat_widget::paragraph::{Paragraph, ParagraphState};
+use ratatui::layout::{Constraint, Layout, Rect};
 use rat_widget::text_input::{TextInput, TextInputState, handle_events};
 use rat_widget::event::TextOutcome;
 use rat_widget::text::HasScreenCursor;
@@ -28,6 +22,7 @@ use rat_widget::text::HasScreenCursor;
 use crate::app::Lang;
 use crate::ui::form_node::{handle_form_nav, FormAction, FormNode};
 use crate::ui::render_ctx::RenderCtx;
+use crate::ui::widgets::{node_block, render_hint_opt};
 
 #[derive(Debug)]
 pub struct TextInputNode {
@@ -125,30 +120,12 @@ impl FormNode for TextInputNode {
     fn render(&mut self, f: &mut RenderCtx<'_>, area: Rect, focused: bool, lang: Lang) {
         let rows = Layout::vertical([Constraint::Length(3), Constraint::Length(1)]).split(area);
 
-        let label_text  = crate::i18n::t(lang, self.label_key);
-        let req_suffix  = if self.required { " *" } else { "" };
-        let label_style = if focused {
-            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Color::White)
-        };
-        let border_style = if focused {
-            Style::default().fg(Color::Cyan)
-        } else {
-            Style::default().fg(Color::DarkGray)
-        };
-
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(border_style)
-            .title(Line::from(Span::styled(
-                format!(" {}{} ", label_text, req_suffix),
-                label_style,
-            )));
+        let block = node_block(self.label_key, self.required, focused, lang);
 
         // Inform the widget about focus so it applies focus_style.
         self.state.focus.set(focused);
 
+        use ratatui::style::{Color, Style};
         let widget = {
             let w = TextInput::new()
                 .block(block)
@@ -166,17 +143,7 @@ impl FormNode for TextInputNode {
             }
         }
 
-        // Hint line
-        if let Some(hk) = self.hint_key {
-            f.render_stateful_widget(
-                Paragraph::new(Line::from(Span::styled(
-                    crate::i18n::t(lang, hk),
-                    Style::default().fg(Color::DarkGray),
-                ))),
-                rows[1],
-                &mut ParagraphState::new(),
-            );
-        }
+        render_hint_opt(f, rows[1], self.hint_key, lang);
     }
 
     fn handle_mouse(&mut self, event: crossterm::event::MouseEvent, _area: Rect) -> FormAction {

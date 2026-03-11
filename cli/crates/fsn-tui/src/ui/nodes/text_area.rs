@@ -21,13 +21,7 @@
 // preferred_height = visible_lines + 3  (2 borders + 1 hint row)
 
 use crossterm::event::{Event, KeyCode, KeyEvent};
-use ratatui::{
-    layout::{Constraint, Layout, Rect},
-    style::{Color, Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders},
-};
-use rat_widget::paragraph::{Paragraph, ParagraphState};
+use ratatui::layout::{Constraint, Layout, Rect};
 use rat_widget::textarea::{TextArea, TextAreaState, handle_events};
 use rat_widget::event::TextOutcome;
 use rat_widget::text::HasScreenCursor;
@@ -35,6 +29,7 @@ use rat_widget::text::HasScreenCursor;
 use crate::app::Lang;
 use crate::ui::form_node::{handle_form_nav, FormAction, FormNode};
 use crate::ui::render_ctx::RenderCtx;
+use crate::ui::widgets::{node_block, render_hint};
 
 const DEFAULT_ROWS: u16 = 4;
 
@@ -120,29 +115,11 @@ impl FormNode for TextAreaNode {
         let box_h = self.visible_lines + 2;
         let rows  = Layout::vertical([Constraint::Length(box_h), Constraint::Length(1)]).split(area);
 
-        let label_text  = crate::i18n::t(lang, self.label_key);
-        let req_suffix  = if self.required { " *" } else { "" };
-        let label_style = if focused {
-            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Color::White)
-        };
-        let border_style = if focused {
-            Style::default().fg(Color::Cyan)
-        } else {
-            Style::default().fg(Color::DarkGray)
-        };
-
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(border_style)
-            .title(Line::from(Span::styled(
-                format!(" {}{} ", label_text, req_suffix),
-                label_style,
-            )));
+        let block = node_block(self.label_key, self.required, focused, lang);
 
         self.state.focus.set(focused);
 
+        use ratatui::style::{Color, Style};
         let widget = TextArea::new()
             .block(block)
             .style(Style::default().fg(Color::White))
@@ -157,20 +134,9 @@ impl FormNode for TextAreaNode {
             }
         }
 
-        // Hint line
-        let hint_text = if let Some(hk) = self.hint_key {
-            crate::i18n::t(lang, hk)
-        } else {
-            crate::i18n::t(lang, "form.textarea.hint")
-        };
-        f.render_stateful_widget(
-            Paragraph::new(Line::from(Span::styled(
-                hint_text,
-                Style::default().fg(Color::DarkGray),
-            ))),
-            rows[1],
-            &mut ParagraphState::new(),
-        );
+        // Hint line — falls back to generic textarea hint if none specified.
+        let hk = self.hint_key.unwrap_or("form.textarea.hint");
+        render_hint(f, rows[1], hk, lang);
     }
 
     /// Delegate mouse events to rat-widget — same source of truth as handle_key().

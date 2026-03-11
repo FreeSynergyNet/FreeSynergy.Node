@@ -3,7 +3,12 @@
 // Design Pattern: Utility Library — stateless pure functions shared across all
 // rendering modules. Keeps rendering code DRY: color, char, and text helpers
 // live here so no module duplicates a RunState color match or a truncation loop.
+//
+// Form node helpers (node_styles, node_block, render_hint, render_hint_opt):
+//   Single source of truth for the label + border styling shared by all FormNode
+//   render() implementations. Previously duplicated ~8 lines in every node file.
 
+use rat_widget::paragraph::{Paragraph, ParagraphState};
 use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
@@ -11,9 +16,8 @@ use ratatui::{
     widgets::{Block, Borders, Clear},
 };
 
+use crate::app::{run_state_i18n, AppState, Lang, RunState};
 use crate::ui::render_ctx::RenderCtx;
-
-use crate::app::{run_state_i18n, AppState, RunState};
 
 /// Language toggle button: "[DE]" or "[EN]" in the top-right corner.
 pub fn lang_button<'a>(state: &AppState) -> Span<'a> {
@@ -143,6 +147,59 @@ pub fn health_color(level: fsn_core::health::HealthLevel) -> ratatui::style::Sty
         HealthLevel::Ok      => Style::new().fg(Color::Green),
         HealthLevel::Warning => Style::new().fg(Color::Yellow),
         HealthLevel::Error   => Style::new().fg(Color::Red).add_modifier(Modifier::BOLD),
+    }
+}
+
+// ── Form node rendering helpers ───────────────────────────────────────────────
+
+/// Label and border styles for a form node — focused = Cyan, unfocused = White/DarkGray.
+///
+/// Returns `(label_style, border_style)`.
+pub fn node_styles(focused: bool) -> (Style, Style) {
+    let label_style = if focused {
+        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::White)
+    };
+    let border_style = if focused {
+        Style::default().fg(Color::Cyan)
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+    (label_style, border_style)
+}
+
+/// Standard bordered block for a form field — label in title, `*` suffix when required.
+///
+/// Single source of truth for the visual chrome shared by all FormNode render() methods.
+pub fn node_block(label_key: &str, required: bool, focused: bool, lang: Lang) -> Block<'static> {
+    let (label_style, border_style) = node_styles(focused);
+    let req_suffix = if required { " *" } else { "" };
+    Block::default()
+        .borders(Borders::ALL)
+        .border_style(border_style)
+        .title(Line::from(Span::styled(
+            format!(" {}{} ", crate::i18n::t(lang, label_key), req_suffix),
+            label_style,
+        )))
+}
+
+/// Render a DarkGray hint line below a form field.
+pub fn render_hint(f: &mut RenderCtx<'_>, area: Rect, hint_key: &str, lang: Lang) {
+    f.render_stateful_widget(
+        Paragraph::new(Line::from(Span::styled(
+            crate::i18n::t(lang, hint_key),
+            Style::default().fg(Color::DarkGray),
+        ))),
+        area,
+        &mut ParagraphState::new(),
+    );
+}
+
+/// Render a hint line only when `hint_key` is Some — no-op when None.
+pub fn render_hint_opt(f: &mut RenderCtx<'_>, area: Rect, hint_key: Option<&str>, lang: Lang) {
+    if let Some(hk) = hint_key {
+        render_hint(f, area, hk, lang);
     }
 }
 

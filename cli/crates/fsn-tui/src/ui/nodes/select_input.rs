@@ -13,9 +13,8 @@ use std::collections::HashSet;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Color, Style},
     text::{Line, Span},
-    widgets::{Block, Borders},
 };
 use rat_widget::paragraph::{Paragraph, ParagraphState};
 
@@ -23,6 +22,7 @@ use crate::app::Lang;
 use crate::ui::form_node::{handle_selection_nav, FormAction, FormNode};
 use crate::ui::nodes::selection_popup::{SelectionPopup, SelectionResult};
 use crate::ui::render_ctx::RenderCtx;
+use crate::ui::widgets::{node_block, render_hint_opt};
 
 #[derive(Debug)]
 pub struct SelectInputNode {
@@ -116,22 +116,7 @@ impl FormNode for SelectInputNode {
             .constraints([Constraint::Length(3), Constraint::Length(1)])
             .split(area);
 
-        let label_text  = crate::i18n::t(lang, self.label_key);
-        let req_suffix  = if self.required { " *" } else { "" };
-        let label_style = if focused {
-            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Color::White)
-        };
-        let title = Line::from(Span::styled(
-            format!(" {}{} ", label_text, req_suffix),
-            label_style,
-        ));
-        let border_style = if focused {
-            Style::default().fg(Color::Cyan)
-        } else {
-            Style::default().fg(Color::DarkGray)
-        };
+        let block = node_block(self.label_key, self.required, focused, lang);
 
         let display = self.human_label();
         let input_line = if focused {
@@ -143,23 +128,12 @@ impl FormNode for SelectInputNode {
             Line::from(Span::styled(display.to_string(), Style::default().fg(Color::White)))
         };
         f.render_stateful_widget(
-            Paragraph::new(input_line)
-                .block(Block::default().borders(Borders::ALL).border_style(border_style).title(title)),
+            Paragraph::new(input_line).block(block),
             rows[0],
             &mut ParagraphState::new(),
         );
 
-        // Hint line below (always shown — popup appears above content, not in this space)
-        if let Some(hk) = self.hint_key {
-            f.render_stateful_widget(
-                Paragraph::new(Line::from(Span::styled(
-                    crate::i18n::t(lang, hk),
-                    Style::default().fg(Color::DarkGray),
-                ))),
-                rows[1],
-                &mut ParagraphState::new(),
-            );
-        }
+        render_hint_opt(f, rows[1], self.hint_key, lang);
     }
 
     /// Render the popup — centered on the full terminal. Called after all fields are rendered.

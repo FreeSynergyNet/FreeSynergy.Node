@@ -45,13 +45,25 @@ pub fn handle_form_submit(state: &mut AppState, root: &Path) -> Result<()> {
         return Ok(());
     }
 
-    match kind {
-        ResourceKind::Project => submit_project(state, root)?,
-        ResourceKind::Service => submit_service(state, root)?,
-        ResourceKind::Host    => submit_host(state, root)?,
-        ResourceKind::Bot     => submit_bot(state, root)?,
-    }
+    kind.dispatch_submit(state, root)?;
     Ok(())
+}
+
+// ── ResourceKind::dispatch_submit — OOP dispatch ──────────────────────────────
+//
+// Design Pattern: OOP — the type knows which submit function to call.
+// Placed here (not in resource_form.rs) to avoid circular imports: submit.rs
+// already imports ResourceKind; resource_form.rs does not import submit functions.
+
+impl ResourceKind {
+    fn dispatch_submit(self, state: &mut AppState, root: &Path) -> Result<()> {
+        match self {
+            ResourceKind::Project => submit_project(state, root),
+            ResourceKind::Service => submit_service(state, root),
+            ResourceKind::Host    => submit_host(state, root),
+            ResourceKind::Bot     => submit_bot(state, root),
+        }
+    }
 }
 
 // ── Queue advancement helper ──────────────────────────────────────────────────

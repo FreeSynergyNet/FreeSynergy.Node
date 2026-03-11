@@ -290,9 +290,9 @@ impl SidebarItem {
         match self {
             SidebarItem::Project { slug, .. } => {
                 if let Some(proj) = state.projects.iter().find(|p| p.slug == *slug).cloned() {
-                    let svcs    = state.svc_handles.clone();
-                    let entries = state.store_entries.clone();
-                    let form    = crate::project_form::edit_project_form(&proj, &svcs, &entries);
+                    let form = crate::project_form::edit_project_form(
+                        &proj, &state.svc_handles, &state.store_entries,
+                    );
                     state.open_form(form);
                 }
             }
@@ -325,7 +325,7 @@ impl SidebarItem {
 pub(crate) fn activate_sidebar_item(item: SidebarItem, state: &mut AppState, root: &Path) {
     match item {
         SidebarItem::Action { kind: SidebarAction::NewProject, .. } => {
-            let form = crate::project_form::new_project_form(&state.svc_handles.clone(), &state.store_entries.clone());
+            let form = crate::project_form::new_project_form(&state.svc_handles, &state.store_entries);
             state.open_form(form);
         }
         SidebarItem::Action { kind: SidebarAction::NewHost, .. } => {
@@ -434,7 +434,7 @@ fn open_new_resource_form(item_idx: usize, state: &mut AppState, root: &Path) {
     let Some(&(_, kind)) = NEW_RESOURCE_ITEMS.get(item_idx) else { return };
     match kind {
         ResourceKind::Project => {
-            let form = crate::project_form::new_project_form(&state.svc_handles.clone(), &state.store_entries.clone());
+            let form = crate::project_form::new_project_form(&state.svc_handles, &state.store_entries);
             state.open_form(form);
         }
         ResourceKind::Host => {
@@ -452,39 +452,49 @@ fn open_new_resource_form(item_idx: usize, state: &mut AppState, root: &Path) {
     let _ = root;
 }
 
-// ── Confirm action helpers ────────────────────────────────────────────────────
+// ── ConfirmAction — OOP execution (second impl block) ─────────────────────────
+//
+// Design Pattern: OOP — behaviour lives on the type, not in standalone functions.
+//
+// Placed here (not in app.rs) to avoid circular deps: app.rs does not import
+// actions.rs, but events_dashboard.rs does.
 
-pub(crate) fn execute_confirm_action(
-    state: &mut AppState,
-    root: &Path,
-    data: Option<String>,
-    yes_action: ConfirmAction,
-) -> Result<()> {
-    match yes_action {
-        ConfirmAction::DeleteProject => {
-            delete_selected_project(state, root)?;
-            state.push_notif(NotifKind::Success, "Project deleted");
+impl ConfirmAction {
+    /// Execute the confirmed action, consuming self.
+    pub(crate) fn execute(
+        self,
+        state: &mut AppState,
+        root: &Path,
+        data: Option<String>,
+    ) -> Result<()> {
+        match self {
+            ConfirmAction::DeleteProject => {
+                delete_selected_project(state, root)?;
+                state.push_notif(NotifKind::Success, "Project deleted");
+            }
+            ConfirmAction::DeleteHost => {
+                delete_selected_host(state, root)?;
+                state.push_notif(NotifKind::Success, "Host deleted");
+            }
+            ConfirmAction::LeaveForm => {
+                state.close_form_queue();
+            }
+            ConfirmAction::Quit => {
+                state.should_quit = true;
+            }
+            ConfirmAction::DeleteService => {
+                let name = data.unwrap_or_default();
+                delete_service_by_name(state, root, name.clone())?;
+                state.push_notif(NotifKind::Success, format!("Service '{}' deleted", name));
+            }
+            ConfirmAction::StopService => {
+                let name = data.unwrap_or_default();
+                stop_service_container(state, name.clone());
+                state.push_notif(NotifKind::Info, format!("Service '{}' stopped", name));
+            }
         }
-        ConfirmAction::DeleteHost    => {
-            delete_selected_host(state, root)?;
-            state.push_notif(NotifKind::Success, "Host deleted");
-        }
-        ConfirmAction::LeaveForm => {
-            state.close_form_queue();
-        }
-        ConfirmAction::Quit => { state.should_quit = true; }
-        ConfirmAction::DeleteService => {
-            let name = data.unwrap_or_default();
-            delete_service_by_name(state, root, name.clone())?;
-            state.push_notif(NotifKind::Success, format!("Service '{}' deleted", name));
-        }
-        ConfirmAction::StopService => {
-            let name = data.unwrap_or_default();
-            stop_service_container(state, name.clone());
-            state.push_notif(NotifKind::Info, format!("Service '{}' stopped", name));
-        }
+        Ok(())
     }
-    Ok(())
 }
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
