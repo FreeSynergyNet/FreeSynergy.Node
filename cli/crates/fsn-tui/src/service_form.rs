@@ -36,17 +36,17 @@ pub struct ServiceFormData {
     pub tags: String,
 
     // ── Tab 1: Network ────────────────────────────────────────────────────
-    #[form(label = "form.service.subdomain", tab = 0, hint = "form.service.subdomain.hint")]
+    #[form(label = "form.service.subdomain", tab = 1, hint = "form.service.subdomain.hint")]
     pub subdomain: String,
 
-    #[form(label = "form.service.alias", tab = 0, hint = "form.service.alias.hint")]
+    #[form(label = "form.service.alias", tab = 1, hint = "form.service.alias.hint")]
     pub alias: String,
 
-    #[form(label = "form.service.port", tab = 0)]
+    #[form(label = "form.service.port", tab = 1)]
     pub port: String,
 
     // ── Tab 2: Env ────────────────────────────────────────────────────────
-    #[form(label = "form.service.env", widget = "env_table", tab = 0, rows = 4,
+    #[form(label = "form.service.env", widget = "env_table", tab = 2, rows = 6,
            hint = "form.service.env.hint")]
     pub env: String,
 }
@@ -187,6 +187,25 @@ pub fn submit_service_form(form: &ResourceForm, services_dir: &Path, project_slu
         content.push_str(&format!("tags          = [{tag_list}]\n"));
     }
 
+    // Env vars: "KEY=value\n..." → [environment] TOML table
+    let env_raw = form.field_value("env");
+    let env_pairs: Vec<(String, String)> = env_raw.lines()
+        .filter_map(|line| {
+            let line = line.trim();
+            if line.is_empty() { return None; }
+            let (k, v) = line.split_once('=')?;
+            let k = k.trim().to_string();
+            if k.is_empty() { return None; }
+            Some((k, v.trim().to_string()))
+        })
+        .collect();
+    if !env_pairs.is_empty() {
+        content.push_str("\n[environment]\n");
+        for (k, v) in &env_pairs {
+            content.push_str(&format!("{k} = \"{v}\"\n"));
+        }
+    }
+
     std::fs::write(&path, content)?;
     Ok(())
 }
@@ -206,6 +225,12 @@ pub fn edit_service_form(
     let alias  = svc_entry.alias.as_deref().unwrap_or("");
     let ver    = svc_entry.version.as_str();
 
+    // Serialize env: IndexMap<String,String> → "KEY=value\n..." for EnvTableNode
+    let env_str: String = svc_entry.env.iter()
+        .map(|(k, v)| format!("{k}={v}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+
     let mut prefill = HashMap::new();
     prefill.insert("name",      svc_name);
     prefill.insert("class",     svc_entry.service_class.as_str());
@@ -214,6 +239,7 @@ pub fn edit_service_form(
     prefill.insert("subdomain", sub);
     prefill.insert("alias",     alias);
     prefill.insert("port",      port.as_str());
+    prefill.insert("env",       env_str.as_str());
 
     let nodes = schema_form::build_nodes(
         ServiceFormData::schema(),

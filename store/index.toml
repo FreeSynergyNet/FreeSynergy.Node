@@ -11,12 +11,12 @@ id           = "proxy/zentinel"
 name         = "Zentinel"
 service_type = "proxy"
 version      = "0.1.0"
-description  = "Caddy-based reverse proxy with automatic TLS, DNS challenge support and KDL-driven config"
+description  = "Pingora-based reverse proxy with automatic TLS, DNS challenge support and KDL-driven config"
 icon         = "modules/proxy/zentinel/zentinel.svg"
-website      = "https://caddyserver.com"
-repository   = "https://github.com/caddyserver/caddy"
+website      = "https://github.com/zentinelproxy/zentinel"
+repository   = "https://github.com/zentinelproxy/zentinel"
 author       = "FreeSynergy.Node"
-tags         = ["proxy", "tls", "caddy", "acme"]
+tags         = ["proxy", "tls", "pingora", "acme", "kdl"]
 
 # ── IAM ───────────────────────────────────────────────────────────────────────
 

@@ -9,7 +9,8 @@
 //   ↑ / ↓        — move between rows
 //   Down on last row — adds a new empty row
 //   Enter        — add new row after current, go to col 0
-//   Ctrl+Enter   — FormAction::Submit (form-level)
+//   Ctrl+N       — add new empty row at end
+//   Ctrl+D       — delete current row (keeps at least one row)
 //   Ctrl+← / →  — tab navigation (TabPrev / TabNext)
 //   Backspace    — delete char before cursor in active cell
 //   Delete       — delete char after cursor in active cell
@@ -162,6 +163,35 @@ impl EnvTableNode {
         self.cur_pos = 0;
     }
 
+    fn add_row_at_end(&mut self) {
+        self.rows.push(["".to_string(), "".to_string(), "".to_string()]);
+        self.cur_row = self.rows.len() - 1;
+        self.cur_col = 0;
+        self.cur_pos = 0;
+        self.dirty = true;
+        self.rebuild_cache();
+    }
+
+    /// Delete the current row. Keeps at least one (empty) row in the table.
+    fn delete_current_row(&mut self) {
+        if self.rows.len() == 1 {
+            // Clear the only row instead of removing it.
+            self.rows[0] = ["".to_string(), "".to_string(), "".to_string()];
+            self.cur_col = 0;
+            self.cur_pos = 0;
+        } else {
+            self.rows.remove(self.cur_row);
+            if self.cur_row >= self.rows.len() {
+                self.cur_row = self.rows.len() - 1;
+            }
+            self.cur_col = self.cur_col.min(2);
+            let cell_len = self.rows[self.cur_row][self.cur_col].len();
+            self.cur_pos = self.cur_pos.min(cell_len);
+        }
+        self.dirty = true;
+        self.rebuild_cache();
+    }
+
     fn update_scroll(&mut self) {
         let n = self.visible_rows as usize;
         if self.cur_row >= self.scroll_offset + n {
@@ -308,16 +338,25 @@ impl FormNode for EnvTableNode {
             }
         }
 
-        // Hint
-        if let Some(hk) = self.hint_key {
-            f.render_stateful_widget(
-                Paragraph::new(Line::from(Span::styled(
-                    crate::i18n::t(lang, hk),
-                    Style::default().fg(Color::DarkGray),
-                ))),
-                hint_area,
-                &mut ParagraphState::new(),
-            );
+        // Hint: when focused show shortcut bar; otherwise show the configured hint.
+        {
+            let hint_text = if focused {
+                "Enter: new row   Ctrl+N: add at end   Ctrl+D: delete row   ↑/↓: navigate".to_string()
+            } else if let Some(hk) = self.hint_key {
+                crate::i18n::t(lang, hk).to_string()
+            } else {
+                String::new()
+            };
+            if !hint_text.is_empty() {
+                f.render_stateful_widget(
+                    Paragraph::new(Line::from(Span::styled(
+                        hint_text,
+                        Style::default().fg(Color::DarkGray),
+                    ))),
+                    hint_area,
+                    &mut ParagraphState::new(),
+                );
+            }
         }
     }
 
@@ -381,6 +420,18 @@ impl FormNode for EnvTableNode {
             KeyCode::Enter => {
                 self.add_row_after_current();
                 return FormAction::Consumed;
+            }
+
+            // Ctrl+N: add new row at end
+            KeyCode::Char('n') if key.modifiers.contains(KM::CONTROL) => {
+                self.add_row_at_end();
+                return FormAction::ValueChanged;
+            }
+
+            // Ctrl+D: delete current row (keeps at least one empty row)
+            KeyCode::Char('d') if key.modifiers.contains(KM::CONTROL) => {
+                self.delete_current_row();
+                return FormAction::ValueChanged;
             }
 
             // Cursor movement within cell
