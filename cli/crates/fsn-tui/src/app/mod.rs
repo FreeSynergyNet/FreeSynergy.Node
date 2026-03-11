@@ -34,7 +34,7 @@ pub use sidebar::{NEW_RESOURCE_ITEMS, SidebarAction, SidebarItem};
 // Re-export handle and form types so existing `use crate::app::*` imports keep working.
 pub use crate::handles::{HostHandle, ProjectHandle, RunState, ServiceHandle, ServiceRow, run_state_i18n};
 pub use crate::resource_form::{
-    BOT_TABS, HOST_TABS, PROJECT_TABS, ResourceForm, ResourceKind, SERVICE_TABS, slugify,
+    BOT_TABS, HOST_TABS, PROJECT_TABS, ResourceForm, ResourceKind, SERVICE_TABS, STORE_TABS, slugify,
 };
 
 // ── Full application state ────────────────────────────────────────────────────
@@ -85,6 +85,8 @@ pub struct AppState {
     pub reconcile_rx:         Option<mpsc::Receiver<HashMap<String, RunState>>>,
     /// Background store fetcher — receives fresh entries after HTTP fetch completes.
     pub store_rx:             Option<mpsc::Receiver<Vec<fsn_core::store::StoreEntry>>>,
+    /// Background language downloader — receives Ok(code) on success, Err(msg) on failure.
+    pub lang_download_rx:     Option<mpsc::Receiver<Result<String, String>>>,
     pub settings:             AppSettings,
     pub store_entries:        Vec<StoreEntry>,
     pub settings_cursor:      usize,
@@ -147,6 +149,7 @@ impl AppState {
             deploy_rx: None,
             reconcile_rx: None,
             store_rx: None,
+            lang_download_rx: None,
             settings,
             store_entries: Vec::new(),
             settings_cursor: 0,

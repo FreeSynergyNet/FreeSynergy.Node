@@ -251,6 +251,9 @@ fn open_new_resource_form(item_idx: usize, state: &mut AppState, root: &Path) {
         ResourceKind::Bot => {
             state.open_form(crate::bot_form::new_bot_form());
         }
+        ResourceKind::Store => {
+            // Stores are edited from Settings, not from the new-resource menu.
+        }
     }
     let _ = root;
 }

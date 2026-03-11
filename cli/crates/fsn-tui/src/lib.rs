@@ -24,6 +24,7 @@ pub mod project_form;
 pub mod resource_form;
 pub mod schema_form;
 pub mod service_form;
+pub mod settings_form;
 pub mod submit;
 pub mod sysinfo;
 pub mod task_queue;
@@ -62,6 +63,63 @@ pub fn spawn_store_fetcher(
         let _ = tx.send(entries);
     });
     rx
+}
+
+// ── Background language downloader ───────────────────────────────────────────
+
+/// Known languages available in the FSN Store (under `Node/i18n/`).
+/// Each entry is (BCP-47 code, display name).
+pub const KNOWN_STORE_LANGS: &[(&str, &str)] = &[
+    ("de", "Deutsch"),
+];
+
+/// Download a language TOML file from the first enabled store and save it to
+/// `~/.local/share/fsn/i18n/{code}.toml`.
+///
+/// Returns `Ok(code)` on success, `Err(message)` on failure.
+/// The caller should set `state.lang_download_rx` to the returned receiver and
+/// call `state.reload_langs()` when the result arrives (handled in event_loop.rs).
+pub fn spawn_lang_downloader(
+    code:     &str,
+    settings: fsn_core::config::AppSettings,
+) -> mpsc::Receiver<Result<String, String>> {
+    let code = code.to_string();
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let result = download_lang(&code, &settings);
+        let _ = tx.send(result.map(|_| code).map_err(|e| e.to_string()));
+    });
+    rx
+}
+
+fn download_lang(code: &str, settings: &fsn_core::config::AppSettings) -> anyhow::Result<()> {
+    // Determine source: local_path first (fast, no HTTP required), then HTTP.
+    let content = if let Some(store) = settings.stores.iter().find(|s| s.enabled && s.local_path.is_some()) {
+        let path = std::path::PathBuf::from(store.local_path.as_deref().unwrap())
+            .join("Node").join("i18n").join(format!("{code}.toml"));
+        std::fs::read_to_string(&path)
+            .map_err(|e| anyhow::anyhow!("local read: {e}"))?
+    } else if let Some(store) = settings.stores.iter().find(|s| s.enabled) {
+        let url = format!("{}/Node/i18n/{code}.toml", store.url.trim_end_matches('/'));
+        let rt  = tokio::runtime::Runtime::new()?;
+        rt.block_on(async move {
+            let resp = reqwest::get(&url).await?.error_for_status()?;
+            resp.text().await.map_err(anyhow::Error::from)
+        })?
+    } else {
+        anyhow::bail!("no enabled store configured");
+    };
+
+    // Validate that the TOML is parseable before saving.
+    crate::i18n::DynamicLang::load(&content)
+        .map_err(|e| anyhow::anyhow!("invalid language file: {e}"))?;
+
+    // Save to the user's i18n directory.
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+    let dir  = std::path::PathBuf::from(home).join(".local").join("share").join("fsn").join("i18n");
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(dir.join(format!("{code}.toml")), content)?;
+    Ok(())
 }
 
 // ── Background reconciler ─────────────────────────────────────────────────────

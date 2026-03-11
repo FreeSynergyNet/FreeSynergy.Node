@@ -12,11 +12,12 @@ pub const PROJECT_TABS: &[&str] = &["form.tab.project"];
 pub const SERVICE_TABS: &[&str] = &["form.tab.service"];
 pub const HOST_TABS:    &[&str] = &["form.tab.host"];
 pub const BOT_TABS:     &[&str] = &["form.tab.bot"];
+pub const STORE_TABS:   &[&str] = &["settings.tab.stores"];
 
 // ── Resource kind ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ResourceKind { Project, Service, Host, Bot }
+pub enum ResourceKind { Project, Service, Host, Bot, Store }
 
 impl ResourceKind {
     pub fn submit_key(self) -> &'static str {
@@ -25,6 +26,7 @@ impl ResourceKind {
             ResourceKind::Service => "form.submit.service",
             ResourceKind::Host    => "form.submit.host",
             ResourceKind::Bot     => "form.submit.bot",
+            ResourceKind::Store   => "form.submit.store",
         }
     }
 
@@ -38,6 +40,7 @@ impl ResourceKind {
             (ResourceKind::Host,    false) => "form.new_host",
             (ResourceKind::Host,    true)  => "form.edit_host",
             (ResourceKind::Bot,     _)     => "form.tab.bot",
+            (ResourceKind::Store,   _)     => "settings.store.edit",
         }
     }
 }

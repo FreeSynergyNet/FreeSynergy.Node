@@ -226,6 +226,43 @@ fn handle_left_click(col: u16, row: u16, state: &mut AppState, root: &Path) -> R
                 }
             }
         }
+        DashHit::Miss => {
+            // ClickMap dispatch for non-dashboard screens (e.g. Settings).
+            let target = state.click_map.hit(col, row).cloned();
+            match target {
+                Some(ClickTarget::SettingsCursor { idx }) => {
+                    state.settings_cursor = idx;
+                    if dbl {
+                        // Double-click on store row — open edit form.
+                        if let Some(store) = state.settings.stores.get(idx) {
+                            let form = crate::settings_form::edit_store_form(idx, store);
+                            state.open_form(form);
+                        }
+                    }
+                }
+                Some(ClickTarget::LangCursor { idx }) => {
+                    state.lang_cursor = idx;
+                    // Double-click activates / downloads — same as Enter in events.rs.
+                    if dbl {
+                        let installed = state.available_langs.len();
+                        if idx == 0 {
+                            state.lang = crate::app::Lang::En;
+                            state.settings.preferred_lang = None;
+                            let _ = state.settings.save();
+                        } else if idx <= installed {
+                            if let Some(dl) = state.available_langs.get(idx - 1) {
+                                state.lang = crate::app::Lang::Dynamic(dl);
+                                state.settings.preferred_lang = Some(dl.code.to_string());
+                                let _ = state.settings.save();
+                            }
+                        } else {
+                            crate::events::trigger_lang_download_pub(state, idx - 1 - installed);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
         _ => {}
     }
     Ok(())

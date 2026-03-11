@@ -49,6 +49,14 @@ pub enum ClickTarget {
     /// A navigation tab in the header bar.
     /// `index` maps to: 0=Projects, 1=Hosts, 2=Services, 3=Store, 4=Settings.
     NavTab { index: usize },
+
+    /// A store row in the Settings → Stores tab.
+    /// `idx` = index into `state.settings.stores`.
+    SettingsCursor { idx: usize },
+
+    /// A language row in the Settings → Languages tab.
+    /// `idx` = absolute cursor index (0 = English, 1+ = installed, then downloadable).
+    LangCursor { idx: usize },
 }
 
 // ── ClickMap ──────────────────────────────────────────────────────────────────

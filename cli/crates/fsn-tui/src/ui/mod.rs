@@ -11,6 +11,7 @@
 
 pub mod anim;
 pub mod components;
+pub mod cursor;
 pub mod dashboard;
 pub mod detail;
 pub mod form_node;

@@ -272,8 +272,14 @@ impl FormNode for EnvTableNode {
         let [block_area, hint_area] = [chunks[0], chunks[1]];
 
         // ── Outer block ──────────────────────────────────────────────────────
-        let label_text   = crate::i18n::t(lang, self.label_key);
-        let label_style  = if focused {
+        let label_text  = crate::i18n::t(lang, self.label_key);
+        // Show row counter in title so the user always knows how many rows exist.
+        let title_text  = if focused && self.rows.len() > 1 {
+            format!(" {} [{}/{}] ", label_text, self.cur_row + 1, self.rows.len())
+        } else {
+            format!(" {} ", label_text)
+        };
+        let label_style = if focused {
             Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(Color::White)
@@ -285,7 +291,7 @@ impl FormNode for EnvTableNode {
         };
 
         let block = Block::default()
-            .title(Line::from(Span::styled(format!(" {} ", label_text), label_style)))
+            .title(Line::from(Span::styled(title_text, label_style)))
             .borders(Borders::ALL)
             .border_style(outer_border);
 
@@ -294,126 +300,104 @@ impl FormNode for EnvTableNode {
 
         if inner.height == 0 { return; }
 
-        // ── Editor section — 3 bordered input boxes for the current row ──────
-        //
-        // Always rendered at the top; takes exactly 3 rows (top border + content + bottom border).
-        const EDITOR_H: u16 = 3;
+        if focused {
+            // ── Focused: 3-box editor (current row) + compact list (other rows) ──
+            //
+            // Editor takes exactly 3 rows (top border + content + bottom border).
+            const EDITOR_H: u16 = 3;
 
-        // Column widths: KEY(28%) | VALUE(40%) | COMMENT(rest)
-        let key_w = (inner.width * 28 / 100).max(5);
-        let val_w = (inner.width * 40 / 100).max(8);
-        let com_w = inner.width.saturating_sub(key_w).saturating_sub(val_w);
+            // Column widths: KEY(28%) | VALUE(40%) | COMMENT(rest)
+            let key_w = (inner.width * 28 / 100).max(5);
+            let val_w = (inner.width * 40 / 100).max(8);
+            let com_w = inner.width.saturating_sub(key_w).saturating_sub(val_w);
 
-        let col_rects = [
-            Rect { x: inner.x,                  y: inner.y, width: key_w, height: EDITOR_H.min(inner.height) },
-            Rect { x: inner.x + key_w,           y: inner.y, width: val_w, height: EDITOR_H.min(inner.height) },
-            Rect { x: inner.x + key_w + val_w,   y: inner.y, width: com_w, height: EDITOR_H.min(inner.height) },
-        ];
-        let col_names = ["KEY", "VALUE", "COMMENT"];
+            let col_rects = [
+                Rect { x: inner.x,                y: inner.y, width: key_w, height: EDITOR_H.min(inner.height) },
+                Rect { x: inner.x + key_w,         y: inner.y, width: val_w, height: EDITOR_H.min(inner.height) },
+                Rect { x: inner.x + key_w + val_w, y: inner.y, width: com_w, height: EDITOR_H.min(inner.height) },
+            ];
+            let col_names = ["KEY", "VALUE", "COMMENT"];
 
-        for (ci, &col_rect) in col_rects.iter().enumerate() {
-            if col_rect.width == 0 { continue; }
+            for (ci, &col_rect) in col_rects.iter().enumerate() {
+                if col_rect.width == 0 { continue; }
 
-            let cell_val  = self.rows.get(self.cur_row).map(|r| r[ci].as_str()).unwrap_or("");
-            let is_active = focused && ci == self.cur_col;
+                let cell_val  = self.rows.get(self.cur_row).map(|r| r[ci].as_str()).unwrap_or("");
+                let is_active = ci == self.cur_col;
 
-            let (border_style, title_style) = if is_active {
-                (
-                    Style::default().fg(Color::Cyan),
-                    Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
-                )
-            } else if focused {
-                (
-                    Style::default().fg(Color::DarkGray),
-                    Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD),
-                )
-            } else {
-                (
-                    Style::default().fg(Color::DarkGray),
-                    Style::default().fg(Color::DarkGray),
-                )
-            };
+                let (border_style, title_style) = if is_active {
+                    (Style::default().fg(Color::Cyan), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+                } else {
+                    (Style::default().fg(Color::DarkGray), Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD))
+                };
 
-            let cell_block = Block::default()
-                .title(Span::styled(format!(" {} ", col_names[ci]), title_style))
-                .borders(Borders::ALL)
-                .border_style(border_style);
-            let cell_inner = cell_block.inner(col_rect);
-            f.render_widget(cell_block, col_rect);
+                let cell_block = Block::default()
+                    .title(Span::styled(format!(" {} ", col_names[ci]), title_style))
+                    .borders(Borders::ALL)
+                    .border_style(border_style);
+                let cell_inner = cell_block.inner(col_rect);
+                f.render_widget(cell_block, col_rect);
 
-            if cell_inner.height == 0 { continue; }
+                if cell_inner.height == 0 { continue; }
 
-            let line = if is_active {
                 let pos    = self.cur_pos.min(cell_val.len());
                 let before = &cell_val[..pos];
                 let after  = &cell_val[pos..];
-                Line::from(vec![
-                    Span::styled(before.to_string(), Style::default().fg(Color::White)),
-                    Span::styled("█",               Style::default().fg(Color::Cyan)),
-                    Span::styled(after.to_string(),  Style::default().fg(Color::White)),
-                ])
-            } else {
-                let style = if cell_val.is_empty() {
-                    Style::default().fg(Color::DarkGray)
-                } else {
-                    Style::default().fg(Color::White)
-                };
-                Line::from(Span::styled(cell_val.to_string(), style))
-            };
-            f.render_stateful_widget(Paragraph::new(line), cell_inner, &mut ParagraphState::new());
-        }
-
-        // ── Other rows list — all rows except cur_row, shown below the editor ─
-        let list_y = inner.y + EDITOR_H;
-        if list_y < inner.bottom() {
-            let n_slots = (inner.bottom() - list_y) as usize;
-            let mut slot = 0usize;
-
-            for row_idx in 0..self.rows.len() {
-                if row_idx == self.cur_row { continue; } // active row is in the editor
-
-                // Apply scroll offset: skip leading rows.
-                let virtual_idx = if row_idx < self.cur_row { row_idx } else { row_idx - 1 };
-                if virtual_idx < self.scroll_offset { continue; }
-
-                if slot >= n_slots { break; }
-                let row_y = list_y + slot as u16;
-
-                let row   = &self.rows[row_idx];
-                let key   = row[0].as_str();
-                let val   = row[1].as_str();
-
-                let line = if key.is_empty() {
-                    Line::from(Span::styled("  —", Style::default().fg(Color::DarkGray)))
-                } else {
+                let line = if is_active {
                     Line::from(vec![
-                        Span::raw("  "),
-                        Span::styled(key.to_string(), Style::default().fg(Color::White)),
-                        Span::styled(" = ", Style::default().fg(Color::DarkGray)),
-                        Span::styled(val.to_string(), Style::default().fg(Color::DarkGray)),
+                        Span::styled(before.to_string(), Style::default().fg(Color::White)),
+                        Span::styled("█",               Style::default().fg(Color::Cyan)),
+                        Span::styled(after.to_string(),  Style::default().fg(Color::White)),
                     ])
+                } else {
+                    let style = if cell_val.is_empty() {
+                        Style::default().fg(Color::DarkGray)
+                    } else {
+                        Style::default().fg(Color::White)
+                    };
+                    Line::from(Span::styled(cell_val.to_string(), style))
                 };
-                f.render_stateful_widget(
-                    Paragraph::new(line),
-                    Rect { x: inner.x, y: row_y, width: inner.width, height: 1 },
-                    &mut ParagraphState::new(),
-                );
-                slot += 1;
+                f.render_stateful_widget(Paragraph::new(line), cell_inner, &mut ParagraphState::new());
+            }
+
+            // Other rows: compact list below the editor
+            let list_y = inner.y + EDITOR_H;
+            if list_y < inner.bottom() {
+                let n_slots = (inner.bottom() - list_y) as usize;
+                let mut slot = 0usize;
+                for row_idx in 0..self.rows.len() {
+                    if row_idx == self.cur_row { continue; }
+                    let virtual_idx = if row_idx < self.cur_row { row_idx } else { row_idx - 1 };
+                    if virtual_idx < self.scroll_offset { continue; }
+                    if slot >= n_slots { break; }
+                    render_compact_row(f, &self.rows[row_idx], inner.x, list_y + slot as u16, inner.width);
+                    slot += 1;
+                }
+            }
+        } else {
+            // ── Unfocused: compact list of ALL rows — data is always visible ──
+            //
+            // This is the key UX fix: when focus leaves the env table, every
+            // row remains readable as a compact "KEY = value" entry so the user
+            // can confirm their input without re-focusing the field.
+            let n_slots = inner.height as usize;
+            for (i, row) in self.rows.iter().enumerate() {
+                if i >= n_slots { break; }
+                render_compact_row(f, row, inner.x, inner.y + i as u16, inner.width);
             }
         }
 
         // ── Hint bar ─────────────────────────────────────────────────────────
         let hint_text = if focused {
-            "Tab: next col   ↑/↓: rows   Enter: new row   Ctrl+D: delete".to_string()
+            "Tab: next col   ↑/↓: rows   Enter: new row   Ctrl+D: delete"
         } else if let Some(hk) = self.hint_key {
-            crate::i18n::t(lang, hk).to_string()
+            crate::i18n::t(lang, hk)
         } else {
-            String::new()
+            ""
         };
         if !hint_text.is_empty() {
             f.render_stateful_widget(
                 Paragraph::new(Line::from(Span::styled(
-                    hint_text,
+                    hint_text.to_string(),
                     Style::default().fg(Color::DarkGray),
                 ))),
                 hint_area,
@@ -519,4 +503,34 @@ impl FormNode for EnvTableNode {
 
         FormAction::Unhandled
     }
+}
+
+// ── Module-level helpers ──────────────────────────────────────────────────────
+
+/// Render one env row as a compact `  KEY = value` line.
+/// Used by both the focused-mode "other rows" list and the unfocused compact view.
+fn render_compact_row(
+    f:     &mut RenderCtx<'_>,
+    row:   &[String; 3],
+    x:     u16,
+    y:     u16,
+    width: u16,
+) {
+    let key = row[0].as_str();
+    let val = row[1].as_str();
+    let line = if key.is_empty() {
+        Line::from(Span::styled("  —", Style::default().fg(Color::DarkGray)))
+    } else {
+        Line::from(vec![
+            Span::raw("  "),
+            Span::styled(key.to_string(),    Style::default().fg(Color::White)),
+            Span::styled(" = ".to_string(),  Style::default().fg(Color::DarkGray)),
+            Span::styled(val.to_string(),    Style::default().fg(Color::DarkGray)),
+        ])
+    };
+    f.render_stateful_widget(
+        Paragraph::new(line),
+        Rect { x, y, width, height: 1 },
+        &mut ParagraphState::new(),
+    );
 }

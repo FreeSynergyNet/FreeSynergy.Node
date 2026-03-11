@@ -143,6 +143,25 @@ fn fsn_event(
                 }
             }
 
+            // Drain language downloader channel (one-shot).
+            let lang_result: Option<Result<String, String>> = state.lang_download_rx
+                .as_ref()
+                .and_then(|rx| rx.try_recv().ok());
+            if let Some(result) = lang_result {
+                state.lang_download_rx = None;
+                match result {
+                    Ok(code) => {
+                        state.reload_langs();
+                        state.push_notif(NotifKind::Success,
+                            format!("Language '{}' downloaded", code.to_uppercase()));
+                    }
+                    Err(msg) => {
+                        state.push_notif(NotifKind::Info,
+                            format!("Language download failed: {msg}"));
+                    }
+                }
+            }
+
             // Refresh sysinfo every 5 s.
             if state.last_refresh.elapsed() >= Duration::from_secs(5) {
                 state.sysinfo = crate::sysinfo::SysInfo::collect();

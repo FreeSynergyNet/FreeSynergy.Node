@@ -1141,6 +1141,7 @@ dependencies = [
  "rat-theme4",
  "rat-widget",
  "ratatui",
+ "reqwest",
  "sysinfo",
  "tokio",
  "toml 0.8.23",

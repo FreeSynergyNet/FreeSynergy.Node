@@ -62,6 +62,7 @@ impl ResourceKind {
             ResourceKind::Service => submit_service(state, root),
             ResourceKind::Host    => submit_host(state, root),
             ResourceKind::Bot     => submit_bot(state, root),
+            ResourceKind::Store   => submit_store(state),
         }
     }
 }
@@ -245,6 +246,43 @@ pub fn submit_host(state: &mut AppState, root: &Path) -> Result<()> {
             state.dash_focus = DashFocus::Sidebar;
             advance_or_close(state);
             state.push_notif(NotifKind::Success, format!("Host '{}' saved", name));
+        }
+        Some(Err(e)) => apply_submit_error(state, e),
+        None => {}
+    }
+    Ok(())
+}
+
+pub fn submit_store(state: &mut AppState) -> Result<()> {
+    // Collect all form values first (immutable borrow ends before we mutate state).
+    let values = state.active_form().map(|form| {
+        let idx        = form.edit_id.as_ref().and_then(|s| s.parse::<usize>().ok());
+        let name       = form.field_value("name");
+        let url        = form.field_value("url");
+        let git_url    = { let v = form.field_value("git_url");    if v.is_empty() { None } else { Some(v) } };
+        let local_path = { let v = form.field_value("local_path"); if v.is_empty() { None } else { Some(v) } };
+        let enabled    = form.field_value("enabled") == "true";
+        (idx, name, url, git_url, local_path, enabled)
+    });
+
+    let result: Option<anyhow::Result<String>> = values.map(|(idx, name, url, git_url, local_path, enabled)| {
+        let idx = idx.ok_or_else(|| anyhow::anyhow!("invalid store index"))?;
+        let store = state.settings.stores.get_mut(idx)
+            .ok_or_else(|| anyhow::anyhow!("store index out of range"))?;
+        store.name       = name.clone();
+        store.url        = url;
+        store.git_url    = git_url;
+        store.local_path = local_path;
+        store.enabled    = enabled;
+        state.settings.save().map_err(|e| anyhow::anyhow!("{e}"))?;
+        Ok(name)
+    });
+
+    match result {
+        Some(Ok(name)) => {
+            advance_or_close(state);
+            state.screen = crate::app::Screen::Settings;
+            state.push_notif(NotifKind::Success, format!("Store '{}' saved", name));
         }
         Some(Err(e)) => apply_submit_error(state, e),
         None => {}

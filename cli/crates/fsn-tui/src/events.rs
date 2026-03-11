@@ -155,6 +155,7 @@ fn handle_resource_form(key: KeyEvent, state: &mut AppState, root: &Path) -> Res
 
     match action {
         FormAction::Cancel => {
+            let kind  = state.active_form().map(|f| f.kind);
             let dirty = state.active_form().map(|f| f.is_dirty()).unwrap_or(false);
             if dirty {
                 state.push_overlay(OverlayLayer::Confirm {
@@ -164,6 +165,9 @@ fn handle_resource_form(key: KeyEvent, state: &mut AppState, root: &Path) -> Res
                 });
             } else {
                 state.close_form_queue();
+                if kind == Some(crate::resource_form::ResourceKind::Store) {
+                    state.screen = Screen::Settings;
+                }
             }
         }
         FormAction::LangToggle => state.cycle_lang(),
@@ -214,11 +218,14 @@ fn handle_settings_stores(key: KeyEvent, state: &mut AppState) -> Result<()> {
 
     let n = state.settings.stores.len();
     match key.code {
-        KeyCode::Up => {
-            if state.settings_cursor > 0 { state.settings_cursor -= 1; }
-        }
-        KeyCode::Down => {
-            if n > 0 && state.settings_cursor < n - 1 { state.settings_cursor += 1; }
+        KeyCode::Up   => crate::ui::cursor::up(&mut state.settings_cursor),
+        KeyCode::Down => crate::ui::cursor::down(&mut state.settings_cursor, n),
+        KeyCode::Enter => {
+            // Open a ResourceForm to edit the selected store.
+            if let Some(store) = state.settings.stores.get(state.settings_cursor) {
+                let form = crate::settings_form::edit_store_form(state.settings_cursor, store);
+                state.open_form(form);
+            }
         }
         KeyCode::Char(' ') => {
             if let Some(store) = state.settings.stores.get_mut(state.settings_cursor) {
@@ -254,38 +261,57 @@ fn handle_settings_stores(key: KeyEvent, state: &mut AppState) -> Result<()> {
 }
 
 fn handle_settings_languages(key: KeyEvent, state: &mut AppState) -> Result<()> {
-    // Index 0 = English (built-in), 1..=n = available_langs
-    let n_total = 1 + state.available_langs.len();
+    // Cursor layout:
+    //   0               → English (built-in)
+    //   1..=installed   → available_langs (downloaded)
+    //   installed+1..   → downloadable store langs not yet installed
+    let installed   = state.available_langs.len();
+    let downloadable = crate::KNOWN_STORE_LANGS.iter()
+        .filter(|(code, _)| !state.available_langs.iter().any(|d| d.code == *code))
+        .count();
+    let n_total = 1 + installed + downloadable;
 
     match key.code {
-        KeyCode::Up => {
-            if state.lang_cursor > 0 { state.lang_cursor -= 1; }
-        }
-        KeyCode::Down => {
-            if state.lang_cursor + 1 < n_total { state.lang_cursor += 1; }
-        }
+        KeyCode::Up   => crate::ui::cursor::up(&mut state.lang_cursor),
+        KeyCode::Down => crate::ui::cursor::down(&mut state.lang_cursor, n_total),
+
         KeyCode::Enter => {
-            // Activate selected language.
-            if state.lang_cursor == 0 {
+            let idx = state.lang_cursor;
+            if idx == 0 {
+                // Activate English.
                 state.lang = crate::app::Lang::En;
                 state.settings.preferred_lang = None;
                 let _ = state.settings.save();
-            } else if let Some(dl) = state.available_langs.get(state.lang_cursor - 1) {
-                state.lang = crate::app::Lang::Dynamic(dl);
-                state.settings.preferred_lang = Some(dl.code.to_string());
-                let _ = state.settings.save();
+            } else if idx <= installed {
+                // Activate an already-installed language.
+                if let Some(dl) = state.available_langs.get(idx - 1) {
+                    state.lang = crate::app::Lang::Dynamic(dl);
+                    state.settings.preferred_lang = Some(dl.code.to_string());
+                    let _ = state.settings.save();
+                }
+            } else {
+                // Download a store language — same as 'f'.
+                trigger_lang_download(state, idx - 1 - installed);
             }
         }
+
+        // 'f' / 'F' = fetch (download) the selected store language.
+        KeyCode::Char('f') | KeyCode::Char('F') => {
+            let idx = state.lang_cursor;
+            if idx > installed {
+                trigger_lang_download(state, idx - 1 - installed);
+            }
+        }
+
         KeyCode::Delete | KeyCode::Char('d') | KeyCode::Char('D') => {
             // Remove a downloaded language file (built-in English cannot be removed).
-            if state.lang_cursor > 0 {
+            if state.lang_cursor > 0 && state.lang_cursor <= installed {
                 if let Some(dl) = state.available_langs.get(state.lang_cursor - 1) {
                     let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
                     let path = std::path::PathBuf::from(home)
                         .join(".local/share/fsn/i18n")
                         .join(format!("{}.toml", dl.code));
                     let _ = std::fs::remove_file(&path);
-                    // If active language was removed, fall back to English.
                     if matches!(state.lang, crate::app::Lang::Dynamic(d) if d.code == dl.code) {
                         state.lang = crate::app::Lang::En;
                         state.settings.preferred_lang = None;
@@ -296,10 +322,32 @@ fn handle_settings_languages(key: KeyEvent, state: &mut AppState) -> Result<()> 
                 }
             }
         }
+
         KeyCode::Esc | KeyCode::Char('q') => {
             state.screen = Screen::Dashboard;
         }
         _ => {}
     }
     Ok(())
+}
+
+/// Public wrapper — called by mouse.rs on double-click of a downloadable lang row.
+pub(crate) fn trigger_lang_download_pub(state: &mut AppState, download_idx: usize) {
+    trigger_lang_download(state, download_idx);
+}
+
+/// Spawn a background download for the Nth downloadable store language.
+fn trigger_lang_download(state: &mut AppState, download_idx: usize) {
+    if state.lang_download_rx.is_some() {
+        state.push_notif(crate::app::NotifKind::Info, "Download already in progress…");
+        return;
+    }
+    let uninstalled: Vec<&str> = crate::KNOWN_STORE_LANGS.iter()
+        .filter(|(code, _)| !state.available_langs.iter().any(|d| d.code == *code))
+        .map(|(code, _)| *code)
+        .collect();
+    if let Some(&code) = uninstalled.get(download_idx) {
+        state.push_notif(crate::app::NotifKind::Info, format!("Downloading {}…", code.to_uppercase()));
+        state.lang_download_rx = Some(crate::spawn_lang_downloader(code, state.settings.clone()));
+    }
 }

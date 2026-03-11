@@ -19,6 +19,7 @@ rat-theme4    = { workspace = true }
 tui-big-text  = { workspace = true }
 sysinfo    = { workspace = true }
 anyhow     = { workspace = true }
+reqwest    = { workspace = true }
 tokio      = { workspace = true }
 tracing    = { workspace = true }
 toml       = { workspace = true }
