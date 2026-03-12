@@ -258,10 +258,12 @@ fn handle_left_click(col: u16, row: u16, state: &mut AppState, root: &Path) -> R
                     use crate::app::SettingsFocus;
                     state.lang_cursor = idx;
                     state.settings_focus = SettingsFocus::Content;
-                    // Double-click: activate if installed, download if not.
-                    // Single source of truth via lang_cursor_activate_pub.
                     if dbl {
+                        // Double-click: activate language (Enter behavior).
                         crate::events::lang_cursor_activate_pub(state, idx);
+                    } else {
+                        // Single-click: toggle checkbox (Space behavior).
+                        crate::events::lang_cursor_toggle_pub(state, idx);
                     }
                 }
                 _ => {}

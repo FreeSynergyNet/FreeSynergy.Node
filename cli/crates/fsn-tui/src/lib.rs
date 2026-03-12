@@ -83,11 +83,11 @@ pub struct StoreLangEntry {
 /// The main loop picks it up and stores it in `state.store_langs`.
 pub fn spawn_lang_index_fetcher(
     settings: fsn_core::config::AppSettings,
-) -> mpsc::Receiver<Vec<StoreLangEntry>> {
+) -> mpsc::Receiver<Result<Vec<StoreLangEntry>, String>> {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
-        let entries = fetch_lang_index(&settings).unwrap_or_default();
-        let _ = tx.send(entries);
+        let result = fetch_lang_index(&settings).map_err(|e| e.to_string());
+        let _ = tx.send(result);
     });
     rx
 }
@@ -219,9 +219,14 @@ fn podman_container_statuses() -> HashMap<String, RunState> {
 /// Start the TUI. Blocks until the user quits.
 /// Terminal setup (raw mode, alternate screen, mouse capture) is managed by rat-salsa.
 pub fn run(root: &Path) -> Result<()> {
-    let sysinfo  = SysInfo::collect();
-    let projects = load_projects(root);
+    let sysinfo = SysInfo::collect();
+    let (projects, project_errors) = load_projects(root);
     let mut state = AppState::new(sysinfo, projects);
+
+    // Surface load errors as startup notifications (broken/invalid TOML files).
+    for msg in project_errors {
+        state.push_notif(app::NotifKind::Info, msg);
+    }
 
     // Load the bundled store index (offline — no HTTP required at startup).
     let store_index = fsn_engine::store::StoreClient::load_bundled(&root.join("modules"));
@@ -230,7 +235,11 @@ pub fn run(root: &Path) -> Result<()> {
     // Load hosts for the first selected project.
     if let Some(proj) = state.projects.first() {
         let project_dir = root.join("projects").join(&proj.slug);
-        state.hosts = load_hosts(&project_dir);
+        let (hosts, host_errors) = load_hosts(&project_dir);
+        state.hosts = hosts;
+        for msg in host_errors {
+            state.push_notif(app::NotifKind::Info, msg);
+        }
         state.rebuild_sidebar();
     }
 
@@ -251,11 +260,9 @@ pub fn run(root: &Path) -> Result<()> {
     state.store_rx = store_fetcher_rx;
 
     // Fetch language index from Store in the background.
-    state.store_langs_rx = if state.settings.stores.iter().any(|s| s.enabled) {
-        Some(spawn_lang_index_fetcher(state.settings.clone()))
-    } else {
-        None
-    };
+    // Always spawned — even if no store is configured, the fetcher returns a
+    // descriptive error that the Tick handler surfaces as a notification.
+    state.store_langs_rx = Some(spawn_lang_index_fetcher(state.settings.clone()));
 
     // Start background reconciler (polls Podman every 5 seconds).
     // The receiver lives in AppState so the rat-salsa Tick handler can drain it.
@@ -267,12 +274,17 @@ pub fn run(root: &Path) -> Result<()> {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /// Load all projects from `root/projects/` using `ProjectConfig::load()`.
-pub fn load_projects(root: &Path) -> Vec<ProjectHandle> {
+///
+/// Returns `(valid_projects, load_errors)`. Broken or invalid TOML files are
+/// skipped and their error messages collected in the second return value so the
+/// caller can surface them as UI notifications.
+pub fn load_projects(root: &Path) -> (Vec<ProjectHandle>, Vec<String>) {
     let projects_dir = root.join("projects");
-    if !projects_dir.exists() { return vec![]; }
+    if !projects_dir.exists() { return (vec![], vec![]); }
 
     let mut projects = Vec::new();
-    let Ok(entries) = std::fs::read_dir(&projects_dir) else { return projects; };
+    let mut errors   = Vec::new();
+    let Ok(entries) = std::fs::read_dir(&projects_dir) else { return (projects, errors); };
 
     for entry in entries.flatten() {
         let path = entry.path();
@@ -289,16 +301,19 @@ pub fn load_projects(root: &Path) -> Vec<ProjectHandle> {
             let stem = fp.file_stem().and_then(|s| s.to_str()).unwrap_or("");
             let slug = stem.strip_suffix(".project").unwrap_or(stem).to_string();
 
-            if let Ok(mut config) = fsn_core::config::project::ProjectConfig::load(&fp) {
-                // Merge standalone .service.toml files — source of truth for env + all fields.
-                // Services in the services/ subdir are always authoritative; project TOML
-                // entries are just a lightweight reference (class + version).
-                merge_service_instances(&mut config, &path);
-                projects.push(ProjectHandle { slug, toml_path: fp, config });
+            match fsn_core::config::project::ProjectConfig::load(&fp) {
+                Ok(mut config) => {
+                    // Merge standalone .service.toml files — source of truth for env + all fields.
+                    merge_service_instances(&mut config, &path);
+                    projects.push(ProjectHandle { slug, toml_path: fp, config });
+                }
+                Err(e) => {
+                    errors.push(format!("Broken project file '{}': {e}", fp.display()));
+                }
             }
         }
     }
-    projects
+    (projects, errors)
 }
 
 /// Merge standalone `.service.toml` files from `{project_dir}/services/` into the
@@ -357,9 +372,13 @@ fn merge_service_instances(
 }
 
 /// Load all `.host.toml` files from a project directory.
-pub fn load_hosts(project_dir: &Path) -> Vec<HostHandle> {
-    let mut hosts = Vec::new();
-    let Ok(entries) = std::fs::read_dir(project_dir) else { return hosts; };
+///
+/// Returns `(valid_hosts, load_errors)` — broken files are skipped and
+/// their error messages collected for UI notification.
+pub fn load_hosts(project_dir: &Path) -> (Vec<HostHandle>, Vec<String>) {
+    let mut hosts  = Vec::new();
+    let mut errors = Vec::new();
+    let Ok(entries) = std::fs::read_dir(project_dir) else { return (hosts, errors); };
     for entry in entries.flatten() {
         let fp = entry.path();
         let is_host_toml = fp.extension().and_then(|e| e.to_str()) == Some("toml")
@@ -369,11 +388,12 @@ pub fn load_hosts(project_dir: &Path) -> Vec<HostHandle> {
         if !is_host_toml { continue; }
         let stem = fp.file_stem().and_then(|s| s.to_str()).unwrap_or("");
         let slug = stem.strip_suffix(".host").unwrap_or(stem).to_string();
-        if let Ok(config) = fsn_core::config::host::HostConfig::load(&fp) {
-            hosts.push(HostHandle { slug, toml_path: fp, config });
+        match fsn_core::config::host::HostConfig::load(&fp) {
+            Ok(config) => { hosts.push(HostHandle { slug, toml_path: fp, config }); }
+            Err(e)     => { errors.push(format!("Broken host file '{}': {e}", fp.display())); }
         }
     }
-    hosts
+    (hosts, errors)
 }
 
 /// Load all `.service.toml` files from `{project_dir}/services/`.

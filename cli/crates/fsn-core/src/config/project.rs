@@ -219,7 +219,7 @@ pub struct ServiceInstanceMeta {
 
 impl ServiceInstanceConfig {
     pub fn load(path: &std::path::Path) -> Result<Self, crate::error::FsnError> {
-        crate::config::load_toml(path)
+        crate::config::load_toml_validated(path, crate::config::validate::TomlKind::Service)
     }
 }
 
@@ -255,7 +255,7 @@ impl ServiceResource for ServiceInstanceConfig {
 
 impl ProjectConfig {
     pub fn load(path: &Path) -> Result<Self, FsnError> {
-        crate::config::load_toml(path)
+        crate::config::load_toml_validated(path, crate::config::validate::TomlKind::Project)
     }
 }
 

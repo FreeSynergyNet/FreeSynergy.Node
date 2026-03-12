@@ -163,12 +163,18 @@ fn fsn_event(
             }
 
             // Drain language index fetcher (one-shot).
-            let lang_index: Option<Vec<crate::StoreLangEntry>> = state.store_langs_rx
+            let lang_index: Option<Result<Vec<crate::StoreLangEntry>, String>> = state.store_langs_rx
                 .as_ref()
                 .and_then(|rx| rx.try_recv().ok());
-            if let Some(entries) = lang_index {
-                state.store_langs = entries;
+            if let Some(result) = lang_index {
                 state.store_langs_rx = None;
+                match result {
+                    Ok(entries) => { state.store_langs = entries; }
+                    Err(msg)    => {
+                        state.push_notif(NotifKind::Info,
+                            format!("Store index: {msg} — configure a local path in Settings"));
+                    }
+                }
             }
 
             // Refresh sysinfo every 5 s.

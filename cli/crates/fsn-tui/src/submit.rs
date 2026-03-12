@@ -128,7 +128,9 @@ pub fn submit_project(state: &mut AppState, root: &Path) -> Result<()> {
                     .collect()
             };
 
-            state.projects = crate::load_projects(root);
+            let (projects, proj_errs) = crate::load_projects(root);
+            state.projects = projects;
+            for msg in proj_errs { state.push_notif(crate::app::NotifKind::Info, msg); }
             if let Some(form) = state.active_form() {
                 let slug = form.edit_id.clone()
                     .unwrap_or_else(|| crate::resource_form::slugify(&form.field_value("name")));
@@ -209,7 +211,9 @@ pub fn submit_service(state: &mut AppState, root: &Path) -> Result<()> {
                 }
             }
             let svc_name = state.active_form().map(|f| f.field_value("name")).unwrap_or_default();
-            state.projects = crate::load_projects(root);
+            let (projects, proj_errs) = crate::load_projects(root);
+            state.projects = projects;
+            for msg in proj_errs { state.push_notif(crate::app::NotifKind::Info, msg); }
             // Re-resolve selected_project by slug — filesystem order is non-deterministic
             // and the index may shift after a reload.  proj.slug comes from the pre-reload
             // clone captured at the top of submit_service.
@@ -241,7 +245,9 @@ pub fn submit_host(state: &mut AppState, root: &Path) -> Result<()> {
     match result {
         Some(Ok(())) => {
             let name = state.active_form().map(|f| f.field_value("name")).unwrap_or_default();
-            state.hosts = crate::load_hosts(&project_dir);
+            let (hosts, host_errs) = crate::load_hosts(&project_dir);
+            state.hosts = hosts;
+            for msg in host_errs { state.push_notif(crate::app::NotifKind::Info, msg); }
             state.rebuild_sidebar();
             state.dash_focus = DashFocus::Sidebar;
             advance_or_close(state);

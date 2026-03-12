@@ -77,7 +77,9 @@ pub fn delete_service_by_name(state: &mut AppState, root: &Path, name: String) -
         let _ = std::fs::write(&proj.toml_path, filtered);
     }
 
-    state.projects = crate::load_projects(root);
+    let (projects, proj_errs) = crate::load_projects(root);
+    state.projects = projects;
+    for msg in proj_errs { state.push_notif(NotifKind::Info, msg); }
     state.rebuild_services();
     state.rebuild_sidebar();
     Ok(())
@@ -97,7 +99,9 @@ pub fn stop_service_container(state: &mut AppState, name: String) {
 
 pub fn reload_hosts(state: &mut AppState, root: &Path) {
     if let Some(proj) = state.projects.get(state.selected_project) {
-        state.hosts = crate::load_hosts(&root.join("projects").join(&proj.slug));
+        let (hosts, host_errs) = crate::load_hosts(&root.join("projects").join(&proj.slug));
+        state.hosts = hosts;
+        for msg in host_errs { state.push_notif(NotifKind::Info, msg); }
         state.rebuild_sidebar();
     }
 }

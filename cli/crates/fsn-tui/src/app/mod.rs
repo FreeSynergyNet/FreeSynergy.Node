@@ -102,7 +102,8 @@ pub struct AppState {
     /// Language entries fetched from the Store (Node/i18n/index.toml).
     pub store_langs:             Vec<crate::StoreLangEntry>,
     /// Background fetcher for store language index (one-shot).
-    pub store_langs_rx:          Option<mpsc::Receiver<Vec<crate::StoreLangEntry>>>,
+    /// Sends Ok(entries) on success or Err(message) on failure.
+    pub store_langs_rx:          Option<mpsc::Receiver<Result<Vec<crate::StoreLangEntry>, String>>>,
     /// Non-blocking feedback banners (auto-expire after a few seconds).
     pub notifications:        Vec<Notification>,
     /// Active sidebar filter query — `None` = closed, `Some("")` = open but empty.

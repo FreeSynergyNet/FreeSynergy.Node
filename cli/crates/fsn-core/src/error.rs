@@ -12,6 +12,9 @@ pub enum FsnError {
         source: toml::de::Error,
     },
 
+    #[error("Config validation failed for {path}: {reason}")]
+    ConfigInvalid { path: String, reason: String },
+
     #[error("Module class not found: {class}")]
     ServiceClassNotFound { class: String },
 

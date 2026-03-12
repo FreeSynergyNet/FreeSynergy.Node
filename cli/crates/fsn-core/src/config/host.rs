@@ -145,7 +145,7 @@ fn default_acme() -> String { "letsencrypt".into() }
 impl HostConfig {
     /// Load a host config from a TOML file.
     pub fn load(path: &Path) -> Result<Self, FsnError> {
-        crate::config::load_toml(path)
+        crate::config::load_toml_validated(path, crate::config::validate::TomlKind::Host)
     }
 }
 

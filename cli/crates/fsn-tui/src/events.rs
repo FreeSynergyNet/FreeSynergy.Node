@@ -410,7 +410,32 @@ fn handle_settings_generic(key: KeyEvent, state: &mut AppState) -> Result<()> {
     Ok(())
 }
 
-/// Public wrapper — called by mouse.rs on double-click/toggle of a lang row.
+/// Public wrapper — called by mouse.rs on single-click of a lang row.
+///
+/// Toggles the checkbox: download if not installed, remove if installed.
+/// English (idx=0) cannot be toggled — it calls activate instead.
+pub(crate) fn lang_cursor_toggle_pub(state: &mut AppState, cursor_idx: usize) {
+    if cursor_idx == 0 {
+        // English: single-click activates (cannot remove).
+        lang_cursor_activate_pub(state, 0);
+        return;
+    }
+    let code_opt = if state.store_langs.is_empty() {
+        state.available_langs.get(cursor_idx - 1).map(|d| d.code.to_string())
+    } else {
+        state.store_langs.get(cursor_idx - 1).map(|e| e.code.clone())
+    };
+    if let Some(code) = code_opt {
+        let is_installed = state.available_langs.iter().any(|d| d.code == code);
+        if is_installed {
+            remove_lang(state, &code);
+        } else {
+            trigger_lang_download_by_code(state, code);
+        }
+    }
+}
+
+/// Public wrapper — called by mouse.rs on double-click of a lang row.
 ///
 /// Determines action by cursor index matching the new unified checkbox layout:
 ///   0          → activate English
