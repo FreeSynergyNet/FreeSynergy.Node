@@ -195,6 +195,105 @@ impl ServiceType {
         }
     }
 
+    /// One-sentence plain-language explanation of what this service type is.
+    pub fn description(&self) -> &'static str {
+        match self {
+            ServiceType::IamProvider     => "Manages user identities, handles login and authentication (e.g. Kanidm, Keycloak).",
+            ServiceType::IamBroker       => "Federates multiple identity providers — acts as a single login gateway.",
+            ServiceType::Iam             => "Identity and access management service.",
+            ServiceType::Proxy           => "Routes incoming HTTPS traffic to your services and handles TLS certificates automatically.",
+            ServiceType::WebhosterSimple => "Hosts static websites or simple web apps directly without a separate proxy step.",
+            ServiceType::Mail            => "Sends and receives emails for your domain (SMTP/IMAP).",
+            ServiceType::Chat            => "Team messaging and real-time communication (Matrix protocol).",
+            ServiceType::Git             => "Hosts Git repositories with web interface and CI/CD support.",
+            ServiceType::Wiki            => "Collaborative knowledge base and documentation platform.",
+            ServiceType::Collab          => "Real-time collaborative document and spreadsheet editing.",
+            ServiceType::Tasks           => "Issue tracking and task management for your team.",
+            ServiceType::Tickets         => "Event ticketing and shop system.",
+            ServiceType::Maps            => "Self-hosted interactive maps and geo data.",
+            ServiceType::Monitoring      => "Collects metrics, logs and traces — alerts when things go wrong.",
+            ServiceType::Database        => "Relational database engine, internal use only (no public access).",
+            ServiceType::Cache           => "In-memory key-value store for performance, internal use only.",
+            ServiceType::Bot             => "Automation agent — connects services and handles scheduled tasks.",
+            ServiceType::Custom          => "User-defined service type.",
+        }
+    }
+
+    /// What contracts/interfaces this type provides to other services.
+    ///
+    /// Returns a list of human-readable strings explaining cross-service integration.
+    pub fn what_it_provides(&self) -> &'static [&'static str] {
+        match self {
+            ServiceType::IamProvider => &[
+                "Single Sign-On via OpenID Connect (OIDC)",
+                "User directory for other services",
+                "Auth token issuer",
+            ],
+            ServiceType::IamBroker => &[
+                "Single Sign-On via OpenID Connect (OIDC)",
+                "Federates external identity providers",
+                "Auth token issuer",
+            ],
+            ServiceType::Iam => &[
+                "Single Sign-On via OpenID Connect (OIDC)",
+                "User directory for other services",
+            ],
+            ServiceType::Proxy => &[
+                "HTTPS routing for all services",
+                "Automatic TLS certificate management",
+                "Health-based load balancing",
+            ],
+            ServiceType::WebhosterSimple => &[
+                "Static file hosting without a separate proxy",
+                "HTTPS routing for simple web apps",
+            ],
+            ServiceType::Mail => &[
+                "MAIL_HOST, MAIL_DOMAIN, MAIL_URL, MAIL_PORT variables for other services",
+                "SMTP relay for notifications and transactional email",
+            ],
+            ServiceType::Chat => &[
+                "CHAT_HOST, CHAT_DOMAIN, CHAT_URL, CHAT_PORT variables",
+                "Notification target for monitoring and automation",
+            ],
+            ServiceType::Git => &[
+                "GIT_HOST, GIT_DOMAIN, GIT_URL, GIT_PORT variables",
+                "OAuth2 provider for other services (if supported)",
+            ],
+            ServiceType::Wiki => &[
+                "WIKI_HOST, WIKI_DOMAIN, WIKI_URL, WIKI_PORT variables",
+            ],
+            ServiceType::Collab => &[
+                "COLLAB_HOST, COLLAB_DOMAIN, COLLAB_URL, COLLAB_PORT variables",
+            ],
+            ServiceType::Tasks => &[
+                "TASKS_HOST, TASKS_DOMAIN, TASKS_URL, TASKS_PORT variables",
+            ],
+            ServiceType::Tickets => &[
+                "TICKETS_HOST, TICKETS_DOMAIN, TICKETS_URL, TICKETS_PORT variables",
+            ],
+            ServiceType::Maps => &[
+                "MAPS_HOST, MAPS_DOMAIN, MAPS_URL, MAPS_PORT variables",
+            ],
+            ServiceType::Monitoring => &[
+                "MONITORING_HOST, MONITORING_DOMAIN, MONITORING_URL, MONITORING_PORT variables",
+                "Centralized log and metric collection endpoint",
+            ],
+            ServiceType::Database => &[
+                "Internal PostgreSQL connection (not exported to public)",
+                "Used directly by services that need it",
+            ],
+            ServiceType::Cache => &[
+                "Internal Redis-compatible connection (not exported)",
+                "Used directly by services that need it",
+            ],
+            ServiceType::Bot => &[
+                "Scheduled automation tasks",
+                "Cross-service event handling",
+            ],
+            ServiceType::Custom => &[],
+        }
+    }
+
     /// Returns the cross-service variable contract for this type.
     ///
     /// `None` for internal/infrastructure types (Database, Cache, Proxy, Bot, Custom)

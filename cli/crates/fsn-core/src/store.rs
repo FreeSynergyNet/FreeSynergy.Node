@@ -8,6 +8,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::config::service::types::{ServiceType, de_service_types};
+
 // ── StoreIndex ────────────────────────────────────────────────────────────────
 
 /// The top-level store manifest.
@@ -33,9 +35,16 @@ pub struct StoreEntry {
     /// Example: "Kanidm", "Zentinel".
     pub name: String,
 
-    /// Service type category — matches `ServiceType` variants (lowercase).
-    /// Example: "iam", "proxy", "wiki".
-    pub service_type: String,
+    /// Service type(s) — accepts either a single string (legacy `service_type`)
+    /// or an array (`service_types`). Deserialized via `de_service_types`.
+    /// Example: `service_type = "iam"` or `service_types = ["proxy", "webhoster_simple"]`.
+    #[serde(
+        alias = "service_type",
+        rename = "service_types",
+        deserialize_with = "de_service_types",
+        default = "default_custom_types"
+    )]
+    pub service_types: Vec<ServiceType>,
 
     /// Version of the module definition.
     pub version: String,
@@ -61,17 +70,52 @@ pub struct StoreEntry {
     /// Searchable tags for the store browser.
     #[serde(default)]
     pub tags: Vec<String>,
+
+    /// ISO 8601 date string when this module was first published.
+    #[serde(default)]
+    pub created_at: Option<String>,
+
+    /// ISO 8601 date string when this module was last updated.
+    #[serde(default)]
+    pub updated_at: Option<String>,
+
+    /// License identifier (SPDX), e.g. "Apache-2.0", "MIT".
+    #[serde(default)]
+    pub license: Option<String>,
+
+    /// Minimum FSN version required to deploy this module.
+    /// Example: "0.2.0".
+    #[serde(default)]
+    pub min_fsn_version: Option<String>,
+}
+
+fn default_custom_types() -> Vec<ServiceType> {
+    vec![ServiceType::Custom]
 }
 
 impl StoreEntry {
     /// Returns the formatted label shown in the TUI service class dropdown.
     /// Format: "Kanidm (IAM)" or "Kanidm (IAM) ↓" when not installed locally.
     pub fn select_label(&self, is_local: bool) -> String {
-        let type_upper = self.service_type.to_uppercase();
+        let type_label = self.service_types.iter()
+            .map(|t| t.label())
+            .collect::<Vec<_>>()
+            .join("/");
         if is_local {
-            format!("{} ({})", self.name, type_upper)
+            format!("{} ({})", self.name, type_label)
         } else {
-            format!("{} ({}) ↓", self.name, type_upper)
+            format!("{} ({}) ↓", self.name, type_label)
         }
+    }
+
+    /// Returns the primary (first) service type of this entry.
+    pub fn primary_type(&self) -> &ServiceType {
+        self.service_types.first().unwrap_or(&ServiceType::Custom)
+    }
+
+    /// Returns the primary service type as a lowercase string.
+    /// Used for backward-compat comparisons with legacy string-based filters.
+    pub fn primary_type_str(&self) -> String {
+        self.primary_type().to_string()
     }
 }

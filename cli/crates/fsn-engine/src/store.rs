@@ -85,7 +85,7 @@ impl StoreClient {
     /// Used by the wizard to populate the service class dropdown.
     pub fn list_by_type<'a>(entries: &'a [StoreEntry], service_type: &str) -> Vec<&'a StoreEntry> {
         entries.iter()
-            .filter(|e| e.service_type == service_type)
+            .filter(|e| e.primary_type_str() == service_type)
             .collect()
     }
 

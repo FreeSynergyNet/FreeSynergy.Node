@@ -36,7 +36,7 @@ use ratatui::{
 };
 use rat_widget::paragraph::{Paragraph, ParagraphState};
 
-use crate::app::{AppState, SettingsFocus, SettingsSection};
+use crate::app::{AppState, SettingsFocus, SettingsSection, StoreSettingsFocus};
 use crate::click_map::{ClickMap, ClickTarget};
 use crate::i18n::{TRANSLATION_API_VERSION, t};
 use crate::ui::components::{Component, FooterBar, HeaderBar};
@@ -143,88 +143,179 @@ fn render_content(f: &mut RenderCtx<'_>, state: &AppState, area: Rect, cmap: &mu
         .split(inner);
 
     match state.settings_section {
-        SettingsSection::Stores    => render_stores(f, state, chunks[0], cmap),
-        SettingsSection::Languages => render_languages(f, state, chunks[0], cmap),
         SettingsSection::General   => render_general(f, state, chunks[0]),
+        SettingsSection::Store     => render_store(f, state, chunks[0], cmap),
+        SettingsSection::Languages => render_languages(f, state, chunks[0], cmap),
         SettingsSection::About     => render_about(f, state, chunks[0]),
     }
 
     render_hint(f, state, chunks[1]);
 }
 
-// ── Stores content ────────────────────────────────────────────────────────────
+// ── Store section (Settings → Store) ─────────────────────────────────────────
+//
+// Layout:
+//   ┌─ Repositories ──────────────────────────────────┐
+//   │ ✓ FSN Official    https://raw.github.com/..     │
+//   │   My Custom       https://example.com/..        │
+//   ├─────────────────────────────────────────────────┤
+//   │ Modules                                         │
+//   │ [x] proxy/zentinel  ✓                           │
+//   │ [ ] iam/kanidm                                  │
+//   └─────────────────────────────────────────────────┘
+//   Footer hint: Ctrl+A: Apply pending changes
 
-fn render_stores(f: &mut RenderCtx<'_>, state: &AppState, area: Rect, cmap: &mut ClickMap) {
+fn render_store(f: &mut RenderCtx<'_>, state: &AppState, area: Rect, cmap: &mut ClickMap) {
+    // Split vertically: repos top half, modules bottom half.
+    let repos_height = (state.settings.stores.len() as u16 + 2).min(area.height / 2);
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(repos_height),
+            Constraint::Min(1),
+        ])
+        .split(area);
+
+    render_store_repos(f, state, chunks[0], cmap);
+    render_store_modules(f, state, chunks[1], cmap);
+}
+
+fn render_store_repos(f: &mut RenderCtx<'_>, state: &AppState, area: Rect, cmap: &mut ClickMap) {
     let stores  = &state.settings.stores;
     let focused = state.settings_focus == SettingsFocus::Content
-        && state.settings_section == SettingsSection::Stores;
+        && state.settings_section == SettingsSection::Store
+        && state.settings_store_focus == StoreSettingsFocus::Repos;
+
+    // Header row
+    let header_line = Line::from(vec![
+        Span::styled(
+            state.t("settings.store.tab.repos"),
+            Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled("  [+] Add", Style::default().fg(Color::DarkGray)),
+    ]);
+
+    let mut lines: Vec<Line<'_>> = vec![header_line];
 
     if stores.is_empty() {
-        f.render_stateful_widget(
-            Paragraph::new(Line::from(Span::styled(
-                state.t("settings.empty"),
-                Style::default().fg(Color::DarkGray),
-            ))),
-            area,
-            &mut ParagraphState::new(),
-        );
-        return;
-    }
+        lines.push(Line::from(Span::styled(
+            state.t("settings.empty"),
+            Style::default().fg(Color::DarkGray),
+        )));
+    } else {
+        for (i, store) in stores.iter().enumerate() {
+            let is_sel     = focused && i == state.settings_cursor;
+            let enabled    = store.enabled;
+            let status_sym = if enabled { "✓" } else { " " };
+            let status_col = if enabled { Color::Green } else { Color::DarkGray };
+            let marker     = if is_sel { "▶ " } else { "  " };
+            let name_style = if is_sel {
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            };
+            let url_short: String = store.url.chars().take(50).collect();
 
-    let mut y = area.y;
-    for (i, store) in stores.iter().enumerate() {
-        if y >= area.bottom() { break; }
+            let row_y = area.y + i as u16 + 1; // +1 for header
+            if row_y < area.bottom() {
+                cmap.push(
+                    Rect { x: area.x, y: row_y, width: area.width, height: 1 },
+                    ClickTarget::SettingsCursor { idx: i },
+                );
+            }
 
-        // Height: name+status (1) + URL (1) + optional path + optional git + blank (1)
-        let detail_lines = store.local_path.is_some() as u16 + store.git_url.is_some() as u16;
-        let item_h = (2 + detail_lines + 1).min(area.bottom().saturating_sub(y));
-        let item_rect = Rect { x: area.x, y, width: area.width, height: item_h };
-
-        cmap.push(item_rect, ClickTarget::SettingsCursor { idx: i });
-
-        let is_sel     = focused && i == state.settings_cursor;
-        let status_key = if store.enabled { "settings.store.enabled" } else { "settings.store.disabled" };
-        let status     = state.t(status_key);
-        let status_col = if store.enabled { Color::Green } else { Color::DarkGray };
-        let marker     = if is_sel { "▶ " } else { "  " };
-        let name_style = if is_sel {
-            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Color::White)
-        };
-
-        let mut lines: Vec<Line<'_>> = vec![
-            Line::from(vec![
+            lines.push(Line::from(vec![
                 Span::raw(marker),
+                Span::styled(status_sym, Style::default().fg(status_col)),
+                Span::raw(" "),
                 Span::styled(store.name.as_str(), name_style),
                 Span::raw("  "),
-                Span::styled(status, Style::default().fg(status_col)),
-            ]),
-            Line::from(vec![
-                Span::raw("    "),
-                Span::styled("URL:  ", Style::default().fg(Color::DarkGray)),
-                Span::styled(store.url.as_str(), Style::default().fg(Color::DarkGray)),
-            ]),
-        ];
-        if let Some(ref lp) = store.local_path {
-            lines.push(Line::from(vec![
-                Span::raw("    "),
-                Span::styled("Path: ", Style::default().fg(Color::DarkGray)),
-                Span::styled(lp.as_str(), Style::default().fg(Color::Yellow)),
+                Span::styled(url_short, Style::default().fg(Color::DarkGray)),
             ]));
         }
-        if let Some(ref gu) = store.git_url {
-            lines.push(Line::from(vec![
-                Span::raw("    "),
-                Span::styled("Git:  ", Style::default().fg(Color::DarkGray)),
-                Span::styled(gu.as_str(), Style::default().fg(Color::DarkGray)),
-            ]));
-        }
-        lines.push(Line::from(""));
-
-        f.render_stateful_widget(Paragraph::new(lines), item_rect, &mut ParagraphState::new());
-        y += item_h;
     }
+
+    f.render_stateful_widget(Paragraph::new(lines), area, &mut ParagraphState::new());
+}
+
+fn render_store_modules(f: &mut RenderCtx<'_>, state: &AppState, area: Rect, _cmap: &mut ClickMap) {
+    let focused = state.settings_focus == SettingsFocus::Content
+        && state.settings_section == SettingsSection::Store
+        && state.settings_store_focus == StoreSettingsFocus::Modules;
+
+    let pending_count = state.settings_module_pending.len();
+
+    // Header + footer hint
+    let header = Line::from(vec![
+        Span::styled(
+            state.t("settings.store.tab.modules"),
+            Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD),
+        ),
+    ]);
+
+    let mut lines: Vec<Line<'_>> = vec![header];
+
+    if state.store_entries.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "Loading store index…",
+            Style::default().fg(Color::DarkGray),
+        )));
+    } else {
+        for (i, entry) in state.store_entries.iter().enumerate() {
+            let is_installed = state.settings.is_installed(&entry.id);
+            let is_pending   = state.settings_module_pending.contains(&entry.id);
+            let is_sel       = focused && i == state.settings_module_cursor;
+
+            let checkbox = match (is_installed, is_pending) {
+                (true,  true)  => "[ ]", // pending uninstall
+                (true,  false) => "[x]",
+                (false, true)  => "[x]", // pending install
+                (false, false) => "[ ]",
+            };
+            let chk_col    = if is_installed || is_pending { Color::Green } else { Color::DarkGray };
+            let marker     = if is_sel { "▶ " } else { "  " };
+            let name_style = if is_sel {
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+            } else if is_installed {
+                Style::default().fg(Color::White)
+            } else {
+                Style::default().fg(Color::DarkGray)
+            };
+            let status_badge: Vec<Span<'_>> = if is_pending {
+                vec![Span::styled("  *", Style::default().fg(Color::Yellow))]
+            } else if is_installed {
+                vec![Span::styled("  ✓", Style::default().fg(Color::Green))]
+            } else {
+                vec![]
+            };
+
+            let mut spans = vec![
+                Span::raw(marker),
+                Span::styled(checkbox, Style::default().fg(chk_col)),
+                Span::raw(" "),
+                Span::styled(entry.id.as_str(), name_style),
+            ];
+            spans.extend(status_badge);
+            lines.push(Line::from(spans));
+        }
+    }
+
+    // Pending changes footer
+    if pending_count > 0 {
+        lines.push(Line::from(""));
+        lines.push(Line::from(vec![
+            Span::styled(
+                state.t("settings.store.hint.apply"),
+                Style::default().fg(Color::Yellow),
+            ),
+            Span::styled(
+                format!("  ({} {})", pending_count, state.t("settings.store.pending")),
+                Style::default().fg(Color::DarkGray),
+            ),
+        ]));
+    }
+
+    f.render_stateful_widget(Paragraph::new(lines), area, &mut ParagraphState::new());
 }
 
 // ── Languages content ─────────────────────────────────────────────────────────
@@ -445,9 +536,9 @@ fn render_hint(f: &mut RenderCtx<'_>, state: &AppState, area: Rect) {
     let key = match state.settings_focus {
         SettingsFocus::Sidebar => "settings.hint.sidebar",
         SettingsFocus::Content => match state.settings_section {
-            SettingsSection::Stores    => "settings.hint.stores",
-            SettingsSection::Languages => "settings.hint.languages",
             SettingsSection::General   => "settings.hint.general",
+            SettingsSection::Store     => "settings.hint.stores",
+            SettingsSection::Languages => "settings.hint.languages",
             SettingsSection::About     => "settings.hint.about",
         },
     };

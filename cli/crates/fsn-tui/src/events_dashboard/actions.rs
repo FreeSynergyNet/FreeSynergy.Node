@@ -207,6 +207,18 @@ impl ConfirmAction {
                 stop_service_container(state, name.clone());
                 state.push_notif(NotifKind::Info, format!("Service '{}' stopped", name));
             }
+            ConfirmAction::MarkModuleInstalled => {
+                let id = data.unwrap_or_default();
+                state.settings.mark_installed(&id);
+                let _ = state.settings.save();
+                state.push_notif(NotifKind::Success, format!("Module '{}' marked as installed", id));
+            }
+            ConfirmAction::MarkModuleUninstalled => {
+                let id = data.unwrap_or_default();
+                state.settings.mark_uninstalled(&id);
+                let _ = state.settings.save();
+                state.push_notif(NotifKind::Info, format!("Module '{}' uninstalled", id));
+            }
         }
         Ok(())
     }

@@ -22,6 +22,7 @@ pub mod new_project;
 pub mod nodes;
 pub mod render_ctx;
 pub mod settings_screen;
+pub mod store_screen;
 pub mod style;
 pub mod welcome;
 pub mod widgets;
@@ -57,6 +58,7 @@ pub fn render(f: &mut RenderCtx<'_>, state: &mut AppState) {
         Screen::Welcome    => render_with_help(f, state, full, |f, s, a| welcome::render(f, s, a)),
         Screen::NewProject => render_with_help(f, state, full, |f, s, a| new_project::render(f, s, a)),
         Screen::Settings   => render_with_help(f, state, full, |f, s, a| settings_screen::render(f, s, a)),
+        Screen::Store      => store_screen::render(f, state),
     }
 
     // Overlay layers drawn on top (Ebene system).

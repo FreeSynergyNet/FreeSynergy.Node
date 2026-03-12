@@ -13,6 +13,8 @@ pub enum Screen {
     NewProject,
     /// Application settings — store management, preferences.
     Settings,
+    /// Store browser — browse and install modules from configured stores.
+    Store,
 }
 
 // ── Dashboard focus ───────────────────────────────────────────────────────────
@@ -48,17 +50,17 @@ pub enum SettingsFocus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SettingsSection {
     #[default]
-    Stores,
-    Languages,
     General,
+    Store,
+    Languages,
     About,
 }
 
 impl SettingsSection {
     pub const ALL: &'static [SettingsSection] = &[
-        Self::Stores,
-        Self::Languages,
         Self::General,
+        Self::Store,
+        Self::Languages,
         Self::About,
     ];
 
@@ -73,9 +75,9 @@ impl SettingsSection {
     /// i18n key for the sidebar label.
     pub fn label_key(self) -> &'static str {
         match self {
-            Self::Stores    => "settings.section.stores",
-            Self::Languages => "settings.section.languages",
             Self::General   => "settings.section.general",
+            Self::Store     => "settings.section.store",
+            Self::Languages => "settings.section.languages",
             Self::About     => "settings.section.about",
         }
     }
@@ -85,3 +87,29 @@ impl SettingsSection {
 
 /// Kept for backward compatibility — maps to SettingsSection.
 pub type SettingsTab = SettingsSection;
+
+// ── Store screen focus ────────────────────────────────────────────────────────
+
+/// Which part of the Settings → Store section has focus.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum StoreSettingsFocus {
+    #[default]
+    Repos,
+    Modules,
+}
+
+/// Which panel of the Store screen has focus.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum StoreScreenFocus {
+    #[default]
+    Sidebar,
+    Detail,
+}
+
+/// What the Store screen sidebar is showing.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum StoreSidebarMode {
+    #[default]
+    ByType,   // grouped by ServiceType category
+    All,      // flat list
+}

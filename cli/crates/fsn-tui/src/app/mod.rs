@@ -28,7 +28,10 @@ pub use overlay::{
     ActionSource, ConfirmAction, ContextAction, DeployMsg, DeployState,
     LogsState, OverlayKind, OverlayLayer,
 };
-pub use screen::{DashFocus, Screen, SettingsFocus, SettingsSection, SettingsTab};
+pub use screen::{
+    DashFocus, Screen, SettingsFocus, SettingsSection, SettingsTab,
+    StoreScreenFocus, StoreSettingsFocus, StoreSidebarMode,
+};
 pub use sidebar::{NEW_RESOURCE_ITEMS, SidebarAction, SidebarItem};
 
 // Re-export handle and form types so existing `use crate::app::*` imports keep working.
@@ -95,10 +98,30 @@ pub struct AppState {
     pub settings_section:        SettingsSection,
     /// Which side of the Settings screen has keyboard focus.
     pub settings_focus:          SettingsFocus,
-    /// Cursor within the Settings sidebar (0=Stores, 1=Languages, 2=General, 3=About).
+    /// Cursor within the Settings sidebar (0=General, 1=Store, 2=Languages, 3=About).
     pub settings_sidebar_cursor: usize,
     /// Cursor within the Languages section content list.
     pub lang_cursor:             usize,
+
+    // ── Store screen ──────────────────────────────────────────────────────────
+    /// Which panel of the Store screen has keyboard focus.
+    pub store_screen_focus:   StoreScreenFocus,
+    /// Whether the Store screen sidebar groups by type or shows a flat list.
+    pub store_screen_mode:    StoreSidebarMode,
+    /// Which ServiceType category is selected in the Store sidebar.
+    pub store_type_cursor:    usize,
+    /// Which package within the selected type category is selected.
+    pub store_cursor:         usize,
+    /// Scroll offset in the Store screen detail panel.
+    pub store_detail_scroll:  u16,
+
+    // ── Settings → Store section ──────────────────────────────────────────────
+    /// Which part of the Settings → Store section has focus (Repos / Modules).
+    pub settings_store_focus:    StoreSettingsFocus,
+    /// Pending module installs/uninstalls (not yet applied).
+    pub settings_module_pending: std::collections::HashSet<String>,
+    /// Cursor within the modules multiselect list.
+    pub settings_module_cursor:  usize,
     /// Language entries fetched from the Store (Node/i18n/index.toml).
     pub store_langs:             Vec<crate::StoreLangEntry>,
     /// Background fetcher for store language index (one-shot).
@@ -166,6 +189,14 @@ impl AppState {
             lang_cursor: 0,
             store_langs: Vec::new(),
             store_langs_rx: None,
+            store_screen_focus: StoreScreenFocus::default(),
+            store_screen_mode: StoreSidebarMode::default(),
+            store_type_cursor: 0,
+            store_cursor: 0,
+            store_detail_scroll: 0,
+            settings_store_focus: StoreSettingsFocus::default(),
+            settings_module_pending: std::collections::HashSet::new(),
+            settings_module_cursor: 0,
             notifications: Vec::new(),
             sidebar_filter: None,
             selected_services: HashSet::new(),
@@ -205,7 +236,7 @@ impl AppState {
 
     pub fn store_entries_for_type(&self, service_type: &str) -> Vec<&StoreEntry> {
         self.store_entries.iter()
-            .filter(|e| e.service_type == service_type)
+            .filter(|e| e.primary_type_str() == service_type)
             .collect()
     }
 

@@ -87,6 +87,10 @@ pub enum ConfirmAction {
     /// Close the form queue (abandon all pending tabs — user confirmed).
     LeaveForm,
     Quit,
+    /// Mark the module (data = module ID) as installed in AppSettings.
+    MarkModuleInstalled,
+    /// Mark the module (data = module ID) as uninstalled in AppSettings.
+    MarkModuleUninstalled,
 }
 
 // ── ActionSource — context menu origin ───────────────────────────────────────

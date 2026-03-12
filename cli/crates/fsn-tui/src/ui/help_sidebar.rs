@@ -134,6 +134,20 @@ pub fn build_help(
                 ],
             },
         ],
+
+        Screen::Store => vec![
+            HelpSection {
+                title: t("screen.store.title"),
+                entries: vec![
+                    HelpEntry { key: "↑↓",   desc: t("help.nav.select") },
+                    HelpEntry { key: "←/→",  desc: t("help.nav.panel") },
+                    HelpEntry { key: "i",    desc: t("store.hint.install") },
+                    HelpEntry { key: "u",    desc: t("store.hint.uninstall") },
+                    HelpEntry { key: "r",    desc: t("store.hint.reinstall") },
+                    HelpEntry { key: "Esc",  desc: t("help.form.cancel") },
+                ],
+            },
+        ],
     }
 }
 

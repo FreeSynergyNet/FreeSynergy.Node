@@ -18,7 +18,10 @@ use std::path::Path;
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use crate::app::{AppState, ConfirmAction, OverlayKind, OverlayLayer, Screen, SettingsFocus, SettingsSection};
+use crate::app::{
+    AppState, ConfirmAction, OverlayKind, OverlayLayer, Screen,
+    SettingsFocus, SettingsSection, StoreScreenFocus, StoreSettingsFocus,
+};
 use crate::resource_form::FormErrorKind;
 use crate::ui::form_node::FormAction;
 use crate::events_dashboard::{self, handle_new_resource_overlay};
@@ -66,6 +69,7 @@ pub fn handle(key: KeyEvent, state: &mut AppState, root: &Path) -> Result<()> {
         Screen::Dashboard  => events_dashboard::handle_dashboard(key, state, root),
         Screen::NewProject => handle_resource_form(key, state, root),
         Screen::Settings   => handle_settings(key, state),
+        Screen::Store      => handle_store_screen(key, state),
     }
 }
 
@@ -230,53 +234,180 @@ fn handle_settings_content(key: KeyEvent, state: &mut AppState) -> Result<()> {
     }
 
     match state.settings_section {
-        SettingsSection::Stores    => handle_settings_stores(key, state),
-        SettingsSection::Languages => handle_settings_languages(key, state),
         SettingsSection::General   => handle_settings_generic(key, state),
+        SettingsSection::Store     => handle_settings_store(key, state),
+        SettingsSection::Languages => handle_settings_languages(key, state),
         SettingsSection::About     => handle_settings_generic(key, state),
     }
 }
 
-fn handle_settings_stores(key: KeyEvent, state: &mut AppState) -> Result<()> {
+fn handle_settings_store(key: KeyEvent, state: &mut AppState) -> Result<()> {
     use fsn_core::config::StoreConfig;
 
-    let n = state.settings.stores.len();
-    match key.code {
-        KeyCode::Up   => crate::ui::cursor::up(&mut state.settings_cursor),
-        KeyCode::Down => crate::ui::cursor::down(&mut state.settings_cursor, n),
-        KeyCode::Enter => {
-            if let Some(store) = state.settings.stores.get(state.settings_cursor) {
-                let form = crate::settings_form::edit_store_form(state.settings_cursor, store);
-                state.open_form(form);
-            }
-        }
-        KeyCode::Char(' ') => {
-            if let Some(store) = state.settings.stores.get_mut(state.settings_cursor) {
-                store.enabled = !store.enabled;
-                let _ = state.settings.save();
-            }
-        }
-        KeyCode::Char('d') | KeyCode::Char('D') | KeyCode::Delete => {
-            if !state.settings.stores.is_empty() {
-                state.settings.stores.remove(state.settings_cursor);
-                if state.settings_cursor >= state.settings.stores.len()
-                    && state.settings_cursor > 0
-                {
-                    state.settings_cursor -= 1;
+    // Tab cycles between Repos and Modules focus panels.
+    if key.code == KeyCode::Tab {
+        state.settings_store_focus = match state.settings_store_focus {
+            StoreSettingsFocus::Repos   => StoreSettingsFocus::Modules,
+            StoreSettingsFocus::Modules => StoreSettingsFocus::Repos,
+        };
+        return Ok(());
+    }
+
+    match state.settings_store_focus {
+        StoreSettingsFocus::Repos => {
+            let n = state.settings.stores.len();
+            match key.code {
+                KeyCode::Up   => crate::ui::cursor::up(&mut state.settings_cursor),
+                KeyCode::Down => crate::ui::cursor::down(&mut state.settings_cursor, n),
+                KeyCode::Enter => {
+                    if let Some(store) = state.settings.stores.get(state.settings_cursor) {
+                        let form = crate::settings_form::edit_store_form(state.settings_cursor, store);
+                        state.open_form(form);
+                    }
                 }
-                let _ = state.settings.save();
+                KeyCode::Char(' ') => {
+                    if let Some(store) = state.settings.stores.get_mut(state.settings_cursor) {
+                        store.enabled = !store.enabled;
+                        let _ = state.settings.save();
+                    }
+                }
+                KeyCode::Char('d') | KeyCode::Char('D') | KeyCode::Delete => {
+                    if !state.settings.stores.is_empty() {
+                        state.settings.stores.remove(state.settings_cursor);
+                        if state.settings_cursor >= state.settings.stores.len()
+                            && state.settings_cursor > 0
+                        {
+                            state.settings_cursor -= 1;
+                        }
+                        let _ = state.settings.save();
+                    }
+                }
+                KeyCode::Char('a') | KeyCode::Char('A') | KeyCode::Char('+') => {
+                    state.settings.stores.push(StoreConfig {
+                        name: "New Store".into(), url: "https://".into(),
+                        git_url: None, local_path: None, enabled: false,
+                    });
+                    state.settings_cursor = state.settings.stores.len().saturating_sub(1);
+                    let _ = state.settings.save();
+                }
+                KeyCode::Esc | KeyCode::Char('q') => {
+                    state.settings_focus = SettingsFocus::Sidebar;
+                }
+                _ => {}
             }
         }
-        KeyCode::Char('a') | KeyCode::Char('A') => {
-            state.settings.stores.push(StoreConfig {
-                name: "New Store".into(), url: "https://".into(),
-                git_url: None, local_path: None, enabled: false,
-            });
-            state.settings_cursor = state.settings.stores.len().saturating_sub(1);
-            let _ = state.settings.save();
+        StoreSettingsFocus::Modules => {
+            let n = state.store_entries.len();
+            match key.code {
+                KeyCode::Up   => crate::ui::cursor::up(&mut state.settings_module_cursor),
+                KeyCode::Down => crate::ui::cursor::down(&mut state.settings_module_cursor, n),
+                KeyCode::Char(' ') => {
+                    if let Some(entry) = state.store_entries.get(state.settings_module_cursor) {
+                        let id = entry.id.clone();
+                        if state.settings_module_pending.contains(&id) {
+                            state.settings_module_pending.remove(&id);
+                        } else {
+                            state.settings_module_pending.insert(id);
+                        }
+                    }
+                }
+                KeyCode::Char('a') if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
+                    // Ctrl+A: apply pending changes (install/uninstall modules).
+                    let pending: Vec<String> = state.settings_module_pending.drain().collect();
+                    for id in pending {
+                        if state.settings.is_installed(&id) {
+                            state.settings.mark_uninstalled(&id);
+                        } else {
+                            state.settings.mark_installed(&id);
+                        }
+                    }
+                    let _ = state.settings.save();
+                    state.push_notif(crate::app::NotifKind::Success, "Module changes applied.");
+                }
+                KeyCode::Esc | KeyCode::Char('q') => {
+                    state.settings_focus = SettingsFocus::Sidebar;
+                    state.settings_store_focus = StoreSettingsFocus::Repos;
+                }
+                _ => {}
+            }
         }
+    }
+    Ok(())
+}
+
+// ── Store screen ──────────────────────────────────────────────────────────────
+
+fn handle_store_screen(key: KeyEvent, state: &mut AppState) -> Result<()> {
+    let n_packages = state.store_entries.len();
+
+    match key.code {
+        // Navigation — sidebar cursor
+        KeyCode::Up => {
+            if state.store_screen_focus == StoreScreenFocus::Sidebar {
+                crate::ui::cursor::up(&mut state.store_cursor);
+            } else {
+                // Scroll detail panel up
+                if state.store_detail_scroll > 0 {
+                    state.store_detail_scroll -= 1;
+                }
+            }
+        }
+        KeyCode::Down => {
+            if state.store_screen_focus == StoreScreenFocus::Sidebar {
+                crate::ui::cursor::down(&mut state.store_cursor, n_packages);
+            } else {
+                state.store_detail_scroll = state.store_detail_scroll.saturating_add(1);
+            }
+        }
+
+        // Focus switching
+        KeyCode::Left | KeyCode::Char('h') => {
+            state.store_screen_focus = StoreScreenFocus::Sidebar;
+        }
+        KeyCode::Right | KeyCode::Char('l') | KeyCode::Enter => {
+            state.store_screen_focus = StoreScreenFocus::Detail;
+            state.store_detail_scroll = 0;
+        }
+
+        // Install / uninstall / reinstall
+        KeyCode::Char('i') => {
+            if let Some(entry) = state.store_entries.get(state.store_cursor) {
+                let id = entry.id.clone();
+                if !state.settings.is_installed(&id) {
+                    state.push_overlay(OverlayLayer::Confirm {
+                        message:    "store.confirm.install".into(),
+                        data:       Some(id),
+                        yes_action: ConfirmAction::MarkModuleInstalled,
+                    });
+                }
+            }
+        }
+        KeyCode::Char('u') => {
+            if let Some(entry) = state.store_entries.get(state.store_cursor) {
+                let id = entry.id.clone();
+                if state.settings.is_installed(&id) {
+                    state.push_overlay(OverlayLayer::Confirm {
+                        message:    "store.confirm.uninstall".into(),
+                        data:       Some(id),
+                        yes_action: ConfirmAction::MarkModuleUninstalled,
+                    });
+                }
+            }
+        }
+        KeyCode::Char('r') => {
+            if let Some(entry) = state.store_entries.get(state.store_cursor) {
+                let id = entry.id.clone();
+                state.push_overlay(OverlayLayer::Confirm {
+                    message:    "store.confirm.reinstall".into(),
+                    data:       Some(id),
+                    yes_action: ConfirmAction::MarkModuleInstalled,
+                });
+            }
+        }
+
+        // Exit Store screen
         KeyCode::Esc | KeyCode::Char('q') => {
-            state.settings_focus = SettingsFocus::Sidebar;
+            state.screen = Screen::Dashboard;
         }
         _ => {}
     }

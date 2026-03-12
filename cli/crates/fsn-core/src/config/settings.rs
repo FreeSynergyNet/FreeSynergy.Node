@@ -22,11 +22,35 @@ pub struct AppSettings {
     /// `None` = auto-detect from system locale.
     #[serde(default)]
     pub preferred_lang: Option<String>,
+
+    /// Module IDs that have been installed (local copy synced from store).
+    /// Example: ["proxy/zentinel", "iam/kanidm"]
+    #[serde(default)]
+    pub installed_modules: Vec<String>,
 }
 
 impl Default for AppSettings {
     fn default() -> Self {
-        Self { stores: default_stores(), preferred_lang: None }
+        Self { stores: default_stores(), preferred_lang: None, installed_modules: Vec::new() }
+    }
+}
+
+impl AppSettings {
+    /// Returns `true` if the module with the given ID is marked as installed.
+    pub fn is_installed(&self, id: &str) -> bool {
+        self.installed_modules.iter().any(|m| m == id)
+    }
+
+    /// Mark a module as installed (idempotent).
+    pub fn mark_installed(&mut self, id: &str) {
+        if !self.is_installed(id) {
+            self.installed_modules.push(id.to_string());
+        }
+    }
+
+    /// Remove a module from the installed list (idempotent).
+    pub fn mark_uninstalled(&mut self, id: &str) {
+        self.installed_modules.retain(|m| m != id);
     }
 }
 

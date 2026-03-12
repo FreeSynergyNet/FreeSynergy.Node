@@ -143,7 +143,7 @@ fn slot_entries_for(
     // Compare against service_class (the module ID), not the instance name,
     // so "kanidm-prod" correctly suppresses the "iam/kanidm" store entry.
     for entry in store_entries {
-        if entry.service_type == svc_type {
+        if entry.primary_type_str() == svc_type {
             let already_deployed = services.iter()
                 .any(|s| s.config.service.service_class == entry.id);
             if !already_deployed {

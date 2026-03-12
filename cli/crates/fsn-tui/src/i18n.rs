@@ -387,6 +387,7 @@ fn en(key: &str) -> Option<&'static str> {
         "settings.stores.hint"   => "A=Add  D=Delete  Space=Enable/Disable  Tab=Switch tab  Esc=Back",
         // ── Settings sections (sidebar labels) ────────────────────────────────
         "settings.section.stores"    => "Stores",
+        "settings.section.store"     => "Store",
         "settings.section.languages" => "Languages",
         "settings.section.general"   => "General",
         "settings.section.about"     => "About",
@@ -396,6 +397,25 @@ fn en(key: &str) -> Option<&'static str> {
         "settings.hint.languages"  => "↑↓=Nav  Enter=Activate  Space=Toggle(↓/✕)  Del=Remove  ←=Sidebar",
         "settings.hint.general"    => "←=Sidebar",
         "settings.hint.about"      => "←=Sidebar",
+        // ── Settings → Store section ───────────────────────────────────────────
+        "settings.store.hint.apply"  => "Ctrl+A: Apply changes",
+        "settings.store.pending"     => "pending changes",
+        "settings.store.tab.repos"   => "Repositories",
+        "settings.store.tab.modules" => "Modules",
+        // ── Store screen ──────────────────────────────────────────────────────
+        "screen.store.title"         => "Store",
+        "store.status.installed"     => "✓ Installed",
+        "store.status.not_installed" => "Not installed",
+        "store.status.update_available" => "↑ Update available",
+        "store.hint.install"         => "[i] Install",
+        "store.hint.uninstall"       => "[u] Uninstall",
+        "store.hint.reinstall"       => "[r] Reinstall",
+        "store.no_packages"          => "No packages in this category",
+        "store.select_package"       => "Select a package to see details",
+        "store.select_type"          => "Select a category to see details",
+        "store.confirm.install"      => "Install module",
+        "store.confirm.uninstall"    => "Uninstall module",
+        "store.confirm.reinstall"    => "Reinstall module",
         _ => return None,
     })
 }
