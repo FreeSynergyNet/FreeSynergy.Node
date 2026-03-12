@@ -95,6 +95,31 @@ pub fn spawn_lang_index_fetcher(
     rx
 }
 
+/// Read a file from `Node/i18n/{filename}` — tries local store first, then HTTP.
+///
+/// Single source of truth for the store → local/HTTP lookup pattern used by
+/// `fetch_lang_index` and `download_lang`.
+fn read_store_node_i18n_file(
+    settings: &fsn_core::config::AppSettings,
+    filename: &str,
+) -> anyhow::Result<String> {
+    if let Some(store) = settings.stores.iter().find(|s| s.enabled && s.local_path.is_some()) {
+        let path = std::path::PathBuf::from(store.local_path.as_deref().unwrap())
+            .join("Node").join("i18n").join(filename);
+        return std::fs::read_to_string(&path)
+            .map_err(|e| anyhow::anyhow!("local read: {e}"));
+    }
+    if let Some(store) = settings.stores.iter().find(|s| s.enabled) {
+        let url = format!("{}/Node/i18n/{filename}", store.url.trim_end_matches('/'));
+        let rt  = tokio::runtime::Runtime::new()?;
+        return rt.block_on(async move {
+            let resp = reqwest::get(&url).await?.error_for_status()?;
+            resp.text().await.map_err(anyhow::Error::from)
+        });
+    }
+    anyhow::bail!("no enabled store configured")
+}
+
 fn fetch_lang_index(settings: &fsn_core::config::AppSettings) -> anyhow::Result<Vec<StoreLangEntry>> {
     #[derive(serde::Deserialize)]
     struct Entry {
@@ -104,22 +129,7 @@ fn fetch_lang_index(settings: &fsn_core::config::AppSettings) -> anyhow::Result<
     #[derive(serde::Deserialize)]
     struct Index { languages: Vec<Entry> }
 
-    let content = if let Some(store) = settings.stores.iter().find(|s| s.enabled && s.local_path.is_some()) {
-        let path = std::path::PathBuf::from(store.local_path.as_deref().unwrap())
-            .join("Node").join("i18n").join("index.toml");
-        std::fs::read_to_string(&path)
-            .map_err(|e| anyhow::anyhow!("local read: {e}"))?
-    } else if let Some(store) = settings.stores.iter().find(|s| s.enabled) {
-        let url = format!("{}/Node/i18n/index.toml", store.url.trim_end_matches('/'));
-        let rt  = tokio::runtime::Runtime::new()?;
-        rt.block_on(async move {
-            let resp = reqwest::get(&url).await?.error_for_status()?;
-            resp.text().await.map_err(anyhow::Error::from)
-        })?
-    } else {
-        anyhow::bail!("no enabled store configured");
-    };
-
+    let content = read_store_node_i18n_file(settings, "index.toml")?;
     let index: Index = toml::from_str(&content)
         .map_err(|e| anyhow::anyhow!("parse error: {e}"))?;
     Ok(index.languages.into_iter().map(|e| {
@@ -152,23 +162,9 @@ pub fn spawn_lang_downloader(
 }
 
 fn download_lang(code: &str, file: &str, settings: &fsn_core::config::AppSettings) -> anyhow::Result<()> {
-    // Determine source: local_path first (fast, no HTTP required), then HTTP.
     // Use `file` from the store index for the actual filename (supports non-standard names).
-    let content = if let Some(store) = settings.stores.iter().find(|s| s.enabled && s.local_path.is_some()) {
-        let path = std::path::PathBuf::from(store.local_path.as_deref().unwrap())
-            .join("Node").join("i18n").join(file);
-        std::fs::read_to_string(&path)
-            .map_err(|e| anyhow::anyhow!("local read: {e}"))?
-    } else if let Some(store) = settings.stores.iter().find(|s| s.enabled) {
-        let url = format!("{}/Node/i18n/{file}", store.url.trim_end_matches('/'));
-        let rt  = tokio::runtime::Runtime::new()?;
-        rt.block_on(async move {
-            let resp = reqwest::get(&url).await?.error_for_status()?;
-            resp.text().await.map_err(anyhow::Error::from)
-        })?
-    } else {
-        anyhow::bail!("no enabled store configured");
-    };
+    // Tries local store path first (fast, no HTTP), then falls back to HTTP.
+    let content = read_store_node_i18n_file(settings, file)?;
 
     // Validate that the TOML is parseable before saving.
     crate::i18n::DynamicLang::load(&content)

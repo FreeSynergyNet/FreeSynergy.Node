@@ -131,11 +131,7 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(sysinfo: SysInfo, projects: Vec<ProjectHandle>) -> Self {
-        let i18n_dir = {
-            let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-            std::path::PathBuf::from(home).join(".local/share/fsn/i18n")
-        };
-        let available_langs = DynamicLang::load_dir(&i18n_dir);
+        let available_langs = DynamicLang::load_dir(&i18n_dir());
         let settings = AppSettings::load().unwrap_or_default();
 
         // Language priority: saved setting → system locale → English.
@@ -362,11 +358,7 @@ impl AppState {
 
     /// Reload languages from the i18n directory (e.g. after download).
     pub fn reload_langs(&mut self) {
-        let i18n_dir = {
-            let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-            std::path::PathBuf::from(home).join(".local/share/fsn/i18n")
-        };
-        self.available_langs = DynamicLang::load_dir(&i18n_dir);
+        self.available_langs = DynamicLang::load_dir(&i18n_dir());
         // Keep current language if still available, else fall back to En.
         let current_code = self.lang.code();
         self.lang = self.available_langs.iter()
@@ -432,6 +424,12 @@ impl AppState {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/// Returns the user-local i18n directory: `~/.local/share/fsn/i18n`.
+fn i18n_dir() -> std::path::PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+    std::path::PathBuf::from(home).join(".local/share/fsn/i18n")
+}
 
 /// Detect the user's preferred language from Linux locale environment variables.
 ///

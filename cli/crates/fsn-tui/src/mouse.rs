@@ -338,25 +338,19 @@ fn handle_scroll(col: u16, row: u16, state: &mut AppState, dir: i32) {
                 state.sidebar_cursor = idx;
             }
         }
-        DashHit::Service(_) => {
-            if let Some(area) = state.services_table_area {
-                if col >= area.x && col < area.right() && row >= area.y && row < area.bottom() {
-                    let cur = state.selected as i32 + dir * SCROLL_STEP as i32;
-                    let max = state.services.len().saturating_sub(1) as i32;
-                    state.selected = cur.clamp(0, max) as usize;
-                }
-            }
-        }
-        _ => {
-            // Miss — check if in services area by rect (scroll can hit the area even without a
-            // specific service row, e.g. scrolling past the end of the list).
-            if let Some(area) = state.services_table_area {
-                if col >= area.x && col < area.right() && row >= area.y && row < area.bottom() {
-                    let cur = state.selected as i32 + dir * SCROLL_STEP as i32;
-                    let max = state.services.len().saturating_sub(1) as i32;
-                    state.selected = cur.clamp(0, max) as usize;
-                }
-            }
+        // DashHit::Service and Miss-in-services-area both scroll the services table.
+        // scroll_services() does the rect check so this handles both cases uniformly.
+        _ => scroll_services(col, row, state, dir),
+    }
+}
+
+/// Scroll the services table if (col, row) is inside its area.
+fn scroll_services(col: u16, row: u16, state: &mut AppState, dir: i32) {
+    if let Some(area) = state.services_table_area {
+        if col >= area.x && col < area.right() && row >= area.y && row < area.bottom() {
+            let cur = state.selected as i32 + dir * SCROLL_STEP as i32;
+            let max = state.services.len().saturating_sub(1) as i32;
+            state.selected = cur.clamp(0, max) as usize;
         }
     }
 }

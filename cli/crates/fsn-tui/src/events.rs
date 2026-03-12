@@ -302,48 +302,15 @@ fn handle_settings_languages(key: KeyEvent, state: &mut AppState) -> Result<()> 
         KeyCode::Down => crate::ui::cursor::down(&mut state.lang_cursor, n_total),
 
         // Enter: activate (if installed) or download (if not).
-        KeyCode::Enter => {
-            let idx = state.lang_cursor;
-            if idx == 0 {
-                state.lang = crate::app::Lang::En;
-                state.settings.preferred_lang = None;
-                let _ = state.settings.save();
-            } else if state.store_langs.is_empty() {
-                // Fallback: only installed langs shown.
-                if let Some(dl) = state.available_langs.get(idx - 1) {
-                    state.lang = crate::app::Lang::Dynamic(dl);
-                    state.settings.preferred_lang = Some(dl.code.to_string());
-                    let _ = state.settings.save();
-                }
-            } else {
-                // Full store list: activate if installed, download if not.
-                let code = state.store_langs.get(idx - 1).map(|e| e.code.clone());
-                if let Some(code) = code {
-                    let is_installed = state.available_langs.iter().any(|d| d.code == code);
-                    if is_installed {
-                        if let Some(dl) = state.available_langs.iter().find(|d| d.code == code) {
-                            state.lang = crate::app::Lang::Dynamic(dl);
-                            state.settings.preferred_lang = Some(code);
-                            let _ = state.settings.save();
-                        }
-                    } else {
-                        trigger_lang_download_by_code(state, code);
-                    }
-                }
-            }
-        }
+        // Delegates to lang_cursor_activate_pub — single source of truth.
+        KeyCode::Enter => lang_cursor_activate_pub(state, state.lang_cursor),
 
         // Space: toggle — download if not installed, remove if installed.
         KeyCode::Char(' ') => {
             let idx = state.lang_cursor;
             if idx == 0 { return Ok(()); } // English is built-in, cannot toggle
 
-            let code_opt = if state.store_langs.is_empty() {
-                state.available_langs.get(idx - 1).map(|d| d.code.to_string())
-            } else {
-                state.store_langs.get(idx - 1).map(|e| e.code.clone())
-            };
-            if let Some(code) = code_opt {
+            if let Some(code) = resolve_lang_code(state, idx) {
                 let is_installed = state.available_langs.iter().any(|d| d.code == code);
                 if is_installed {
                     remove_lang(state, &code);
@@ -357,12 +324,7 @@ fn handle_settings_languages(key: KeyEvent, state: &mut AppState) -> Result<()> 
         KeyCode::Delete | KeyCode::Char('d') | KeyCode::Char('D') => {
             let idx = state.lang_cursor;
             if idx == 0 { return Ok(()); }
-            let code_opt = if state.store_langs.is_empty() {
-                state.available_langs.get(idx - 1).map(|d| d.code.to_string())
-            } else {
-                state.store_langs.get(idx - 1).map(|e| e.code.clone())
-            };
-            if let Some(code) = code_opt {
+            if let Some(code) = resolve_lang_code(state, idx) {
                 remove_lang(state, &code);
             }
         }
@@ -373,6 +335,20 @@ fn handle_settings_languages(key: KeyEvent, state: &mut AppState) -> Result<()> 
         _ => {}
     }
     Ok(())
+}
+
+/// Resolve the language code for `cursor_idx` in the unified language list.
+///
+/// Layout (matches render_languages):
+///   0          → English (built-in) — returns `None`
+///   1..n_store → store entry (or installed entry when store list is empty)
+fn resolve_lang_code(state: &AppState, cursor_idx: usize) -> Option<String> {
+    if cursor_idx == 0 { return None; }
+    if state.store_langs.is_empty() {
+        state.available_langs.get(cursor_idx - 1).map(|d| d.code.to_string())
+    } else {
+        state.store_langs.get(cursor_idx - 1).map(|e| e.code.clone())
+    }
 }
 
 /// Remove an installed language file and fall back to English if it was active.
@@ -425,12 +401,7 @@ pub(crate) fn lang_cursor_toggle_pub(state: &mut AppState, cursor_idx: usize) {
         lang_cursor_activate_pub(state, 0);
         return;
     }
-    let code_opt = if state.store_langs.is_empty() {
-        state.available_langs.get(cursor_idx - 1).map(|d| d.code.to_string())
-    } else {
-        state.store_langs.get(cursor_idx - 1).map(|e| e.code.clone())
-    };
-    if let Some(code) = code_opt {
+    if let Some(code) = resolve_lang_code(state, cursor_idx) {
         let is_installed = state.available_langs.iter().any(|d| d.code == code);
         if is_installed {
             remove_lang(state, &code);
@@ -452,12 +423,7 @@ pub(crate) fn lang_cursor_activate_pub(state: &mut AppState, cursor_idx: usize) 
         let _ = state.settings.save();
         return;
     }
-    let code = if state.store_langs.is_empty() {
-        state.available_langs.get(cursor_idx - 1).map(|d| d.code.to_string())
-    } else {
-        state.store_langs.get(cursor_idx - 1).map(|e| e.code.clone())
-    };
-    if let Some(code) = code {
+    if let Some(code) = resolve_lang_code(state, cursor_idx) {
         let is_installed = state.available_langs.iter().any(|d| d.code == code);
         if is_installed {
             if let Some(dl) = state.available_langs.iter().find(|d| d.code == code) {

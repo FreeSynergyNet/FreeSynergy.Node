@@ -445,7 +445,7 @@ fn render_hint(f: &mut RenderCtx<'_>, state: &AppState, area: Rect) {
         Span::styled(hint_text, Style::default().fg(Color::DarkGray)),
         Span::raw("  "),
         Span::styled(
-            "F1=Hilfe",
+            "F1=Help",
             Style::default().fg(if state.help_visible { Color::Cyan } else { Color::DarkGray }),
         ),
     ]);
