@@ -11,6 +11,7 @@ use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+use crate::config::meta::ResourceMeta;
 use crate::error::FsnError;
 use crate::resource::{HostResource, Resource};
 
@@ -32,10 +33,9 @@ pub struct HostConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HostMeta {
-    pub name: String,
-
-    /// Display alias, e.g. "main", "backup".
-    pub alias: Option<String>,
+    /// Common fields: name, alias, description, version, tags.
+    #[serde(flatten)]
+    pub meta: ResourceMeta,
 
     /// Primary IPv4 address or FQDN.
     pub address: String,
@@ -53,10 +53,6 @@ pub struct HostMeta {
     /// SSH port.
     #[serde(default = "default_ssh_port")]
     pub ssh_port: u16,
-
-    /// Free-form tags for grouping / filtering.
-    #[serde(default)]
-    pub tags: Vec<String>,
 
     // ── Legacy fields (kept for backward compat) ──────────────────────────────
 
@@ -81,6 +77,9 @@ impl HostMeta {
     pub fn addr(&self) -> &str {
         if !self.address.is_empty() { &self.address } else { &self.ip }
     }
+
+    /// Convenience: returns name from embedded ResourceMeta.
+    pub fn name(&self) -> &str { &self.meta.name }
 }
 
 /// Host-level DNS provider configuration.
@@ -152,14 +151,12 @@ impl HostConfig {
 impl Resource for HostConfig {
     fn kind(&self) -> &'static str { "host" }
     fn id(&self) -> &str { self.host.addr() }
-    fn display_name(&self) -> &str {
-        self.host.alias.as_deref().unwrap_or(&self.host.name)
-    }
-    fn tags(&self) -> &[String] { &self.host.tags }
+    fn display_name(&self) -> &str { self.host.meta.display_name() }
+    fn tags(&self) -> &[String] { &self.host.meta.tags }
 
     fn validate(&self) -> Result<(), FsnError> {
-        if self.host.name.is_empty()   { return Err(FsnError::ConstraintViolation { message: "host.name is required".into() }); }
-        if self.host.addr().is_empty() { return Err(FsnError::ConstraintViolation { message: "host.address is required".into() }); }
+        if self.host.meta.name.is_empty() { return Err(FsnError::ConstraintViolation { message: "host.name is required".into() }); }
+        if self.host.addr().is_empty()    { return Err(FsnError::ConstraintViolation { message: "host.address is required".into() }); }
         Ok(())
     }
 }

@@ -1,6 +1,7 @@
 pub mod bot;
 pub mod host;
 pub mod manifest;
+pub mod meta;
 pub mod plugin;
 pub mod project;
 pub mod registry;
@@ -11,6 +12,7 @@ pub mod vault;
 
 pub use bot::{BotConfig, BotMeta, BotType};
 pub use host::{HostConfig, HostDns, HostAcme, HostMeta};
+pub use meta::ResourceMeta;
 pub use manifest::{
     ModuleManifest, ManifestInputs, ManifestOutputFile,
     PluginContext, InstanceInfo, PeerService, PeerRoute,

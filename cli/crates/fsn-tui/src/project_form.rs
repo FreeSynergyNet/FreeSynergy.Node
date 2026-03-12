@@ -268,12 +268,12 @@ pub fn edit_project_form(
     available_langs: &[&'static crate::i18n::DynamicLang],
 ) -> ResourceForm {
     let p    = &handle.config.project;
-    let desc = p.description.as_deref().unwrap_or("").to_string();
+    let desc = p.meta.description.as_deref().unwrap_or("").to_string();
     let slots = &handle.config.services;
     let languages_str = p.languages.join(",");
-    let tags_str      = p.tags.join(",");
+    let tags_str      = p.meta.tags.join(",");
     let prefill: HashMap<&str, &str> = [
-        ("name",          p.name.as_str()),
+        ("name",          p.meta.name.as_str()),
         ("domain",        p.domain.as_str()),
         ("description",   desc.as_str()),
         ("contact_email", handle.email()),
@@ -281,7 +281,7 @@ pub fn edit_project_form(
         ("languages",     languages_str.as_str()),
         ("tags",          tags_str.as_str()),
         ("install_dir",   handle.install_dir()),
-        ("version",       p.version.as_str()),
+        ("version",       p.meta.version.as_str()),
     ].into_iter().filter(|(_, v)| !v.is_empty()).collect();
 
     let lang_opts  = build_lang_options(available_langs);

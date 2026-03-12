@@ -118,7 +118,7 @@ pub fn check_project(project: &ProjectConfig, host_projects: &[&str]) -> HealthS
     let mut s = HealthStatus::ok();
 
     // ── Required: at least one host must reference this project ──────────────
-    let has_host = host_projects.iter().any(|&p| p == project.project.name.as_str());
+    let has_host = host_projects.iter().any(|&p| p == project.project.meta.name.as_str());
     if !has_host {
         s.error("health.project.no_host");
     }

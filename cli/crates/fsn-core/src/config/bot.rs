@@ -9,6 +9,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::config::meta::ResourceMeta;
 use crate::error::FsnError;
 use crate::resource::{BotResource, Resource, ResourcePhase};
 
@@ -30,8 +31,9 @@ pub struct BotConfig {
 /// Core metadata for a bot instance.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BotMeta {
-    /// Unique bot name within the project (used as identifier).
-    pub name: String,
+    /// Common fields: name, alias, description, version, tags.
+    #[serde(flatten)]
+    pub meta: ResourceMeta,
 
     /// Integration type — determines which service API the bot uses.
     pub bot_type: BotType,
@@ -41,13 +43,6 @@ pub struct BotMeta {
 
     /// Service class that runs this bot, e.g. `"bot/matrix-hookshot"`.
     pub service_class: String,
-
-    /// Optional one-line description of what this bot does.
-    pub description: Option<String>,
-
-    /// Free-form tags for filtering and grouping.
-    #[serde(default)]
-    pub tags: Vec<String>,
 }
 
 // ── BotType ───────────────────────────────────────────────────────────────────
@@ -85,14 +80,14 @@ impl BotType {
 
 impl Resource for BotConfig {
     fn kind(&self) -> &'static str { "bot" }
-    fn id(&self) -> &str { &self.bot.name }
-    fn display_name(&self) -> &str { &self.bot.name }
-    fn description(&self) -> Option<&str> { self.bot.description.as_deref() }
-    fn tags(&self) -> &[String] { &self.bot.tags }
+    fn id(&self) -> &str { &self.bot.meta.name }
+    fn display_name(&self) -> &str { self.bot.meta.display_name() }
+    fn description(&self) -> Option<&str> { self.bot.meta.description.as_deref() }
+    fn tags(&self) -> &[String] { &self.bot.meta.tags }
     fn phase(&self) -> ResourcePhase { ResourcePhase::Unknown }
 
     fn validate(&self) -> Result<(), FsnError> {
-        if self.bot.name.is_empty() {
+        if self.bot.meta.name.is_empty() {
             return Err(FsnError::ConstraintViolation { message: "bot.name is required".into() });
         }
         if self.bot.project.is_empty() {

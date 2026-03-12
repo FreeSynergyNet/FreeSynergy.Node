@@ -231,7 +231,7 @@ async fn try_load_project_config(
         }
     }).collect();
 
-    Some(((proj.project.name, proj.project.domain), services))
+    Some(((proj.project.meta.name, proj.project.domain), services))
 }
 
 fn load_hosts(s: &AppState) -> Vec<HostInfo> {
@@ -247,7 +247,7 @@ fn load_hosts(s: &AppState) -> Vec<HostInfo> {
         })
         .filter_map(|e| {
             let cfg = HostConfig::load(&e.path()).ok()?;
-            Some(HostInfo { name: cfg.host.name, ip: cfg.host.ip })
+            Some(HostInfo { name: cfg.host.meta.name, ip: cfg.host.ip })
         })
         .collect()
 }

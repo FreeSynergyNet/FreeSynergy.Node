@@ -77,7 +77,7 @@ pub fn generate_env_example(project: &ProjectConfig) -> String {
         "# Copy to .env and fill in your values".into(),
         String::new(),
         "# ── Project ──────────────────────────────────────────────────────────".into(),
-        format!("PROJECT_NAME={}", project.project.name),
+        format!("PROJECT_NAME={}", project.project.meta.name),
         format!("PROJECT_DOMAIN={}", project.project.domain),
         "DATA_DIR=./data".into(),
         String::new(),

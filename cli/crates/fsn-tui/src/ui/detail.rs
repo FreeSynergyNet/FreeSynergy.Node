@@ -29,7 +29,7 @@ pub fn render_project_detail(f: &mut RenderCtx<'_>, state: &AppState, area: Rect
         return;
     };
 
-    let name       = proj.config.project.name.as_str();
+    let name       = proj.config.project.meta.name.as_str();
     let domain     = proj.config.project.domain.as_str();
     let email      = proj.email();
     let install    = proj.install_dir();
@@ -91,7 +91,7 @@ pub fn render_project_detail(f: &mut RenderCtx<'_>, state: &AppState, area: Rect
         Span::styled(host_count.to_string(), Style::default().fg(Color::White)),
     ]));
 
-    if let Some(desc) = proj.config.project.description.as_deref() {
+    if let Some(desc) = proj.config.project.meta.description.as_deref() {
         if !desc.is_empty() {
             lines.push(Line::from(""));
             lines.push(Line::from(Span::styled(desc.to_string(), Style::default().fg(Color::DarkGray))));
@@ -116,7 +116,7 @@ pub fn render_host_detail(f: &mut RenderCtx<'_>, state: &AppState, area: Rect, s
         return;
     };
 
-    let display = host.config.host.alias.as_deref().unwrap_or(&host.config.host.name);
+    let display = host.config.host.meta.display_name();
     let block = Block::default()
         .borders(Borders::NONE)
         .title(Span::styled(
@@ -130,7 +130,7 @@ pub fn render_host_detail(f: &mut RenderCtx<'_>, state: &AppState, area: Rect, s
     let ssh_user = &host.config.host.ssh_user;
     let ssh_port = host.config.host.ssh_port;
     let external = if host.config.host.external { "external" } else { "local" };
-    let alias    = host.config.host.alias.as_deref().unwrap_or("—");
+    let alias    = host.config.host.meta.alias.as_deref().unwrap_or("—");
 
     // ── Health status ────────────────────────────────────────────────────────
     let h_status = health::check_host(&host.config);

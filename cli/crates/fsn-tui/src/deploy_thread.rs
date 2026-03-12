@@ -27,7 +27,7 @@ pub fn trigger_deploy(
     let (tx, rx) = std::sync::mpsc::channel::<DeployMsg>();
     state.deploy_rx = Some(rx);
     state.push_overlay(OverlayLayer::Deploy(DeployState {
-        target:  project.config.project.name.clone(),
+        target:  project.config.project.meta.name.clone(),
         log:     Vec::new(),
         done:    false,
         success: false,
@@ -109,11 +109,11 @@ pub fn trigger_deploy(
 
         let network_name = format!(
             "fsn-{}",
-            project_cfg.project.name.to_lowercase().replace(' ', "-")
+            project_cfg.project.meta.name.to_lowercase().replace(' ', "-")
         );
 
         let net_content = fsn_engine::generate::quadlet::generate_network(
-            &network_name, &project_cfg.project.name,
+            &network_name, &project_cfg.project.meta.name,
         );
         if let Err(e) = std::fs::write(quadlet_dir.join(format!("{network_name}.network")), &net_content) {
             let _ = tx.send(DeployMsg::Log(format!("✗ {network_name}.network: {e}")));

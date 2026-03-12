@@ -367,23 +367,23 @@ fn merge_service_instances(
         // Using entry().or_insert_with() then updating ensures both code paths are covered.
         let se = config.load.services.entry(name).or_insert_with(|| ServiceEntry {
             service_class: m.service_class.clone(),
-            alias:         m.alias.clone(),
+            alias:         m.meta.alias.clone(),
             host:          m.host.clone(),
             subdomain:     m.subdomain.clone(),
             port:          m.port,
-            version:       m.version.clone(),
-            tags:          m.tags.clone(),
+            version:       m.meta.version.clone(),
+            tags:          m.meta.tags.clone(),
             env:           Default::default(),
             vars:          svc_config.vars.clone(),
         });
         // Always sync from standalone file so edited vars / subdomain / port is reflected.
         se.service_class = m.service_class.clone();
-        se.alias         = m.alias.clone();
+        se.alias         = m.meta.alias.clone();
         se.host          = m.host.clone();
         se.subdomain     = m.subdomain.clone();
         se.port          = m.port;
-        se.version       = m.version.clone();
-        se.tags          = m.tags.clone();
+        se.version       = m.meta.version.clone();
+        se.tags          = m.meta.tags.clone();
         se.vars          = svc_config.vars.clone();
     }
 }

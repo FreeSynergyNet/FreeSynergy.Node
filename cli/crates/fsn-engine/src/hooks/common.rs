@@ -35,7 +35,7 @@ pub fn render_template(ctx: &HookContext<'_>, template_name: &str) -> Result<Str
         .map(|p| p.to_string_lossy().into_owned())
         .unwrap_or_default();
     let tctx = TemplateContext {
-        project_name:           &ctx.project.project.name,
+        project_name:           &ctx.project.project.meta.name,
         project_domain:         &ctx.project.project.domain,
         instance_name:          &ctx.instance.name,
         service_domain:         &ctx.instance.service_domain,

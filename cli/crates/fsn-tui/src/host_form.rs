@@ -135,8 +135,8 @@ pub fn edit_host_form(handle: &HostHandle, project_slugs: Vec<String>) -> Resour
     let h = &handle.config.host;
     let ssh_port_str = h.ssh_port.to_string();
     let prefill: HashMap<&str, &str> = [
-        ("name",        h.name.as_str()),
-        ("alias",       h.alias.as_deref().unwrap_or("")),
+        ("name",        h.meta.name.as_str()),
+        ("alias",       h.meta.alias.as_deref().unwrap_or("")),
         ("address",     h.addr()),
         ("project",     h.project.as_deref().unwrap_or("")),
         ("ssh_user",    h.ssh_user.as_str()),

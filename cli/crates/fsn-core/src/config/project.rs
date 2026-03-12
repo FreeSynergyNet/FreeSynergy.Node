@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use toml::Value;
 
+use crate::config::meta::ResourceMeta;
 use crate::error::FsnError;
 use crate::resource::{ProjectResource, Resource, ServiceResource};
 
@@ -55,13 +56,11 @@ pub struct ServiceSlots {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectMeta {
-    pub name: String,
-    pub domain: String,
-    pub description: Option<String>,
+    /// Common fields: name, alias, description, version, tags.
+    #[serde(flatten)]
+    pub meta: ResourceMeta,
 
-    /// Project version – increment to trigger config re-generation.
-    #[serde(default = "default_version")]
-    pub version: String,
+    pub domain: String,
 
     /// Primary language (IETF tag, e.g. "en", "de").
     #[serde(default = "default_lang")]
@@ -76,17 +75,12 @@ pub struct ProjectMeta {
     #[serde(default)]
     pub install_dir: Option<String>,
 
-    /// Free-form tags (e.g. for filtering or categorisation).
-    #[serde(default)]
-    pub tags: Vec<String>,
-
     pub contact: Option<ContactInfo>,
     pub branding: Option<BrandingConfig>,
     pub sites: Option<IndexMap<String, SiteConfig>>,
 }
 
-fn default_version() -> String { "0.1.0".into() }
-fn default_lang()    -> String { "en".into() }
+fn default_lang() -> String { "en".into() }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContactInfo {
@@ -185,17 +179,15 @@ pub struct ServiceInstanceConfig {
 /// Metadata block inside a standalone service instance file.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceInstanceMeta {
-    /// Instance name (unique within the project).
-    pub name: String,
+    /// Common fields: name, alias, description, version, tags.
+    #[serde(flatten)]
+    pub meta: ResourceMeta,
 
     /// Service class path, e.g. "git/forgejo".
     pub service_class: String,
 
     /// Which project this service belongs to (project slug).
     pub project: String,
-
-    /// Display alias; also used as subdomain when set.
-    pub alias: Option<String>,
 
     /// Which host slug this service runs on.
     pub host: Option<String>,
@@ -206,11 +198,10 @@ pub struct ServiceInstanceMeta {
     /// Port override (uses service-class default when absent).
     pub port: Option<u16>,
 
-    #[serde(default = "default_version")]
-    pub version: String,
-
+    /// External service — no container, no environment, only variables.
+    /// When `true`, the deploy pipeline skips container creation.
     #[serde(default)]
-    pub tags: Vec<String>,
+    pub external: bool,
 
     /// Git repository of the deployed code (optional metadata).
     pub git_repo: Option<String>,
@@ -231,14 +222,12 @@ impl ServiceInstanceConfig {
 
 impl Resource for ServiceInstanceConfig {
     fn kind(&self) -> &'static str { "service" }
-    fn id(&self) -> &str { &self.service.name }
-    fn display_name(&self) -> &str {
-        self.service.alias.as_deref().unwrap_or(&self.service.name)
-    }
-    fn tags(&self) -> &[String] { &self.service.tags }
+    fn id(&self) -> &str { &self.service.meta.name }
+    fn display_name(&self) -> &str { self.service.meta.display_name() }
+    fn tags(&self) -> &[String] { &self.service.meta.tags }
 
     fn validate(&self) -> Result<(), FsnError> {
-        if self.service.name.is_empty() {
+        if self.service.meta.name.is_empty() {
             return Err(FsnError::ConstraintViolation { message: "service.name is required".into() });
         }
         if self.service.service_class.is_empty() {
@@ -267,12 +256,13 @@ impl ProjectConfig {
 
 impl Resource for ProjectConfig {
     fn kind(&self) -> &'static str { "project" }
-    fn id(&self) -> &str { &self.project.name }
-    fn display_name(&self) -> &str { &self.project.name }
-    fn description(&self) -> Option<&str> { self.project.description.as_deref() }
+    fn id(&self) -> &str { &self.project.meta.name }
+    fn display_name(&self) -> &str { self.project.meta.display_name() }
+    fn description(&self) -> Option<&str> { self.project.meta.description.as_deref() }
+    fn tags(&self) -> &[String] { &self.project.meta.tags }
 
     fn validate(&self) -> Result<(), FsnError> {
-        if self.project.name.is_empty() {
+        if self.project.meta.name.is_empty() {
             return Err(FsnError::ConstraintViolation { message: "project.name is required".into() });
         }
         if self.project.domain.is_empty() {

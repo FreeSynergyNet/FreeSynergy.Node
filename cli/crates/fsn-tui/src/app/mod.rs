@@ -342,7 +342,7 @@ impl AppState {
             let h = health::check_project(&p.config, &host_projects);
             items.push(SidebarItem::Project {
                 slug:   p.slug.clone(),
-                name:   p.config.project.name.clone(),
+                name:   p.config.project.meta.name.clone(),
                 health: h.overall,
             });
         }

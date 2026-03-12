@@ -30,7 +30,7 @@ pub struct ProjectHandle {
 }
 
 impl ProjectHandle {
-    pub fn name(&self)        -> &str { &self.config.project.name }
+    pub fn name(&self)        -> &str { &self.config.project.meta.name }
     pub fn domain(&self)      -> &str { &self.config.project.domain }
     pub fn install_dir(&self) -> &str {
         self.config.project.install_dir.as_deref().unwrap_or("")
@@ -45,8 +45,8 @@ impl ProjectHandle {
 impl Resource for ProjectHandle {
     fn kind(&self) -> &'static str { "project" }
     fn id(&self)   -> &str         { &self.slug }
-    fn display_name(&self) -> &str { &self.config.project.name }
-    fn description(&self)  -> Option<&str> { self.config.project.description.as_deref() }
+    fn display_name(&self) -> &str { self.config.project.meta.display_name() }
+    fn description(&self)  -> Option<&str> { self.config.project.meta.description.as_deref() }
     fn validate(&self) -> Result<(), FsnError> { self.config.validate() }
 }
 
@@ -57,7 +57,7 @@ impl ProjectResource for ProjectHandle {
     fn install_dir(&self)   -> Option<&str>   { self.config.project.install_dir.as_deref() }
 }
 
-// ── Host handle ───────────────────────────────────────────────────────────────
+// ── Host handle ─────────────────────────────────────────────────────────────
 
 /// Runtime wrapper for a loaded host config.
 ///
@@ -73,17 +73,15 @@ pub struct HostHandle {
 }
 
 impl HostHandle {
-    pub fn name(&self) -> &str { &self.config.host.name }
+    pub fn name(&self) -> &str { &self.config.host.meta.name }
     pub fn addr(&self) -> &str { self.config.host.addr() }
 }
 
 impl Resource for HostHandle {
     fn kind(&self) -> &'static str { "host" }
     fn id(&self)   -> &str         { &self.slug }
-    fn display_name(&self) -> &str {
-        self.config.host.alias.as_deref().unwrap_or(&self.config.host.name)
-    }
-    fn tags(&self)  -> &[String]  { &self.config.host.tags }
+    fn display_name(&self) -> &str { self.config.host.meta.display_name() }
+    fn tags(&self)  -> &[String]  { &self.config.host.meta.tags }
     fn validate(&self) -> Result<(), FsnError> { self.config.validate() }
 }
 
@@ -112,10 +110,8 @@ pub struct ServiceHandle {
 impl Resource for ServiceHandle {
     fn kind(&self) -> &'static str { "service" }
     fn id(&self)   -> &str         { &self.name }
-    fn display_name(&self) -> &str {
-        self.config.service.alias.as_deref().unwrap_or(&self.name)
-    }
-    fn tags(&self)  -> &[String]  { &self.config.service.tags }
+    fn display_name(&self) -> &str { self.config.service.meta.display_name() }
+    fn tags(&self)  -> &[String]  { &self.config.service.meta.tags }
     fn validate(&self) -> Result<(), FsnError> { self.config.validate() }
 }
 

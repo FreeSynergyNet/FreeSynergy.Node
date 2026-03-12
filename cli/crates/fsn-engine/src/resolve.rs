@@ -63,7 +63,7 @@ pub fn resolve_desired(
             bail!(
                 "Duplicate service name '{}' in project '{}' (already defined as {})",
                 instance_name,
-                project.project.name,
+                project.project.meta.name,
                 existing
             );
         }
@@ -86,7 +86,7 @@ pub fn resolve_desired(
     }
 
     Ok(DesiredState {
-        project_name: project.project.name.clone(),
+        project_name: project.project.meta.name.clone(),
         domain: project.project.domain.clone(),
         services: instances,
     })
@@ -104,7 +104,7 @@ pub fn collect_cross_service_vars(project: &ProjectConfig) -> HashMap<String, St
     let mut vars = HashMap::new();
 
     // Project-level vars
-    vars.insert("PROJECT_NAME".into(),   project.project.name.clone());
+    vars.insert("PROJECT_NAME".into(),   project.project.meta.name.clone());
     vars.insert("PROJECT_DOMAIN".into(), project.project.domain.clone());
     if let Some(email) = project.contact_email() {
         vars.insert("PROJECT_EMAIL".into(), email.to_string());
@@ -154,7 +154,7 @@ fn resolve_instance(
 
     // Pre-compute [vars] block: render each var template with just the basic vars
     // (no module_vars self-reference). This gives us e.g. config_dir = "/projects/fsn-net/data/zentinel".
-    let module_vars = precompute_module_vars(&class.vars, project_root, name, &project.project.name, &project.project.domain);
+    let module_vars = precompute_module_vars(&class.vars, project_root, name, &project.project.meta.name, &project.project.domain);
 
     // Collect plugin vars for proxy modules (dns_provider, acme_email, acme_ca_url, …).
     // For all other module types this is an empty map.
@@ -174,7 +174,7 @@ fn resolve_instance(
 
     // Build template context for Jinja2 expansion (includes cross-service vars)
     let ctx = TemplateContext {
-        project_name: &project.project.name,
+        project_name: &project.project.meta.name,
         project_domain: &project.project.domain,
         instance_name: name,
         service_domain: &service_domain,
