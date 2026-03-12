@@ -73,6 +73,7 @@ impl SidebarItem {
                         let svc_config = fsn_core::config::project::ServiceInstanceConfig::load(&svc_path).ok();
                         let form = crate::service_form::edit_service_form(
                             name, &entry, svc_config.as_ref(), slug,
+                            project_slugs(state), host_slugs(state), &proj.slug,
                         );
                         state.open_form(form);
                     }
@@ -103,7 +104,13 @@ pub fn activate_sidebar_item(item: SidebarItem, state: &mut AppState, root: &Pat
             state.open_form(form);
         }
         SidebarItem::Action { kind: SidebarAction::NewService, .. } => {
-            state.open_form(crate::service_form::new_service_form_from_store(&state.store_entries));
+            let p_slugs = project_slugs(state);
+            let h_slugs = host_slugs(state);
+            let cur_p   = current_project_slug(state).to_string();
+            let cur_h   = current_host_slug(state).to_string();
+            state.open_form(crate::service_form::new_service_form_from_store(
+                &state.store_entries, p_slugs, h_slugs, &cur_p, &cur_h,
+            ));
         }
         // Project items: check for missing required resources and auto-queue setup forms.
         SidebarItem::Project { .. } => {
@@ -268,10 +275,18 @@ fn open_new_resource_form(item_idx: usize, state: &mut AppState, root: &Path) {
             state.open_form(crate::host_form::new_host_form(slugs, &current));
         }
         ResourceKind::Service => {
-            state.open_form(crate::service_form::new_service_form_from_store(&state.store_entries));
+            let p_slugs = project_slugs(state);
+            let h_slugs = host_slugs(state);
+            let cur_p   = current_project_slug(state).to_string();
+            let cur_h   = current_host_slug(state).to_string();
+            state.open_form(crate::service_form::new_service_form_from_store(
+                &state.store_entries, p_slugs, h_slugs, &cur_p, &cur_h,
+            ));
         }
         ResourceKind::Bot => {
-            state.open_form(crate::bot_form::new_bot_form());
+            let p_slugs = project_slugs(state);
+            let cur_p   = current_project_slug(state).to_string();
+            state.open_form(crate::bot_form::new_bot_form(p_slugs, &cur_p));
         }
         ResourceKind::Store => {
             // Stores are edited from Settings, not from the new-resource menu.
@@ -282,15 +297,27 @@ fn open_new_resource_form(item_idx: usize, state: &mut AppState, root: &Path) {
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
 
-/// Collect all project slugs — used when building host form dropdowns.
-pub(super) fn project_slugs(state: &AppState) -> Vec<String> {
+/// Collect all project slugs — used when building form dropdowns.
+pub(crate) fn project_slugs(state: &AppState) -> Vec<String> {
     state.projects.iter().map(|p| p.slug.clone()).collect()
 }
 
+/// Collect all host slugs — used when building form dropdowns.
+pub(crate) fn host_slugs(state: &AppState) -> Vec<String> {
+    state.hosts.iter().map(|h| h.slug.clone()).collect()
+}
+
 /// Slug of the currently selected project, or empty string.
-pub(super) fn current_project_slug(state: &AppState) -> &str {
+pub(crate) fn current_project_slug(state: &AppState) -> &str {
     state.projects.get(state.selected_project)
         .map(|p| p.slug.as_str())
+        .unwrap_or("")
+}
+
+/// Slug of the first host, or empty string.
+pub(crate) fn current_host_slug(state: &AppState) -> &str {
+    state.hosts.get(state.selected_host)
+        .map(|h| h.slug.as_str())
         .unwrap_or("")
 }
 

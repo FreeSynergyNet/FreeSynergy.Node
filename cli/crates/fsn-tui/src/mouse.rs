@@ -467,7 +467,13 @@ pub fn execute_context_action(
             }
         }
         ContextAction::AddService => {
-            state.open_form(crate::service_form::new_service_form());
+            let p_slugs = crate::events_dashboard::actions::project_slugs(state);
+            let h_slugs = crate::events_dashboard::actions::host_slugs(state);
+            let cur_p   = crate::events_dashboard::actions::current_project_slug(state).to_string();
+            let cur_h   = crate::events_dashboard::actions::current_host_slug(state).to_string();
+            state.open_form(crate::service_form::new_service_form(
+                p_slugs, h_slugs, &cur_p, &cur_h,
+            ));
         }
         ContextAction::AddHost => {
             let slugs   = state.projects.iter().map(|p| p.slug.clone()).collect::<Vec<_>>();

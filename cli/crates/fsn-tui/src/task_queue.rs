@@ -72,34 +72,38 @@ impl TaskKind {
 
     /// Build the `ResourceForm` for this task, pre-filled as needed.
     pub fn build_form(&self, state: &AppState) -> ResourceForm {
+        let p_slugs = state.projects.iter().map(|p| p.slug.clone()).collect::<Vec<_>>();
+        let h_slugs = state.hosts.iter().map(|h| h.slug.clone()).collect::<Vec<_>>();
+        let cur_p   = state.projects.get(state.selected_project)
+            .map(|p| p.slug.as_str()).unwrap_or("");
+        let cur_h   = state.hosts.get(state.selected_host)
+            .map(|h| h.slug.as_str()).unwrap_or("");
+
         match self {
             Self::NewProject => crate::project_form::new_project_form(&state.svc_handles, &state.store_entries, &state.available_langs),
 
             Self::NewHost { .. } => {
-                let slugs   = state.projects.iter().map(|p| p.slug.clone()).collect();
-                let current = state.projects.get(state.selected_project)
-                    .map(|p| p.slug.as_str()).unwrap_or("");
-                crate::host_form::new_host_form(slugs, current)
+                crate::host_form::new_host_form(p_slugs, cur_p)
             }
 
             Self::NewProxy { .. } => {
                 let opts = state.class_options_for_type("proxy", "proxy/zentinel");
                 let env  = env_defaults_for("proxy/zentinel");
-                crate::service_form::new_service_form_with_class_options(opts, "proxy/zentinel", env.as_deref())
+                crate::service_form::new_service_form_with_class_options(opts, "proxy/zentinel", env.as_deref(), p_slugs, h_slugs, cur_p, cur_h)
             }
             Self::NewIAM { .. } => {
                 let opts = state.class_options_for_type("iam", "iam/kanidm");
                 let env  = env_defaults_for("iam/kanidm");
-                crate::service_form::new_service_form_with_class_options(opts, "iam/kanidm", env.as_deref())
+                crate::service_form::new_service_form_with_class_options(opts, "iam/kanidm", env.as_deref(), p_slugs, h_slugs, cur_p, cur_h)
             }
             Self::NewMail { .. } => {
                 let opts = state.class_options_for_type("mail", "mail/stalwart");
                 let env  = env_defaults_for("mail/stalwart");
-                crate::service_form::new_service_form_with_class_options(opts, "mail/stalwart", env.as_deref())
+                crate::service_form::new_service_form_with_class_options(opts, "mail/stalwart", env.as_deref(), p_slugs, h_slugs, cur_p, cur_h)
             }
             Self::NewService { class, .. } => {
                 let env = env_defaults_for(class);
-                crate::service_form::new_service_form_with_default_class(class, env.as_deref())
+                crate::service_form::new_service_form_with_default_class(class, env.as_deref(), p_slugs, h_slugs, cur_p, cur_h)
             }
         }
     }

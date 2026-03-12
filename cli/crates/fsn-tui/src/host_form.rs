@@ -20,46 +20,83 @@ use crate::ui::form_node::FormNode;
 /// Form schema for creating and editing a Host.
 #[derive(Form)]
 pub struct HostFormData {
-    // ── Tab 0: Host ───────────────────────────────────────────────────────
-    #[form(label = "form.host.name", required, tab = 0, hint = "form.host.name.hint")]
+    // ── Section: Basis ────────────────────────────────────────────────────
+    #[form(widget = "section", label = "form.section.basis", tab = 0)]
+    pub _section_basis: String,
+
+    #[form(label = "form.host.name", required, tab = 0, col = 7, min_w = 28,
+           hint = "form.host.name.hint")]
     pub name: String,
 
-    #[form(label = "form.host.alias", tab = 0, hint = "form.host.alias.hint")]
+    #[form(label = "form.host.alias", tab = 0, col = 5, min_w = 22,
+           hint = "form.host.alias.hint")]
     pub alias: String,
 
-    #[form(label = "form.host.address", required, tab = 0, hint = "form.host.address.hint")]
+    #[form(label = "form.host.address", required, tab = 0, col = 7, min_w = 28,
+           hint = "form.host.address.hint")]
     pub address: String,
 
     /// Project this host belongs to.
     /// Options are populated dynamically at form-build time (project slugs).
-    #[form(label = "form.host.project", widget = "select", tab = 0)]
+    #[form(label = "form.host.project", widget = "select", required, tab = 0, col = 5, min_w = 22)]
     pub project: String,
+
+    // ── Section: Details ────────────────────────────────────────────────
+    #[form(widget = "section", label = "form.section.details", tab = 0)]
+    pub _section_details: String,
+
+    #[form(label = "form.host.description", widget = "textarea", rows = 2, tab = 0,
+           hint = "form.host.description.hint")]
+    pub description: String,
+
+    #[form(label = "form.options.version", tab = 0, col = 4, min_w = 14, default = "0.1.0")]
+    pub version: String,
+
+    #[form(label = "form.host.tags", tab = 0, col = 4, min_w = 18,
+           hint = "form.host.tags.hint")]
+    pub tags: String,
+
+    #[form(label = "form.host.external", widget = "select", tab = 0, col = 4, min_w = 14,
+           options = "false,true", default = "false")]
+    pub external: String,
+
+    // ── Section: Proxy ──────────────────────────────────────────────────
+    #[form(widget = "section", label = "form.section.proxy", tab = 0)]
+    pub _section_proxy: String,
 
     /// Name of the proxy (Zentinel) instance on this host.
     /// Written as [proxy.{name}] with service_class = "proxy/zentinel".
     #[form(label = "form.host.proxy", tab = 0, hint = "form.host.proxy.hint", default = "zentinel")]
     pub proxy_name: String,
 
-    // ── Tab 1: System ─────────────────────────────────────────────────────
-    #[form(label = "form.host.ssh_user", tab = 0, default = "root")]
+    // ── Section: System ─────────────────────────────────────────────────
+    #[form(widget = "section", label = "form.section.system", tab = 0)]
+    pub _section_system: String,
+
+    #[form(label = "form.host.ssh_user", tab = 0, col = 4, min_w = 14, default = "root")]
     pub ssh_user: String,
 
-    #[form(label = "form.host.ssh_port", tab = 0, default = "22")]
+    #[form(label = "form.host.ssh_port", tab = 0, col = 4, min_w = 14, default = "22")]
     pub ssh_port: String,
 
-    #[form(label = "form.host.install_dir", tab = 0, hint = "form.host.install_dir.hint", default = "/opt/fsn")]
+    #[form(label = "form.host.install_dir", tab = 0, col = 4, min_w = 18,
+           hint = "form.host.install_dir.hint", default = "/opt/fsn")]
     pub install_dir: String,
 
-    // ── Tab 2: DNS / TLS ──────────────────────────────────────────────────
-    #[form(label = "form.host.dns_provider", widget = "select", tab = 0,
+    // ── Section: DNS / TLS ──────────────────────────────────────────────
+    #[form(widget = "section", label = "form.section.dns_tls", tab = 0)]
+    pub _section_dns: String,
+
+    #[form(label = "form.host.dns_provider", widget = "select", tab = 0, col = 6, min_w = 22,
            options = "hetzner,cloudflare,manual,none", default = "hetzner")]
     pub dns_provider: String,
 
-    #[form(label = "form.host.acme_provider", widget = "select", tab = 0,
+    #[form(label = "form.host.acme_provider", widget = "select", tab = 0, col = 6, min_w = 22,
            options = "letsencrypt,zerossl,buypass,none", default = "letsencrypt")]
     pub acme_provider: String,
 
-    #[form(label = "form.host.acme_email", tab = 0, widget = "email", hint = "form.host.acme_email.hint")]
+    #[form(label = "form.host.acme_email", tab = 0, widget = "email",
+           hint = "form.host.acme_email.hint")]
     pub acme_email: String,
 }
 
@@ -134,14 +171,35 @@ pub fn new_host_form(project_slugs: Vec<String>, current_project: &str) -> Resou
 pub fn edit_host_form(handle: &HostHandle, project_slugs: Vec<String>) -> ResourceForm {
     let h = &handle.config.host;
     let ssh_port_str = h.ssh_port.to_string();
+    let desc         = h.meta.description.as_deref().unwrap_or("");
+    let version      = h.meta.version.as_str();
+    let tags_str     = h.meta.tags.join(",");
+    let ext_val      = if h.external { "true" } else { "false" };
+
+    // Read DNS/ACME from config if present
+    let dns_prov  = handle.config.dns.as_ref().map(|d| d.provider.as_str()).unwrap_or("hetzner");
+    let acme_prov = handle.config.acme.as_ref().map(|a| a.provider.as_str()).unwrap_or("letsencrypt");
+    let acme_mail = handle.config.acme.as_ref().map(|a| a.email.as_str()).unwrap_or("");
+
+    // Read proxy name from first proxy entry
+    let proxy_name = handle.config.proxy.keys().next().map(|s| s.as_str()).unwrap_or("zentinel");
+
     let prefill: HashMap<&str, &str> = [
-        ("name",        h.meta.name.as_str()),
-        ("alias",       h.meta.alias.as_deref().unwrap_or("")),
-        ("address",     h.addr()),
-        ("project",     h.project.as_deref().unwrap_or("")),
-        ("ssh_user",    h.ssh_user.as_str()),
-        ("ssh_port",    ssh_port_str.as_str()),
-        ("install_dir", h.install_dir.as_deref().unwrap_or("")),
+        ("name",          h.meta.name.as_str()),
+        ("alias",         h.meta.alias.as_deref().unwrap_or("")),
+        ("address",       h.addr()),
+        ("project",       h.project.as_deref().unwrap_or("")),
+        ("description",   desc),
+        ("version",       version),
+        ("tags",          tags_str.as_str()),
+        ("external",      ext_val),
+        ("proxy_name",    proxy_name),
+        ("ssh_user",      h.ssh_user.as_str()),
+        ("ssh_port",      ssh_port_str.as_str()),
+        ("install_dir",   h.install_dir.as_deref().unwrap_or("")),
+        ("dns_provider",  dns_prov),
+        ("acme_provider", acme_prov),
+        ("acme_email",    acme_mail),
     ].into_iter().filter(|(_, v)| !v.is_empty()).collect();
 
     let dyn_opts = [("project", project_slugs)];
@@ -163,9 +221,14 @@ pub fn submit_host_form(form: &ResourceForm, project_dir: &Path) -> Result<()> {
     let address     = form.field_value("address");
     let project     = form.field_value("project");
     let proxy_name  = form.field_value("proxy_name");
+    let description = form.field_value("description");
+    let version     = form.field_value("version");
+    let tags_raw    = form.field_value("tags");
+    let external    = form.field_value("external");
 
-    if name.is_empty()    { anyhow::bail!("Hostname ist erforderlich"); }
-    if address.is_empty() { anyhow::bail!("IP-Adresse / FQDN ist erforderlich"); }
+    if name.is_empty()    { anyhow::bail!("Hostname is required"); }
+    if address.is_empty() { anyhow::bail!("Address (IP / FQDN) is required"); }
+    if project.is_empty() { anyhow::bail!("Project is required"); }
 
     let ssh_user    = form.field_value("ssh_user");
     let ssh_port    = form.field_value("ssh_port");
@@ -178,6 +241,7 @@ pub fn submit_host_form(form: &ResourceForm, project_dir: &Path) -> Result<()> {
     let ssh_port_val: u16 = ssh_port.parse().unwrap_or(22);
     let install_dir_val   = if install_dir.is_empty() { "/opt/fsn".to_string() } else { install_dir };
     let proxy_slug        = if proxy_name.is_empty()  { "zentinel".to_string() } else { proxy_name };
+    let version_val       = if version.is_empty()     { "0.1.0".to_string()    } else { version };
 
     let slug = crate::app::slugify(&name);
     let path = project_dir.join(format!("{}.host.toml", slug));
@@ -188,10 +252,32 @@ pub fn submit_host_form(form: &ResourceForm, project_dir: &Path) -> Result<()> {
     }
 
     let mut content = format!(
-        "[host]\nname        = \"{name}\"\naddress     = \"{address}\"\n"
+        "[host]\nname        = \"{name}\"\naddress     = \"{address}\"\nversion     = \"{version_val}\"\n"
     );
-    if !alias.is_empty()   { content.push_str(&format!("alias       = \"{alias}\"\n")); }
-    if !project.is_empty() { content.push_str(&format!("project     = \"{project}\"\n")); }
+    if !alias.is_empty() {
+        content.push_str(&format!("alias       = \"{alias}\"\n"));
+    }
+    if !description.is_empty() {
+        let desc_escaped = crate::ui::widgets::toml_escape_str(&description);
+        content.push_str(&format!("description = \"{desc_escaped}\"\n"));
+    }
+    if !project.is_empty() {
+        content.push_str(&format!("project     = \"{project}\"\n"));
+    }
+    if external == "true" {
+        content.push_str("external    = true\n");
+    }
+
+    // Tags: CSV → TOML array
+    let tags: Vec<String> = tags_raw.split(',')
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty())
+        .collect();
+    if !tags.is_empty() {
+        let tag_list = tags.iter().map(|t| format!("\"{t}\"")).collect::<Vec<_>>().join(", ");
+        content.push_str(&format!("tags        = [{tag_list}]\n"));
+    }
+
     content.push_str(&format!(
         "ssh_user    = \"{ssh_user_val}\"\nssh_port    = {ssh_port_val}\ninstall_dir = \"{install_dir_val}\"\n"
     ));

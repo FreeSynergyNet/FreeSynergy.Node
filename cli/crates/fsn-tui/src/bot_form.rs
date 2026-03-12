@@ -20,18 +20,26 @@ use crate::ui::form_node::FormNode;
 #[derive(Form)]
 pub struct BotFormData {
     // ── Tab 0: Bot ───────────────────────────────────────────────────────
-    #[form(label = "form.bot.name", required, tab = 0, hint = "form.bot.name.hint")]
+    #[form(label = "form.bot.name", required, tab = 0, col = 7, min_w = 28,
+           hint = "form.bot.name.hint")]
     pub name: String,
 
-    #[form(label = "form.bot.type", widget = "select", required, tab = 0,
+    /// Project this bot belongs to (required).
+    #[form(label = "form.bot.project", widget = "select", required, tab = 0, col = 5, min_w = 22)]
+    pub project: String,
+
+    #[form(label = "form.bot.type", widget = "select", required, tab = 0, col = 6, min_w = 22,
            options = "matrix,telegram,webhook,custom",
            default = "matrix")]
     pub bot_type: String,
 
-    #[form(label = "form.bot.class", widget = "select", required, tab = 0,
+    #[form(label = "form.bot.class", widget = "select", required, tab = 0, col = 6, min_w = 22,
            options = "bot/matrix-hookshot,bot/maubot,bot/telegram,bot/webhook",
            default = "bot/matrix-hookshot")]
     pub service_class: String,
+
+    #[form(label = "form.options.version", tab = 0, col = 4, min_w = 14, default = "0.1.0")]
+    pub version: String,
 
     #[form(label = "form.bot.description", widget = "textarea", rows = 3, tab = 0)]
     pub description: String,
@@ -93,40 +101,50 @@ fn bot_on_change(nodes: &mut Vec<Box<dyn FormNode>>, key: &'static str) {
 
 // ── Form builder ──────────────────────────────────────────────────────────────
 
-pub fn new_bot_form() -> ResourceForm {
+pub fn new_bot_form(project_slugs: Vec<String>, current_project: &str) -> ResourceForm {
+    let mut prefill = HashMap::new();
+    if !current_project.is_empty() { prefill.insert("project", current_project); }
+    let dyn_opts = vec![("project", project_slugs)];
     let nodes = schema_form::build_nodes(
         BotFormData::schema(),
-        &HashMap::new(),
+        &prefill,
         DISPLAY_FNS,
         &[],
-        &[],
+        &dyn_opts,
     );
     ResourceForm::new(ResourceKind::Bot, BOT_TABS, nodes, None, bot_on_change)
 }
 
 // ── Submit ────────────────────────────────────────────────────────────────────
 
-pub fn submit_bot_form(form: &ResourceForm, project_dir: &Path, project_slug: &str) -> Result<()> {
+pub fn submit_bot_form(form: &ResourceForm, root: &Path) -> Result<()> {
     let name          = form.field_value("name");
+    let project       = form.field_value("project");
     let bot_type      = form.field_value("bot_type");
     let service_class = form.field_value("service_class");
+    let version       = form.field_value("version");
     let description   = form.field_value("description");
     let tags          = form.field_value("tags");
 
     if name.is_empty()          { anyhow::bail!("Bot name is required"); }
+    if project.is_empty()       { anyhow::bail!("Project is required"); }
     if service_class.is_empty() { anyhow::bail!("Bot class is required"); }
 
+    let project_dir = root.join("projects").join(&project);
     let bots_dir = project_dir.join("bots");
     std::fs::create_dir_all(&bots_dir)?;
 
     let slug = crate::app::slugify(&name);
     let path = bots_dir.join(format!("{}.bot.toml", slug));
 
+    let version_val = if version.is_empty() { "0.1.0".to_string() } else { version };
+
     let mut content = format!(
-        "[bot]\nname          = \"{name}\"\nbot_type      = \"{bot_type}\"\nservice_class = \"{service_class}\"\nproject       = \"{project_slug}\"\n"
+        "[bot]\nname          = \"{name}\"\nbot_type      = \"{bot_type}\"\nservice_class = \"{service_class}\"\nproject       = \"{project}\"\nversion       = \"{version_val}\"\n"
     );
     if !description.is_empty() {
-        content.push_str(&format!("description   = \"{description}\"\n"));
+        let desc_escaped = crate::ui::widgets::toml_escape_str(&description);
+        content.push_str(&format!("description   = \"{desc_escaped}\"\n"));
     }
     if !tags.is_empty() {
         let tag_list: String = tags.split(',')

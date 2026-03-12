@@ -17,7 +17,7 @@
 //   handle_new_resource_overlay() — events.rs OverlayKind::NewResource arm
 //   activate_sidebar_item()       — mouse.rs double-click / left-click
 
-mod actions;
+pub(crate) mod actions;
 mod services;
 mod shortcuts;
 mod sidebar;

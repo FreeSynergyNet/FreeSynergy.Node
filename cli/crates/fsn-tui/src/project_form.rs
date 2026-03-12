@@ -44,7 +44,11 @@ pub struct ProjectFormData {
            hint = "form.project.domain.hint")]
     pub domain: String,
 
-    // Version (col=3) + UI Language (col=4) + Install Path (col=5) in one row.
+    // Alias (col=4) + Version (col=3) + UI Language (col=5) in one row.
+    #[form(label = "form.project.alias", tab = 0, col = 4, min_w = 18,
+           hint = "form.project.alias.hint")]
+    pub alias: String,
+
     #[form(label = "form.options.version", tab = 0, col = 3, min_w = 14, default = "0.1.0")]
     pub version: String,
 
@@ -272,9 +276,11 @@ pub fn edit_project_form(
     let slots = &handle.config.services;
     let languages_str = p.languages.join(",");
     let tags_str      = p.meta.tags.join(",");
+    let alias = p.meta.alias.as_deref().unwrap_or("");
     let prefill: HashMap<&str, &str> = [
         ("name",          p.meta.name.as_str()),
         ("domain",        p.domain.as_str()),
+        ("alias",         alias),
         ("description",   desc.as_str()),
         ("contact_email", handle.email()),
         ("language",      p.language.as_str()),
@@ -367,6 +373,7 @@ pub fn submit_project_form(form: &ResourceForm, root: &Path) -> Result<()> {
 
     let name      = form.field_value("name");
     let domain    = form.field_value("domain");
+    let alias     = form.field_value("alias");
     let desc      = form.field_value("description");
     let email     = form.field_value("contact_email");
     let lang      = form.field_value("language");
@@ -388,6 +395,9 @@ pub fn submit_project_form(form: &ResourceForm, root: &Path) -> Result<()> {
     let mut project_table = Table::new();
     project_table.insert("name".into(),        Value::String(name));
     project_table.insert("domain".into(),      Value::String(domain));
+    if !alias.is_empty() {
+        project_table.insert("alias".into(), Value::String(alias));
+    }
     project_table.insert("description".into(), Value::String(desc));
     project_table.insert("language".into(),    Value::String(lang));
     project_table.insert("install_dir".into(), Value::String(path));

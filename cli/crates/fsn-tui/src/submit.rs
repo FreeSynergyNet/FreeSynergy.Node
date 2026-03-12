@@ -155,8 +155,17 @@ pub fn submit_project(state: &mut AppState, root: &Path) -> Result<()> {
 }
 
 pub fn submit_service(state: &mut AppState, root: &Path) -> Result<()> {
-    let Some(proj) = state.projects.get(state.selected_project).cloned() else {
+    // Read project slug from the form field (user selects it in the form).
+    let proj_slug = state.active_form()
+        .map(|f| f.field_value("project"))
+        .unwrap_or_default();
+    if proj_slug.is_empty() {
         if let Some(f) = state.active_form_mut() { f.error = Some("No project selected".into()); }
+        return Ok(());
+    }
+    let proj = state.projects.iter().find(|p| p.slug == proj_slug).cloned();
+    let Some(proj) = proj else {
+        if let Some(f) = state.active_form_mut() { f.error = Some("Project not found".into()); }
         return Ok(());
     };
 
@@ -165,7 +174,7 @@ pub fn submit_service(state: &mut AppState, root: &Path) -> Result<()> {
     std::fs::create_dir_all(&services_dir)?;
 
     let result = state.active_form()
-        .map(|form| crate::service_form::submit_service_form(form, &services_dir, &proj.slug));
+        .map(|form| crate::service_form::submit_service_form(form, &services_dir));
 
     match result {
         Some(Ok(())) => {
@@ -306,14 +315,17 @@ pub(crate) fn trigger_store_refetch(state: &mut AppState) {
 }
 
 pub fn submit_bot(state: &mut AppState, root: &Path) -> Result<()> {
-    let Some(proj) = state.projects.get(state.selected_project).cloned() else {
+    // Read project slug from the form field (user selects it in the form).
+    let proj_slug = state.active_form()
+        .map(|f| f.field_value("project"))
+        .unwrap_or_default();
+    if proj_slug.is_empty() {
         if let Some(f) = state.active_form_mut() { f.error = Some("No project selected".into()); }
         return Ok(());
-    };
-    let project_dir = root.join("projects").join(&proj.slug);
+    }
 
     let result = state.active_form()
-        .map(|form| crate::bot_form::submit_bot_form(form, &project_dir, &proj.slug));
+        .map(|form| crate::bot_form::submit_bot_form(form, root));
 
     match result {
         Some(Ok(())) => {
