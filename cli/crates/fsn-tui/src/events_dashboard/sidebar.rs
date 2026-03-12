@@ -4,7 +4,7 @@
 // handle_dashboard_shared), then sidebar-specific keys.
 //
 // Sidebar-specific keys: ↑↓ navigation, Enter/e = activate/edit,
-// s = start, x/Del = delete confirm, y = yank, / = open filter, S = Settings.
+// s = start, x/Del = delete confirm, y = yank, / = open filter, S = Settings, T = Store.
 
 use std::path::Path;
 
@@ -54,6 +54,12 @@ pub(super) fn handle_dashboard_sidebar(key: KeyEvent, state: &mut AppState, root
         KeyCode::Char('S') => {
             state.settings_cursor = 0;
             state.screen = Screen::Settings;
+        }
+
+        // 'T' = sTore browser (uppercase to avoid conflict with lowercase 's' = start).
+        KeyCode::Char('T') => {
+            state.store_cursor = 0;
+            state.screen = Screen::Store;
         }
 
         // 'e' = explicit edit (same as Enter on a resource item, but not on Action items).

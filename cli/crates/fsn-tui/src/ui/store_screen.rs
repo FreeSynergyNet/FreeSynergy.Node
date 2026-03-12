@@ -119,7 +119,17 @@ fn render_sidebar(f: &mut RenderCtx<'_>, state: &AppState, area: Rect) {
         height: area.height,
     };
 
-    if state.store_entries.is_empty() {
+    // Filter to only entries from enabled stores (or bundled entries with no source).
+    let enabled_store_names: std::collections::HashSet<&str> = state.settings.stores
+        .iter()
+        .filter(|s| s.enabled)
+        .map(|s| s.name.as_str())
+        .collect();
+    let visible_entries: Vec<&fsn_core::store::StoreEntry> = state.store_entries.iter()
+        .filter(|e| e.store_source.is_empty() || enabled_store_names.contains(e.store_source.as_str()))
+        .collect();
+
+    if visible_entries.is_empty() {
         f.render_stateful_widget(
             Paragraph::new(vec![
                 Line::from(""),
@@ -134,7 +144,9 @@ fn render_sidebar(f: &mut RenderCtx<'_>, state: &AppState, area: Rect) {
         return;
     }
 
-    let rows = build_sidebar_rows(&state.store_entries);
+    // Build sidebar rows from the owned copies of filtered entries.
+    let owned_entries: Vec<fsn_core::store::StoreEntry> = visible_entries.iter().map(|e| (*e).clone()).collect();
+    let rows = build_sidebar_rows(&owned_entries);
     let mut lines: Vec<Line<'_>> = Vec::new();
 
     // Count only package rows for cursor tracking.
@@ -186,7 +198,17 @@ fn render_detail(f: &mut RenderCtx<'_>, state: &AppState, area: Rect) {
     let inner = block.inner(area);
     f.render_widget(block, area);
 
-    if state.store_entries.is_empty() {
+    // Filter entries from enabled stores (same logic as render_sidebar).
+    let enabled_store_names_detail: std::collections::HashSet<&str> = state.settings.stores
+        .iter()
+        .filter(|s| s.enabled)
+        .map(|s| s.name.as_str())
+        .collect();
+    let packages: Vec<&StoreEntry> = state.store_entries.iter()
+        .filter(|e| e.store_source.is_empty() || enabled_store_names_detail.contains(e.store_source.as_str()))
+        .collect();
+
+    if packages.is_empty() {
         f.render_stateful_widget(
             Paragraph::new(vec![
                 Line::from(""),
@@ -202,7 +224,6 @@ fn render_detail(f: &mut RenderCtx<'_>, state: &AppState, area: Rect) {
     }
 
     // Resolve the currently selected package (by cursor index over package rows only).
-    let packages: Vec<&StoreEntry> = state.store_entries.iter().collect();
     let cursor = state.store_cursor.min(packages.len().saturating_sub(1));
 
     if let Some(entry) = packages.get(cursor) {

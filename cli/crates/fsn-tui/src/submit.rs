@@ -287,11 +287,27 @@ pub fn submit_store(state: &mut AppState) -> Result<()> {
             advance_or_close(state);
             state.screen = crate::app::Screen::Settings;
             state.push_notif(NotifKind::Success, format!("Store '{}' saved", name));
+            // Re-fetch store index with updated settings so the module list reflects changes.
+            trigger_store_refetch(state);
         }
         Some(Err(e)) => apply_submit_error(state, e),
         None => {}
     }
     Ok(())
+}
+
+/// Trigger a fresh background store fetch and clear stale entries.
+///
+/// Called after any settings change that affects which stores are enabled or
+/// what their URLs are. Clears `store_entries` immediately so the UI shows a
+/// loading state rather than stale data while the fetch is in progress.
+pub(crate) fn trigger_store_refetch(state: &mut AppState) {
+    state.store_entries.clear();
+    if state.settings.stores.iter().any(|s| s.enabled) {
+        state.store_rx = Some(crate::spawn_store_fetcher(state.settings.clone()));
+    } else {
+        state.store_rx = None;
+    }
 }
 
 pub fn submit_bot(state: &mut AppState, root: &Path) -> Result<()> {

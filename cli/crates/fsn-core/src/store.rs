@@ -87,6 +87,12 @@ pub struct StoreEntry {
     /// Example: "0.2.0".
     #[serde(default)]
     pub min_fsn_version: Option<String>,
+
+    /// Name of the store this entry was fetched from.
+    /// Set by StoreClient when merging results from multiple stores.
+    /// Empty string means source is unknown (e.g. bundled index).
+    #[serde(default)]
+    pub store_source: String,
 }
 
 fn default_custom_types() -> Vec<ServiceType> {

@@ -270,6 +270,8 @@ fn handle_settings_store(key: KeyEvent, state: &mut AppState) -> Result<()> {
                         store.enabled = !store.enabled;
                         let _ = state.settings.save();
                     }
+                    // Re-fetch store index to reflect the updated enabled state.
+                    crate::submit::trigger_store_refetch(state);
                 }
                 KeyCode::Char('d') | KeyCode::Char('D') | KeyCode::Delete => {
                     if !state.settings.stores.is_empty() {
@@ -297,32 +299,74 @@ fn handle_settings_store(key: KeyEvent, state: &mut AppState) -> Result<()> {
             }
         }
         StoreSettingsFocus::Modules => {
-            let n = state.store_entries.len();
+            // Cursor spans: 0..n_modules for module entries, n_modules.. for language entries.
+            // Only entries from enabled stores are shown (matching render_store_modules filter).
+            let enabled_names: std::collections::HashSet<String> = state.settings.stores
+                .iter()
+                .filter(|s| s.enabled)
+                .map(|s| s.name.clone())
+                .collect();
+            let n_modules: usize = state.store_entries.iter()
+                .filter(|e| e.store_source.is_empty() || enabled_names.contains(&e.store_source))
+                .count();
+            let n_langs   = state.store_langs.len();
+            let n_total   = n_modules + n_langs;
+
             match key.code {
                 KeyCode::Up   => crate::ui::cursor::up(&mut state.settings_module_cursor),
-                KeyCode::Down => crate::ui::cursor::down(&mut state.settings_module_cursor, n),
+                KeyCode::Down => crate::ui::cursor::down(&mut state.settings_module_cursor, n_total),
                 KeyCode::Char(' ') => {
-                    if let Some(entry) = state.store_entries.get(state.settings_module_cursor) {
-                        let id = entry.id.clone();
-                        if state.settings_module_pending.contains(&id) {
-                            state.settings_module_pending.remove(&id);
-                        } else {
-                            state.settings_module_pending.insert(id);
+                    let cur = state.settings_module_cursor;
+                    if cur < n_modules {
+                        // Module entry: toggle pending install/uninstall.
+                        let filtered_entries: Vec<&fsn_core::store::StoreEntry> = state.store_entries.iter()
+                            .filter(|e| e.store_source.is_empty() || enabled_names.contains(&e.store_source))
+                            .collect();
+                        if let Some(entry) = filtered_entries.get(cur) {
+                            let id = entry.id.clone();
+                            if state.settings_module_pending.contains(&id) {
+                                state.settings_module_pending.remove(&id);
+                            } else {
+                                state.settings_module_pending.insert(id);
+                            }
+                        }
+                    } else {
+                        // Language entry: toggle pending download/remove using "lang:" prefix.
+                        let lang_idx = cur - n_modules;
+                        if let Some(entry) = state.store_langs.get(lang_idx) {
+                            let pending_key = format!("lang:{}", entry.code);
+                            if state.settings_module_pending.contains(&pending_key) {
+                                state.settings_module_pending.remove(&pending_key);
+                            } else {
+                                state.settings_module_pending.insert(pending_key);
+                            }
                         }
                     }
                 }
                 KeyCode::Char('a') if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
-                    // Ctrl+A: apply pending changes (install/uninstall modules).
+                    // Ctrl+A: apply all pending changes — modules (install/uninstall) + languages (download/remove).
                     let pending: Vec<String> = state.settings_module_pending.drain().collect();
                     for id in pending {
-                        if state.settings.is_installed(&id) {
-                            state.settings.mark_uninstalled(&id);
+                        if let Some(code) = id.strip_prefix("lang:") {
+                            // Language entry: download if not installed, remove if installed.
+                            let code = code.to_string();
+                            let is_installed = state.available_langs.iter().any(|d| d.code == code);
+                            if is_installed {
+                                remove_lang(state, &code);
+                            } else {
+                                trigger_lang_download_by_code(state, code);
+                            }
                         } else {
-                            state.settings.mark_installed(&id);
+                            // Module entry: toggle installed state.
+                            if state.settings.is_installed(&id) {
+                                state.settings.mark_uninstalled(&id);
+                            } else {
+                                state.settings.mark_installed(&id);
+                            }
                         }
                     }
                     let _ = state.settings.save();
-                    state.push_notif(crate::app::NotifKind::Success, "Module changes applied.");
+                    state.push_notif(crate::app::NotifKind::Success, "Changes applied.");
                 }
                 KeyCode::Esc | KeyCode::Char('q') => {
                     state.settings_focus = SettingsFocus::Sidebar;

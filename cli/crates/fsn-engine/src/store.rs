@@ -67,8 +67,9 @@ impl StoreClient {
             if !store.enabled { continue }
             match self.fetch_index(&store.url).await {
                 Ok(index) => {
-                    for entry in index.modules {
+                    for mut entry in index.modules {
                         if seen.insert(entry.id.clone()) {
+                            entry.store_source = store.name.clone();
                             result.push(entry);
                         }
                     }

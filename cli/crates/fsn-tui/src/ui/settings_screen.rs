@@ -255,13 +255,28 @@ fn render_store_modules(f: &mut RenderCtx<'_>, state: &AppState, area: Rect, _cm
 
     let mut lines: Vec<Line<'_>> = vec![header];
 
-    if state.store_entries.is_empty() {
+    // Only show entries from enabled stores (or bundled entries with no source).
+    let enabled_store_names: std::collections::HashSet<&str> = state.settings.stores
+        .iter()
+        .filter(|s| s.enabled)
+        .map(|s| s.name.as_str())
+        .collect();
+    let filtered: Vec<(usize, &fsn_core::store::StoreEntry)> = state.store_entries.iter().enumerate()
+        .filter(|(_, e)| e.store_source.is_empty() || enabled_store_names.contains(e.store_source.as_str()))
+        .collect();
+
+    if filtered.is_empty() && state.store_entries.is_empty() {
         lines.push(Line::from(Span::styled(
             "Loading store index…",
             Style::default().fg(Color::DarkGray),
         )));
+    } else if filtered.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "No modules from enabled stores.",
+            Style::default().fg(Color::DarkGray),
+        )));
     } else {
-        for (i, entry) in state.store_entries.iter().enumerate() {
+        for (i, (_, entry)) in filtered.iter().enumerate() {
             let is_installed = state.settings.is_installed(&entry.id);
             let is_pending   = state.settings_module_pending.contains(&entry.id);
             let is_sel       = focused && i == state.settings_module_cursor;
@@ -300,18 +315,93 @@ fn render_store_modules(f: &mut RenderCtx<'_>, state: &AppState, area: Rect, _cm
         }
     }
 
-    // Pending changes footer
-    if pending_count > 0 {
+    // ── Language Packs section ────────────────────────────────────────────────
+    //
+    // Uses "lang:{code}" prefix in settings_module_pending to distinguish
+    // language toggles from module toggles (same pending set, different prefix).
+    //
+    // Cursor indices: modules occupy 0..n_modules, langs occupy n_modules..
+    let n_modules = filtered.len();
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(vec![
+        Span::styled(
+            "── Language Packs ────────────────",
+            Style::default().fg(Color::DarkGray).add_modifier(Modifier::DIM),
+        ),
+    ]));
+
+    if state.store_langs.is_empty() {
+        lines.push(Line::from(Span::styled(
+            "  Loading language index…",
+            Style::default().fg(Color::DarkGray),
+        )));
+    } else {
+        for (j, entry) in state.store_langs.iter().enumerate() {
+            let cursor_idx  = n_modules + j;
+            let is_installed = state.available_langs.iter().any(|d| d.code == entry.code);
+            let pending_key  = format!("lang:{}", entry.code);
+            let is_pending   = state.settings_module_pending.contains(&pending_key);
+            let is_sel       = focused && state.settings_module_cursor == cursor_idx;
+
+            let checkbox = match (is_installed, is_pending) {
+                (true,  true)  => "[ ]", // pending remove
+                (true,  false) => "[x]",
+                (false, true)  => "[x]", // pending download
+                (false, false) => "[ ]",
+            };
+            let chk_col    = if is_installed || is_pending { Color::Green } else { Color::DarkGray };
+            let marker     = if is_sel { "▶ " } else { "  " };
+            let code_up    = entry.code.to_uppercase();
+            let name_style = if is_sel {
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+            } else if is_installed {
+                Style::default().fg(Color::White)
+            } else {
+                Style::default().fg(Color::DarkGray)
+            };
+            let status_badge: Vec<Span<'_>> = if is_pending {
+                vec![Span::styled("  *", Style::default().fg(Color::Yellow))]
+            } else if is_installed {
+                vec![Span::styled("  ✓ installed", Style::default().fg(Color::Green))]
+            } else {
+                vec![Span::styled("  ↓ available", Style::default().fg(Color::DarkGray))]
+            };
+
+            let mut spans = vec![
+                Span::raw(marker),
+                Span::styled(checkbox, Style::default().fg(chk_col)),
+                Span::raw(" "),
+                Span::styled(format!("{:<4}", code_up), Style::default().fg(Color::Yellow)),
+                Span::styled(format!("{:<12}", entry.name.as_str()), name_style),
+            ];
+            spans.extend(status_badge);
+            lines.push(Line::from(spans));
+        }
+    }
+
+    // Pending changes footer — shows module + language counts separately.
+    let n_lang_pending = state.settings_module_pending.iter()
+        .filter(|k| k.starts_with("lang:"))
+        .count();
+    let n_mod_pending  = pending_count.saturating_sub(n_lang_pending);
+    let total_pending  = pending_count;
+
+    if total_pending > 0 {
         lines.push(Line::from(""));
+        let detail = if n_mod_pending > 0 && n_lang_pending > 0 {
+            format!("  ({} modules, {} languages)", n_mod_pending, n_lang_pending)
+        } else if n_mod_pending > 0 {
+            format!("  ({} modules)", n_mod_pending)
+        } else {
+            format!("  ({} languages)", n_lang_pending)
+        };
         lines.push(Line::from(vec![
             Span::styled(
                 state.t("settings.store.hint.apply"),
                 Style::default().fg(Color::Yellow),
             ),
-            Span::styled(
-                format!("  ({} {})", pending_count, state.t("settings.store.pending")),
-                Style::default().fg(Color::DarkGray),
-            ),
+            Span::styled(detail, Style::default().fg(Color::DarkGray)),
         ]));
     }
 
