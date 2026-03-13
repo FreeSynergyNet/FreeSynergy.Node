@@ -115,14 +115,28 @@ fn handle_overlay_mouse(event: MouseEvent, state: &mut AppState) -> Result<()> {
             }
         }
         MouseEventKind::Down(MouseButton::Left) => {
-            match state.top_overlay().map(|o| o.kind()) {
-                Some(crate::app::OverlayKind::Welcome) => {
-                    handle_welcome_mouse(event.column, event.row, state)?;
-                }
-                Some(crate::app::OverlayKind::ContextMenu) => {
+            // ClickMap dispatch — Welcome buttons are registered during render.
+            let target = state.click_map.hit(event.column, event.row).cloned();
+            match target {
+                Some(ClickTarget::WelcomeButton { index: 0 }) => {
+                    // "New Project" — activate
+                    if let Some(f) = state.welcome_overlay_mut() { *f = 0; }
                     state.pop_overlay();
+                    let form = crate::project_form::new_project_form(
+                        &state.svc_handles, &state.store_entries, &state.available_langs,
+                    );
+                    state.open_form(form);
                 }
-                _ => {}
+                Some(ClickTarget::WelcomeButton { index }) => {
+                    // "Open Project" (disabled) — focus only
+                    if let Some(f) = state.welcome_overlay_mut() { *f = index; }
+                }
+                _ => {
+                    // Close context menu on click outside it.
+                    if state.top_overlay().map(|o| o.kind()) == Some(crate::app::OverlayKind::ContextMenu) {
+                        state.pop_overlay();
+                    }
+                }
             }
         }
         // Close context menu on any non-left click.
@@ -133,99 +147,6 @@ fn handle_overlay_mouse(event: MouseEvent, state: &mut AppState) -> Result<()> {
         }
         _ => {}
     }
-    Ok(())
-}
-
-/// Handle a left-click inside the Welcome overlay.
-///
-/// Replicates the button geometry from `ui/overlays/welcome.rs::render_buttons()`
-/// to hit-test without needing ClickMap registration (overlay renders with &AppState).
-fn handle_welcome_mouse(col: u16, row: u16, state: &mut AppState) -> Result<()> {
-    use ratatui::layout::{Constraint, Direction, Layout, Rect};
-
-    if !matches!(state.top_overlay(), Some(OverlayLayer::Welcome { .. })) {
-        return Ok(());
-    }
-
-    // ── Replicate popup geometry (must match welcome.rs::render) ──────────
-    let area   = state.terminal_area;
-    let width  = (area.width * 3 / 4).min(76).max(50);
-    let height = 17u16.min(area.height.saturating_sub(6));
-    let popup  = Rect {
-        x:      area.width.saturating_sub(width) / 2,
-        y:      area.height.saturating_sub(height) / 2,
-        width,
-        height,
-    };
-
-    // Inner area (minus 1-cell border on each side)
-    let inner = Rect {
-        x: popup.x + 1,
-        y: popup.y + 1,
-        width:  popup.width.saturating_sub(2),
-        height: popup.height.saturating_sub(2),
-    };
-
-    // Vertical layout — buttons are in row[4] (index 4)
-    let rows = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(2), // title
-            Constraint::Length(1), // gap
-            Constraint::Length(6), // sysinfo
-            Constraint::Length(1), // gap
-            Constraint::Length(3), // buttons
-            Constraint::Min(1),   // hint
-        ])
-        .split(inner);
-    let btn_row = rows[4];
-
-    // ── Replicate button column geometry ─────────────────────────────────
-    let btn1_text = state.t("welcome.new_project");
-    let btn2_text = format!("{} {}", state.t("welcome.open_project"), state.t("welcome.open_disabled"));
-    let btn1_w = (btn1_text.chars().count() as u16 + 6).max(22);
-    let btn2_w = (btn2_text.chars().count() as u16 + 6).max(22);
-    let gap    = 4u16;
-    let total  = btn1_w + btn2_w + gap;
-    let side   = btn_row.width.saturating_sub(total) / 2;
-
-    let cols = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Length(side),
-            Constraint::Length(btn1_w),
-            Constraint::Length(gap),
-            Constraint::Length(btn2_w),
-            Constraint::Min(0),
-        ])
-        .split(btn_row);
-
-    let btn1_rect = cols[1];
-    let btn2_rect = cols[3];
-
-    // ── Hit test ─────────────────────────────────────────────────────────
-    let in_rect = |r: Rect| col >= r.x && col < r.right() && row >= r.y && row < r.bottom();
-
-    if in_rect(btn1_rect) {
-        // "Neues Projekt" — focus + activate
-        if let Some(f) = state.welcome_overlay_mut() { *f = 0; }
-        state.pop_overlay();
-        let form = crate::project_form::new_project_form(
-            &state.svc_handles, &state.store_entries, &state.available_langs,
-        );
-        state.open_form(form);
-    } else if in_rect(btn2_rect) {
-        // "Projekt öffnen" — focus only (button disabled)
-        if let Some(f) = state.welcome_overlay_mut() { *f = 1; }
-    } else if in_rect(btn_row) {
-        // Click in button row but missed both — just update focus to nearest
-        if col < btn2_rect.x {
-            if let Some(f) = state.welcome_overlay_mut() { *f = 0; }
-        } else {
-            if let Some(f) = state.welcome_overlay_mut() { *f = 1; }
-        }
-    }
-
     Ok(())
 }
 

@@ -61,6 +61,10 @@ pub enum ClickTarget {
     /// A language row in the Settings → Languages tab.
     /// `idx` = absolute cursor index (0 = English, 1+ = installed, then downloadable).
     LangCursor { idx: usize },
+
+    /// A button in the Welcome overlay popup.
+    /// `index`: 0 = "New Project", 1 = "Open Project" (disabled).
+    WelcomeButton { index: usize },
 }
 
 // ── ClickMap ──────────────────────────────────────────────────────────────────

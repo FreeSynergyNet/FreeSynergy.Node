@@ -153,8 +153,6 @@ pub struct AppState {
     /// Cleared and rebuilt by each screen's render function.
     /// Mouse dispatch queries this once — no per-screen if/else.
     pub click_map: ClickMap,
-    /// Full terminal area — cached during each render pass for overlay mouse hit-testing.
-    pub terminal_area: Rect,
 }
 
 impl AppState {
@@ -210,7 +208,6 @@ impl AppState {
             sidebar_list_area: None,
             services_table_area: None,
             click_map: ClickMap::new(),
-            terminal_area: Rect::default(),
         };
         s.rebuild_sidebar();
         s

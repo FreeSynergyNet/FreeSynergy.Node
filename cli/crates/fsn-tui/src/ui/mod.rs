@@ -52,7 +52,6 @@ impl OverlayLayer {
 
 pub fn render(f: &mut RenderCtx<'_>, state: &mut AppState) {
     let full = f.area();
-    state.terminal_area = full;
 
     // Route to the correct screen renderer.
     // Screen::Welcome now uses the Dashboard layout — the Welcome overlay is drawn on top.
@@ -71,6 +70,14 @@ pub fn render(f: &mut RenderCtx<'_>, state: &mut AppState) {
         // SAFETY: index is valid, no mutation during iteration
         let layer = &state.overlay_stack[i];
         layer.render(f, state);
+    }
+
+    // Register Welcome overlay buttons in the click-map (overlays render with &AppState,
+    // so they cannot push to click_map themselves — we do it here with &mut AppState).
+    if matches!(state.top_overlay(), Some(crate::app::OverlayLayer::Welcome { .. })) {
+        let (btn1, btn2) = overlays::welcome::button_rects(full, state);
+        state.click_map.push(btn1, crate::click_map::ClickTarget::WelcomeButton { index: 0 });
+        state.click_map.push(btn2, crate::click_map::ClickTarget::WelcomeButton { index: 1 });
     }
 
     // Toast notifications — always on top, top-right corner.

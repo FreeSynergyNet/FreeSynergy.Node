@@ -40,16 +40,7 @@ pub fn render(f: &mut RenderCtx<'_>, state: &AppState) {
         _ => return,
     };
 
-    let area   = f.area();
-    let width  = (area.width * 3 / 4).min(76).max(50);
-    // rows: border(1) + title(2) + gap(1) + sysinfo_box(6) + gap(1) + buttons(3) + gap(1) + hint(1) + border(1) = 17
-    let height = 17u16.min(area.height.saturating_sub(6));
-    let popup  = Rect {
-        x:      area.width.saturating_sub(width) / 2,
-        y:      area.height.saturating_sub(height) / 2,
-        width,
-        height,
-    };
+    let (popup, rows) = popup_layout(f.area());
 
     // Clear background + draw border
     f.render_widget(Clear, popup);
@@ -58,11 +49,34 @@ pub fn render(f: &mut RenderCtx<'_>, state: &AppState) {
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(Color::Cyan));
-
-    let inner = block.inner(popup);
     f.render_widget(block, popup);
 
-    // Vertical layout inside the popup
+    render_title(f, state, rows[0]);
+    render_sysinfo(f, state, rows[2]);
+    render_buttons(f, state, rows[4], focus);
+    render_hint(f, state, rows[5]);
+}
+
+// ── Shared geometry ──────────────────────────────────────────────────────────
+
+/// Compute popup outer rect and vertical row layout.
+/// Shared between render() (for drawing) and button_rects() (for click-map).
+fn popup_layout(area: Rect) -> (Rect, std::rc::Rc<[Rect]>) {
+    let width  = (area.width * 3 / 4).min(76).max(50);
+    // rows: border(1) + title(2) + gap(1) + sysinfo(6) + gap(1) + buttons(3) + hint(1) + border(1) = 17
+    let height = 17u16.min(area.height.saturating_sub(6));
+    let popup  = Rect {
+        x:      area.width.saturating_sub(width) / 2,
+        y:      area.height.saturating_sub(height) / 2,
+        width,
+        height,
+    };
+
+    let inner = Rect {
+        x: popup.x + 1, y: popup.y + 1,
+        width: popup.width.saturating_sub(2), height: popup.height.saturating_sub(2),
+    };
+
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -71,15 +85,45 @@ pub fn render(f: &mut RenderCtx<'_>, state: &AppState) {
             Constraint::Length(6), // sysinfo box
             Constraint::Length(1), // gap
             Constraint::Length(3), // buttons
-            Constraint::Min(1),    // gap + hint
+            Constraint::Min(1),   // gap + hint
         ])
         .split(inner);
 
-    render_title(f, state, rows[0]);
-    render_sysinfo(f, state, rows[2]);
-    render_buttons(f, state, rows[4], focus);
-    render_hint(f, state, rows[5]);
+    (popup, rows)
 }
+
+/// Compute button column layout for the welcome popup.
+/// Shared between render_buttons() and button_rects().
+fn btn_columns(btn_row: Rect, state: &AppState) -> std::rc::Rc<[Rect]> {
+    let btn1_text = state.t("welcome.new_project");
+    let btn2_text = format!("{} {}", state.t("welcome.open_project"), state.t("welcome.open_disabled"));
+    let btn1_w = (btn1_text.chars().count() as u16 + 6).max(22);
+    let btn2_w = (btn2_text.chars().count() as u16 + 6).max(22);
+    let gap    = 4u16;
+    let total  = btn1_w + btn2_w + gap;
+    let side   = btn_row.width.saturating_sub(total) / 2;
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Length(side),
+            Constraint::Length(btn1_w),
+            Constraint::Length(gap),
+            Constraint::Length(btn2_w),
+            Constraint::Min(0),
+        ])
+        .split(btn_row)
+}
+
+/// Returns `(btn1_rect, btn2_rect)` for the welcome popup buttons.
+/// Called from `ui/mod.rs::render()` to register in the click-map.
+pub fn button_rects(area: Rect, state: &AppState) -> (Rect, Rect) {
+    let (_popup, rows) = popup_layout(area);
+    let cols = btn_columns(rows[4], state);
+    (cols[1], cols[3])
+}
+
+// ── Sub-renderers ────────────────────────────────────────────────────────────
 
 fn render_title(f: &mut RenderCtx<'_>, state: &AppState, area: Rect) {
     let text = Text::from(vec![
@@ -149,22 +193,7 @@ fn render_buttons(f: &mut RenderCtx<'_>, state: &AppState, area: Rect, focus: us
     let btn1_text = state.t("welcome.new_project");
     let btn2_text = format!("{} {}", state.t("welcome.open_project"), state.t("welcome.open_disabled"));
 
-    let btn1_w = (btn1_text.chars().count() as u16 + 6).max(22);
-    let btn2_w = (btn2_text.chars().count() as u16 + 6).max(22);
-    let gap    = 4u16;
-    let total  = btn1_w + btn2_w + gap;
-    let side   = area.width.saturating_sub(total) / 2;
-
-    let cols = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Length(side),
-            Constraint::Length(btn1_w),
-            Constraint::Length(gap),
-            Constraint::Length(btn2_w),
-            Constraint::Min(0),
-        ])
-        .split(area);
+    let cols = btn_columns(area, state);
 
     let btn1_focused = focus == 0;
     f.render_stateful_widget(
