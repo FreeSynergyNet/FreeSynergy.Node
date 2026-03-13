@@ -11,28 +11,20 @@ pub mod error;
 pub mod store;
 
 pub use config::bot::{BotConfig, BotMeta, BotType};
-pub use error::FsyError;
+pub use error::{FsyError, FsnError};
 pub use resource::{
     Resource, ResourcePhase,
     ProjectResource, HostResource, ServiceResource, BotResource,
     VarProvider,
 };
 
-// ── Form vocabulary (ported from fsn-lib/fsn-core) ───────────────────────────
+// ── Form vocabulary ───────────────────────────────────────────────────────────
+// FormAction is defined here (Node-local canonical definition).
+// SelectionResult lives in fsn-tui/nodes/selection_popup.rs (TUI-only).
 
 /// What a form node returns after handling a keyboard or mouse event.
 #[derive(Debug, Clone, PartialEq)]
 pub enum FormAction {
     Consumed, ValueChanged, FocusNext, FocusPrev, AcceptAndNext,
     TabNext, TabPrev, Submit, Cancel, LangToggle, Quit, Unhandled,
-}
-
-/// What a selection popup returns after handling a key or mouse event.
-#[derive(Debug, PartialEq)]
-pub enum SelectionResult {
-    Consumed,
-    Accepted(String),
-    AcceptedMulti(Vec<String>),
-    Rejected,
-    Unhandled,
 }
