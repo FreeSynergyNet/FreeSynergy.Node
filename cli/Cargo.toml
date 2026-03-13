@@ -21,6 +21,9 @@ repository  = "https://github.com/FreeSynergyNet/FreeSynergy.Node"
 
 # ── Shared dependency versions ────────────────────────────────────────────────
 [workspace.dependencies]
+# External crates (outside this workspace)
+store-sdk   = { path = "../../Store/crates/store-sdk" }
+
 # Internal crates
 fsn-form-derive = { path = "crates/fsn-form-derive" }
 fsn-form    = { path = "crates/fsn-form" }

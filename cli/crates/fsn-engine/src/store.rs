@@ -1,14 +1,17 @@
-// Store client – fetches indices and syncs module trees from configured stores.
+// Store client — fetches catalogs and syncs module trees.
 //
-// Each store is a Git repository with this structure:
-//   Node/              ← module tree (plugin executables, templates, TOML)
-//   Node/catalog.toml  ← unified catalog: [[packages]] + [[locales]]
+// Architecture:
+//   store-sdk::StoreClient  — generic I/O: LocalPath or RemoteHttp
+//   StoreClient (this file) — FSN-specific: wraps store-sdk, adds git sync,
+//                             multi-store merge, bundled offline fallback.
 //
 // Two modes:
-//   fetch_all()     – HTTP, fetches the TOML index only (for browsing)
-//   sync_modules()  – git clone/pull, downloads the full module tree (for deploy)
+//   fetch_all()     — catalog only (for browsing). Uses store-sdk::StoreClient.
+//   sync_modules()  — full git clone/pull of the module tree (for deploy).
 //
-// HTTP fetching is async (reqwest); git operations shell out to `git`.
+// StoreSource selection per configured store:
+//   local_path set  → StoreSource::LocalPath  (dev mode, no HTTP)
+//   otherwise       → StoreSource::RemoteHttp (production)
 
 use std::path::{Path, PathBuf};
 
@@ -19,14 +22,13 @@ use fsn_core::{
     config::{AppSettings, ServiceRegistry},
     store::{StoreCatalog, StoreEntry},
 };
+use store_sdk::{StoreClient as SdkClient, StoreSource};
 
 // ── StoreClient ───────────────────────────────────────────────────────────────
 
-/// Manages store indices and local module availability.
+/// FSN store client — manages catalog fetching and local module availability.
 pub struct StoreClient {
-    /// User-configured stores (from AppSettings).
     settings: AppSettings,
-    /// Local registry — used to check `is_local()`.
     registry: ServiceRegistry,
 }
 
@@ -40,22 +42,11 @@ impl StoreClient {
         self.registry.get(id).is_some()
     }
 
-    /// Fetch the catalog from a store URL.
-    ///
-    /// Catalog URL: `{store_url}/Node/catalog.toml`.
-    /// Returns an empty catalog on network error (caller shows "unavailable").
-    pub async fn fetch_catalog(&self, store_url: &str) -> Result<StoreCatalog> {
-        let url = format!("{}/Node/catalog.toml", store_url.trim_end_matches('/'));
-        let text = reqwest::get(&url)
-            .await
-            .with_context(|| format!("fetching store catalog from {url}"))?
-            .text()
-            .await
-            .with_context(|| "reading store catalog response")?;
-        toml::from_str(&text).with_context(|| format!("parsing store catalog from {url}"))
-    }
-
     /// Fetch and merge all enabled store catalogs into a single list of packages.
+    ///
+    /// Per store:
+    ///   - `local_path` set → `StoreSource::LocalPath` (reads from disk, no HTTP)
+    ///   - otherwise        → `StoreSource::RemoteHttp` (fetches from `store.url`)
     ///
     /// Entries from earlier stores take precedence when IDs collide.
     /// Each `StoreEntry` is annotated with `store_source` at call time.
@@ -64,8 +55,16 @@ impl StoreClient {
         let mut result = Vec::new();
 
         for store in &self.settings.stores {
-            if !store.enabled { continue }
-            match self.fetch_catalog(&store.url).await {
+            if !store.enabled { continue; }
+
+            let source = if let Some(local) = &store.local_path {
+                StoreSource::LocalPath(PathBuf::from(local))
+            } else {
+                StoreSource::RemoteHttp(store.url.clone())
+            };
+
+            let client = SdkClient::new(source);
+            match client.fetch_catalog::<StoreCatalog>("Node").await {
                 Ok(catalog) => {
                     for mut entry in catalog.packages {
                         if seen.insert(entry.id.clone()) {
@@ -92,9 +91,8 @@ impl StoreClient {
 
     /// Load a bundled (offline) catalog from the local modules directory.
     ///
-    /// Tries `{modules_dir}/../store/catalog.toml` first (new format),
-    /// then `{modules_dir}/../store/index.toml` (legacy format with `[[modules]]`).
-    /// Falls back to an empty catalog when neither file exists.
+    /// Tries `{modules_dir}/../store/catalog.toml` (new format) then
+    /// `{modules_dir}/../store/index.toml` (legacy). Falls back to empty catalog.
     pub fn load_bundled(modules_dir: &Path) -> StoreCatalog {
         let base = modules_dir.parent().unwrap_or(modules_dir).join("store");
         let catalog_path = base.join("catalog.toml");
@@ -112,20 +110,14 @@ impl StoreClient {
 
     /// Sync the module tree of the first enabled store to a local cache directory.
     ///
-    /// Returns the path to the `Node/` subdirectory inside the synced store.
-    /// This path is suitable for `DeployOpts::store_root`.
-    ///
     /// Priority per store:
-    ///   1. `local_path` set → use as-is, no git operations (dev mode)
-    ///   2. `git_url` set → git clone/pull into `{cache_dir}/{store_name}/`
+    ///   1. `local_path` set → use as-is (dev mode, no git)
+    ///   2. `git_url` set    → git clone/pull into `{cache_dir}/{store_name}/`
     ///   3. Derive git URL from `url` → same git clone/pull
-    ///
-    /// Cache directory: `~/.local/share/fsn/store/` (caller provides this).
     pub async fn sync_modules(&self, cache_dir: &Path) -> Result<PathBuf> {
         for store in &self.settings.stores {
             if !store.enabled { continue; }
 
-            // ── Dev mode: local_path bypasses all git operations ──────────────
             if let Some(local) = &store.local_path {
                 let node_dir = PathBuf::from(local).join("Node");
                 if node_dir.exists() {
@@ -133,32 +125,27 @@ impl StoreClient {
                     return Ok(node_dir);
                 }
                 tracing::warn!(
-                    "Store '{}': local_path set to '{}' but Node/ not found — skipping",
+                    "Store '{}': local_path '{}' has no Node/ dir — skipping",
                     store.name, local
                 );
                 continue;
             }
 
-            // ── Git sync ──────────────────────────────────────────────────────
             let git_url = store.git_url.as_deref()
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| raw_url_to_git(&store.url));
 
             let local_dir = cache_dir.join(name_to_slug(&store.name));
-
             sync_git_repo(&git_url, &local_dir).await
                 .with_context(|| format!("syncing store '{}'", store.name))?;
 
             let node_dir = local_dir.join("Node");
             if node_dir.exists() {
-                info!(
-                    "Store '{}': synced → {}",
-                    store.name, node_dir.display()
-                );
+                info!("Store '{}': synced → {}", store.name, node_dir.display());
                 return Ok(node_dir);
             }
             tracing::warn!(
-                "Store '{}': synced but no Node/ directory found in {}",
+                "Store '{}': synced but no Node/ directory in {}",
                 store.name, local_dir.display()
             );
         }
@@ -168,10 +155,8 @@ impl StoreClient {
 
 // ── Git helpers ───────────────────────────────────────────────────────────────
 
-/// Clone (first run) or pull (subsequent runs) a git repository.
 async fn sync_git_repo(git_url: &str, local_dir: &Path) -> Result<()> {
     if local_dir.join(".git").exists() {
-        // Already cloned — fast-forward pull only (refuse merges)
         info!("git pull {}", local_dir.display());
         let status = tokio::process::Command::new("git")
             .args(["-C", &local_dir.to_string_lossy(), "pull", "--ff-only", "--quiet"])
@@ -180,7 +165,6 @@ async fn sync_git_repo(git_url: &str, local_dir: &Path) -> Result<()> {
             .with_context(|| format!("git pull in {}", local_dir.display()))?;
         anyhow::ensure!(status.success(), "git pull failed in {}", local_dir.display());
     } else {
-        // First run — shallow clone (depth 1 = only latest commit)
         if let Some(parent) = local_dir.parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -196,14 +180,10 @@ async fn sync_git_repo(git_url: &str, local_dir: &Path) -> Result<()> {
 }
 
 /// Derive a git clone URL from a raw.githubusercontent.com URL.
-///
-/// "https://raw.githubusercontent.com/Owner/Repo/branch"
-/// → "https://github.com/Owner/Repo"
 fn raw_url_to_git(raw_url: &str) -> String {
     let base = raw_url
         .trim_end_matches('/')
         .replace("://raw.githubusercontent.com/", "://github.com/");
-    // Remove trailing /branch component
     match base.rfind('/') {
         Some(pos) => base[..pos].to_string(),
         None      => base,
