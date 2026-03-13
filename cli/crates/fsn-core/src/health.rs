@@ -94,18 +94,3 @@ pub fn check_project_with_hosts(project: &ProjectConfig, host_projects: &[&str])
     combined
 }
 
-// ── Back-compat wrappers ──────────────────────────────────────────────────────
-
-/// Kept for call-sites that haven't migrated to the trait yet.
-#[deprecated(note = "use HostConfig::health() instead")]
-pub fn check_host(host: &HostConfig) -> HealthStatus { host.health() }
-
-/// Kept for call-sites that haven't migrated to the trait yet.
-#[deprecated(note = "use ServiceInstanceConfig::health() instead")]
-pub fn check_service(svc: &ServiceInstanceConfig) -> HealthStatus { svc.health() }
-
-/// Kept for call-sites that haven't migrated to the trait yet.
-#[deprecated(note = "use check_project_with_hosts() instead")]
-pub fn check_project(project: &ProjectConfig, host_projects: &[&str]) -> HealthStatus {
-    check_project_with_hosts(project, host_projects)
-}

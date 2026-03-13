@@ -49,7 +49,7 @@ use std::time::{Duration, Instant};
 use ratatui::layout::Rect;
 
 use fsn_core::config::AppSettings;
-use fsn_core::health;
+use fsn_core::health::{self, HealthCheck};
 use fsn_core::Resource;
 use fsn_core::store::StoreEntry;
 
@@ -361,7 +361,7 @@ impl AppState {
 
         let mut items: Vec<SidebarItem> = vec![SidebarItem::Section("sidebar.projects")];
         for p in &self.projects {
-            let h = health::check_project(&p.config, &host_projects);
+            let h = health::check_project_with_hosts(&p.config, &host_projects);
             items.push(SidebarItem::Project {
                 slug:   p.slug.clone(),
                 name:   p.config.project.meta.name.clone(),
@@ -372,7 +372,7 @@ impl AppState {
 
         items.push(SidebarItem::Section("sidebar.hosts"));
         for h in &self.hosts {
-            let hs = health::check_host(&h.config);
+            let hs = &h.config.health();
             items.push(SidebarItem::Host {
                 slug:   h.slug.clone(),
                 name:   h.display_name().to_string(),

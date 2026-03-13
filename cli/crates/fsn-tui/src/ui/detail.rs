@@ -17,7 +17,7 @@ use rat_widget::paragraph::{Paragraph, ParagraphState};
 
 use crate::ui::render_ctx::RenderCtx;
 
-use fsn_core::health::{self, HealthLevel};
+use fsn_core::health::{self, HealthCheck, HealthLevel};
 use crate::app::{AppState, RunState};
 use crate::ui::widgets;
 
@@ -102,7 +102,7 @@ pub fn render_project_detail(f: &mut RenderCtx<'_>, state: &AppState, area: Rect
     let host_projects: Vec<&str> = state.hosts.iter()
         .filter_map(|h| h.config.host.project.as_deref())
         .collect();
-    let h_status = health::check_project(&proj.config, &host_projects);
+    let h_status = health::check_project_with_hosts(&proj.config, &host_projects);
     push_health_lines(&mut lines, &h_status);
 
     f.render_stateful_widget(Paragraph::new(lines), inner, &mut ParagraphState::new());
@@ -133,7 +133,7 @@ pub fn render_host_detail(f: &mut RenderCtx<'_>, state: &AppState, area: Rect, s
     let alias    = host.config.host.meta.alias.as_deref().unwrap_or("—");
 
     // ── Health status ────────────────────────────────────────────────────────
-    let h_status = health::check_host(&host.config);
+    let h_status = &host.config.health();
     let mut health_lines: Vec<Line> = Vec::new();
     push_health_lines(&mut health_lines, &h_status);
     let mut lines: Vec<Line> = vec![
