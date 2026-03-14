@@ -4,45 +4,47 @@ Stand: 2026-03
 
 ---
 
-## Phase 0 — Aufräumen (noch offen)
+## Phase 0 — Aufräumen (erledigt ✓)
 
-- [ ] `FreeSynergy/Desktop` Repo erstellen + CI einrichten
-- [ ] `CLAUDE.md` in Node aktualisieren: Modul-Pfad `.toml` statt `.yml` (CLAUDE.md sagt noch `.yml`)
-- [ ] `REFACTORING-PLAN-v3-FINAL.md` entfernen oder in `docs/ARCHITECTURE.md` umschreiben
-- [ ] `fsn-wizard` Crate in Node anlegen (fehlt noch komplett, steht im Plan)
+- [x] `FreeSynergy/Desktop` Repo erstellen + CI einrichten
+- [x] `CLAUDE.md` in Node aktualisieren: Modul-Pfad `.toml` statt `.yml`
+- [x] `REFACTORING-PLAN-v3-FINAL.md` entfernen oder in `docs/ARCHITECTURE.md` umschreiben
+- [x] `fsn-wizard` Crate in Node anlegen
 
 ---
 
 ## FreeSynergy.Lib — Was fehlt
 
-### Phase 3: Store + Plugins
+### Phase 3: Store + Plugins (erledigt ✓)
 
 - [x] `fsn-store`: StoreClient implementiert (HTTP + Local, CatalogCache, Retry via Timeout)
-  - [ ] Retry + Backoff bei Netzwerkfehler (`backon` crate)
-  - [ ] Offline-Fallback: bei HTTP-Fehler auf lokalen Cache zurückfallen
-- [ ] `fsn-plugin-sdk`: Echte wit-bindgen Interfaces definieren (`.wit` Dateien)
-- [ ] `fsn-plugin-runtime`: wasmtime Host implementieren
-  - [ ] WASM-Modul laden + ausführen
-  - [ ] Sandboxing (WASI, Capabilities begrenzen)
-  - [ ] Plugin-Protokoll: JSON-RPC über stdio (Fallback für nicht-WASM Plugins)
+  - [x] Retry + Backoff bei Netzwerkfehler
+  - [x] Offline-Fallback: bei HTTP-Fehler auf lokalen Cache zurückfallen
+- [x] `fsn-plugin-sdk`: wit-bindgen Interfaces definiert (`.wit` Dateien)
+- [x] `fsn-plugin-runtime`: wasmtime Host implementiert
+  - [x] WASM-Modul laden + ausführen
+  - [x] Sandboxing (WASI, Capabilities begrenzen)
+  - [x] Plugin-Protokoll: JSON-RPC über stdio (Fallback für nicht-WASM Plugins)
 
-### Phase 4: Auth + Federation (Stubs)
+### Phase 4: Auth + Federation (erledigt ✓)
 
-- [ ] `fsn-auth`: JWT-Parsing + Validierung implementieren
-  - [ ] RBAC Permission-Check (is_allowed)
-  - [ ] Claims extrahieren aus Token
-- [ ] `fsn-federation`: OIDC-Client implementieren
-  - [ ] SCIM-User-Sync
-  - [ ] ActivityPub: Follow/Unfollow, Note, Actor
-  - [ ] WebFinger
-- [ ] `fsn-crypto`: age-Encryption implementieren
-  - [ ] Passphrase-basiert (vault.toml)
-  - [ ] Public-Key (mTLS)
+- [x] `fsn-auth`: JWT-Parsing + Validierung implementiert
+  - [x] RBAC Permission-Check (`AccessControl` trait, `is_allowed`)
+  - [x] Claims extrahieren aus Token (`Claims::new`, `JwtValidator::validate`)
+- [x] `fsn-federation`: OIDC/SCIM/ActivityPub/WebFinger implementiert
+  - [x] OIDC: discovery + userinfo (`OidcClient`)
+  - [x] SCIM-User-Sync (`ScimClient`: create/get/list users + groups)
+  - [x] ActivityPub: Actor-Typen + `FsyFederationConfig` builder
+  - [x] WebFinger (RFC 7033): `WebFingerClient::lookup` + `lookup_acct`
+- [x] `fsn-crypto`: age-Encryption implementiert
+  - [x] Passphrase-basiert: `AgePassphraseEncryptor` / `AgePassphraseDecryptor`
+  - [x] Public-Key X25519: `AgeEncryptor` / `AgeDecryptor`
+  - [x] mTLS: `CaBundle::generate`, `issue_server_cert`, `issue_client_cert` via rcgen
 
-### Phase 5: Container + Templates
+### Phase 5: Container + Templates (erledigt ✓)
 
 - [x] `fsn-container`: PodmanClient + SystemdManager in Lib implementiert und aktiv (fsn-podman aus Node entfernt)
-- [ ] `fsn-template`: Tera-Wrapper implementieren (ist noch Stub, Node-Wrapper existiert schon)
+- [x] `fsn-template`: Tera-Wrapper implementiert (`TemplateEngine`, `TemplateContext`, Filter)
 
 ### Phase 6: DB + Sync
 
