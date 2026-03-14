@@ -171,7 +171,7 @@ Stand: 2026-03
 - [x] Englische Basis-Keys (en) — `locales/en/cli.toml`, im Binary gebündelt via `include_str!()`
 - [x] Hardcoded Strings migriert: `init.rs`, `status.rs`, `sync.rs`
 - [x] Language detection aus `LANGUAGE`/`LANG`/`LC_ALL` env vars in `main.rs`
-- [ ] Store-i18n: 51 Sprachen prüfen (Inhalte vollständig?)
+- [ ] Store-i18n: 51 Sprachen prüfen (Inhalte vollständig?) (deferred)
 - [ ] Fehlermeldungen in allen Commands (deferred)
 
 ---
@@ -211,16 +211,16 @@ Stand: 2026-03
 
 ### Integration Tests
 
-- [ ] Vollständiger Deploy-Lifecycle Test (generate → write → systemd mock)
-- [ ] `fsn init` Wizard Test (stdin mock)
-- [ ] Store-Modul-Parsing Tests (alle 21 Module parsen)
+- [x] Vollständiger Deploy-Lifecycle Test (generate → write → systemd mock)
+- [x] `fsn init` Wizard Test (stdin mock)
+- [x] Store-Modul-Parsing Tests (alle 21 Module parsen)
 
 ### CI/CD (GitHub Actions)
 
-- [ ] Build + Clippy + Rustfmt auf jedem Push (Lib + Node)
-- [ ] `cargo-deny` für License + Advisory Check
-- [ ] Dependabot einrichten
-- [ ] Nightly Fuzzing: `fsn-config`, `fsn-template` (alles was User-Input parst)
+- [x] Build + Clippy + Rustfmt auf jedem Push (Lib + Node)
+- [x] `cargo-deny` für License + Advisory Check
+- [x] Dependabot einrichten
+- [x] Nightly Fuzzing: `fsn-config`, `fsn-template` (alles was User-Input parst)
 
 ---
 
@@ -231,7 +231,7 @@ Stand: 2026-03
 - [x] `fsn-federation`: `activitypub_federation` — OIDC/SCIM/WebFinger/ActivityPub vollständig implementiert
 - [x] `fsn-federation`: `openidconnect` — OidcClient (discover + userinfo) fertig
 - [x] `fsn-auth`: `jsonwebtoken` — JwtSigner + JwtValidator (HMAC/RSA) + PermissionSet fertig
-- [ ] `fsn-bridge-sdk`: komplett leer (noch kein Bedarf)
+- [ ] `fsn-bridge-sdk`: komplett leer (noch kein Bedarf) (deferred)
 - [x] `fsn-plugin-runtime`: `wasmtime` Host vollständig implementiert (WASI sandbox + ProcessPluginRunner)
 - [x] `fsn-plugin-sdk`: PluginContext/PluginManifest/PluginResponse definiert, deploy engine verdrahtet
 - [ ] `fsn-db`: `sea-orm` + `automerge` — Entities definiert, aber kein echter Betrieb
@@ -252,10 +252,10 @@ Stand: 2026-03
 
 ## Dokumentation
 
-- [ ] `docs/ARCHITECTURE.md` pro Repo (Lib, Node, Desktop)
-- [ ] README.md für alle fsn-* Crates
-- [ ] `migration/` Verzeichnis mit Skripten für v1 → v2 Config-Migration
-- [ ] JSON-Schema für alle Modul-Manifeste (für Validierung + UI-Generierung)
+- [x] `docs/ARCHITECTURE.md` pro Repo (Lib, Node, Desktop)
+- [x] README.md für alle fsn-* Crates
+- [ ] `migration/` Verzeichnis mit Skripten für v1 → v2 Config-Migration (deferred)
+- [ ] JSON-Schema für alle Modul-Manifeste (für Validierung + UI-Generierung) (deferred)
 
 ---
 

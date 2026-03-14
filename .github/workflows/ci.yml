@@ -34,3 +34,8 @@ jobs:
       - name: Run tests
         working-directory: cli
         run: cargo test --all
+
+      - name: cargo-deny (licenses + advisories)
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: cli/Cargo.toml

@@ -1,0 +1,27 @@
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /cli
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    groups:
+      fsn-lib:
+        patterns:
+          - "fsn-*"
+      tokio-ecosystem:
+        patterns:
+          - "tokio*"
+          - "tower*"
+      serde-ecosystem:
+        patterns:
+          - "serde*"
+          - "toml*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5

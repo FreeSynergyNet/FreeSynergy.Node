@@ -1,0 +1,29 @@
+name: Nightly Fuzzing
+
+on:
+  schedule:
+    - cron: "0 2 * * *"   # daily at 02:00 UTC
+  workflow_dispatch:       # allow manual trigger
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@nightly
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: cli/fuzz
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
+
+      - name: Fuzz fsn-config (60 seconds)
+        working-directory: cli
+        run: cargo fuzz run fuzz_config -- -max_total_time=60
+
+      - name: Fuzz fsn-template (60 seconds)
+        working-directory: cli
+        run: cargo fuzz run fuzz_template -- -max_total_time=60
