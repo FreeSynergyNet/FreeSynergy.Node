@@ -120,7 +120,7 @@ Stand: 2026-03
 - [x] Ressourcen-Anzeige (CPU, RAM, Volumes)
 - [x] Health-Status (✓/⚠/✗) live
 - [x] Abhängigkeits-Graph visualisieren
-- [ ] Bot-Management (wenn fsn-auth fertig)
+- [x] Bot-Management (wenn fsn-auth fertig)
 
 ### fsd-store (Package Manager)
 
@@ -145,13 +145,13 @@ Stand: 2026-03
 - [x] Language: Sprache wählen (Stub)
 - [x] Desktop: Taskbar-Position, Autostart (Stub)
 - [x] Service Roles: welcher Container für welche Funktion (Logik fehlt)
-- [ ] Accounts: OIDC-Accounts verwalten
+- [x] Accounts: OIDC-Accounts verwalten
 
 ### fsd-profile
 
 - [x] User-Profil (Stub)
 - [x] User-Profil anzeigen + bearbeiten
-- [ ] OIDC-Verbindungen
+- [x] OIDC-Verbindungen
 - [x] SSH-Keys verwalten
 
 ### fsd-app (Einstiegspunkt)
@@ -234,7 +234,7 @@ Stand: 2026-03
 - [ ] `fsn-bridge-sdk`: komplett leer (noch kein Bedarf) (deferred)
 - [x] `fsn-plugin-runtime`: `wasmtime` Host vollständig implementiert (WASI sandbox + ProcessPluginRunner)
 - [x] `fsn-plugin-sdk`: PluginContext/PluginManifest/PluginResponse definiert, deploy engine verdrahtet
-- [ ] `fsn-db`: `sea-orm` + `automerge` — Entities definiert, aber kein echter Betrieb
+- [x] `fsn-db`: `sea-orm` + `automerge` — Entities definiert, aber kein echter Betrieb
 
 ### Zu ergänzen (fehlen noch, stehen im Plan)
 
@@ -278,7 +278,7 @@ Stand: 2026-03
 3. ~~**fsn-host** SSH (Remote-Deploy)~~ ✓ fertig — russh, exec, write_file, remote systemd, `fsn deploy --host <name>`
 4. ~~**fsn-crypto** age-Encryption~~ ✓ fertig — vault.age mit passphrase KDF, VaultConfig in fsn-core
 5. ~~**FreeSynergy.Desktop** Repo anlegen + fsd-conductor als erstes~~ ✓ fertig — fsd-shell, fsd-conductor, fsd-app compilierbar (braucht libxdo-devel)
-6. **i18n** `.ftl`-Migration
+6. ~~**i18n** `.ftl`-Migration~~ ✓ fertig — TOML-Ansatz gewählt statt .ftl, alle CLI-Strings migriert
 7. ~~**fsn-plugin-runtime** WASM Host~~ ✓ fertig — wasmtime Host + WASI sandbox + ProcessPluginRunner + deploy engine verdrahtet
 8. ~~**fsn-auth + fsn-federation**~~ ✓ fertig — JWT (HMAC/RSA), RBAC, OIDC, SCIM, WebFinger vollständig
-9. **fsn-db** echter Betrieb (sea-orm Migrations laufen lassen)
+9. ~~**fsn-db** echter Betrieb (sea-orm Migrations laufen lassen)~~ ✓ fertig — DbManager, ResourceRepo, AuditRepo, PluginRepo, PermissionRepo + Tests
