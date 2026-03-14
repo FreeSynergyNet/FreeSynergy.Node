@@ -46,19 +46,19 @@ Stand: 2026-03
 - [x] `fsn-container`: PodmanClient + SystemdManager in Lib implementiert und aktiv (fsn-podman aus Node entfernt)
 - [x] `fsn-template`: Tera-Wrapper implementiert (`TemplateEngine`, `TemplateContext`, Filter)
 
-### Phase 6: DB + Sync
+### Phase 6: DB + Sync (erledigt ✓)
 
-- [ ] `fsn-db`: SeaORM Entities implementieren
-  - [ ] `resource`, `permission`, `sync_state`, `plugin`, `audit_log`
-  - [ ] Migration-System (sea-orm-cli)
-  - [ ] WriteBuffer flush-loop
+- [x] `fsn-db`: SeaORM Entities implementiert
+  - [x] `resource`, `permission`, `sync_state`, `plugin`, `audit_log`
+  - [x] Migration-System (embedded SQL via `Migrator::run()`)
+  - [x] WriteBuffer flush-loop (`run_auto_flush`)
 
 ### Allgemein (Lib)
 
-- [ ] Feature Flags überall einführen (`sqlite`, `postgres`, `sync`, `federation`, `wasm-plugins`)
-- [ ] README.md pro Crate (alle fehlen)
-- [ ] `#[doc]` auf allen `pub` Items
-- [ ] `examples/` Verzeichnis in jeder Library
+- [x] Feature Flags überall einführen (`sqlite`/`postgres` in fsn-db, `jwt` in fsn-auth, `age`/`mtls`/`keygen` in fsn-crypto, `oidc`/`scim`/`activitypub`/`webfinger` in fsn-federation, `wasm` in fsn-plugin-runtime)
+- [x] README.md pro Crate (alle 20 Crates)
+- [x] `#[doc]` auf allen `pub` Items
+- [ ] `examples/` Verzeichnis in jeder Library (deferred)
 
 ---
 
