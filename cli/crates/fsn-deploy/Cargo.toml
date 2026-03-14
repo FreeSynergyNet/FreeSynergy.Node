@@ -6,7 +6,7 @@ edition.workspace    = true
 license.workspace    = true
 
 [dependencies]
-store-sdk          = { workspace = true }
+fsn-store          = { workspace = true }
 fsn-core           = { workspace = true }
 fsn-plugin-runtime = { workspace = true }
 fsn-plugin-sdk     = { workspace = true }

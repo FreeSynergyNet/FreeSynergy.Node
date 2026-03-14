@@ -17,9 +17,6 @@ repository  = "https://github.com/FreeSynergy/Node"
 
 # ── Shared dependency versions ────────────────────────────────────────────────
 [workspace.dependencies]
-# External crates (outside this workspace)
-store-sdk   = { path = "../../Store/crates/store-sdk" }
-
 # FreeSynergy.Lib — shared libraries
 fsn-types          = { path = "../../FreeSynergy.Lib/fsn-types" }
 fsn-error          = { path = "../../FreeSynergy.Lib/fsn-error" }
@@ -32,6 +29,7 @@ fsn-plugin-sdk     = { path = "../../FreeSynergy.Lib/fsn-plugin-sdk" }
 fsn-plugin-runtime = { path = "../../FreeSynergy.Lib/fsn-plugin-runtime" }
 fsn-container      = { path = "../../FreeSynergy.Lib/fsn-container" }
 fsn-template       = { path = "../../FreeSynergy.Lib/fsn-template" }
+fsn-store          = { path = "../../FreeSynergy.Lib/fsn-store" }
 
 # Internal crates
 fsn-core    = { path = "crates/fsn-core" }

@@ -1,12 +1,12 @@
-// Store catalog data model — FSN-specific types that consume store-sdk.
+// Store catalog data model — FSN-specific types that consume fsn-store.
 //
 // Architecture:
-//   store-sdk  — generic Manifest trait, CatalogMeta, LocaleEntry, StoreClient
+//   fsn-store  — generic Manifest trait, CatalogMeta, LocaleEntry, StoreClient
 //   fsn-core   — StoreEntry (FSN package entry, implements Manifest), StoreCatalog
-//   fsn-engine — StoreClient wraps store_sdk::StoreClient for FSN
+//   fsn-deploy — StoreClient wraps fsn_store::StoreClient for FSN
 //
 // StoreCatalog is FSN's version of the catalog — it re-uses CatalogMeta and
-// LocaleEntry from store-sdk but keeps FSN-specific fields on StoreEntry.
+// LocaleEntry from fsn-store but keeps FSN-specific fields on StoreEntry.
 // The `alias = "modules"` on packages is FSN legacy backward-compat.
 
 use serde::{Deserialize, Serialize};
@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use crate::config::service::types::{ServiceType, de_service_types};
 
 // Re-export shared types so callers import from one place.
-pub use store_sdk::{CatalogMeta, LocaleEntry};
+pub use fsn_store::{CatalogMeta, LocaleEntry};
 
 // ── StoreCatalog ───────────────────────────────────────────────────────────────
 
@@ -41,7 +41,7 @@ pub struct StoreCatalog {
 /// One package entry in the FSN catalog.
 /// Describes a deployable service module (zentinel, kanidm, forgejo, …).
 ///
-/// Implements `store_sdk::Manifest` so generic catalog infrastructure can
+/// Implements `fsn_store::Manifest` so generic catalog infrastructure can
 /// filter and look up entries without knowing FSN-specific fields.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StoreEntry {
@@ -122,7 +122,7 @@ fn default_custom_types() -> Vec<ServiceType> {
 
 // ── Manifest impl ─────────────────────────────────────────────────────────────
 
-impl store_sdk::Manifest for StoreEntry {
+impl fsn_store::Manifest for StoreEntry {
     fn id(&self)       -> &str { &self.id }
     fn version(&self)  -> &str { &self.version }
     fn category(&self) -> &str { &self.category }

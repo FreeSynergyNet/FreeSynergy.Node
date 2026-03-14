@@ -1,17 +1,17 @@
 // Store client — fetches catalogs and syncs module trees.
 //
 // Architecture:
-//   store-sdk::StoreClient  — generic I/O: LocalPath or RemoteHttp
-//   StoreClient (this file) — FSN-specific: wraps store-sdk, adds git sync,
+//   fsn_store::StoreClient  — generic I/O: Local or Http
+//   StoreClient (this file) — FSN-specific: wraps fsn-store, adds git sync,
 //                             multi-store merge, bundled offline fallback.
 //
 // Two modes:
-//   fetch_all()     — catalog only (for browsing). Uses store-sdk::StoreClient.
+//   fetch_all()     — catalog only (for browsing). Uses fsn_store::StoreClient.
 //   sync_modules()  — full git clone/pull of the module tree (for deploy).
 //
 // StoreSource selection per configured store:
-//   local_path set  → StoreSource::LocalPath  (dev mode, no HTTP)
-//   otherwise       → StoreSource::RemoteHttp (production)
+//   local_path set  → StoreSource::Local  (dev mode, no HTTP)
+//   otherwise       → StoreSource::Http   (production)
 
 use std::path::{Path, PathBuf};
 
@@ -22,7 +22,7 @@ use fsn_core::{
     config::{AppSettings, ServiceRegistry},
     store::{StoreCatalog, StoreEntry},
 };
-use store_sdk::{StoreClient as SdkClient, StoreSource};
+use fsn_store::{StoreClient as SdkClient, StoreSource};
 
 // ── StoreClient ───────────────────────────────────────────────────────────────
 
@@ -45,8 +45,8 @@ impl StoreClient {
     /// Fetch and merge all enabled store catalogs into a single list of packages.
     ///
     /// Per store:
-    ///   - `local_path` set → `StoreSource::LocalPath` (reads from disk, no HTTP)
-    ///   - otherwise        → `StoreSource::RemoteHttp` (fetches from `store.url`)
+    ///   - `local_path` set → `StoreSource::Local` (reads from disk, no HTTP)
+    ///   - otherwise        → `StoreSource::Http`  (fetches from `store.url`)
     ///
     /// Entries from earlier stores take precedence when IDs collide.
     /// Each `StoreEntry` is annotated with `store_source` at call time.
@@ -62,13 +62,13 @@ impl StoreClient {
             if !store.enabled { continue; }
 
             let source = if let Some(local) = &store.local_path {
-                StoreSource::LocalPath(PathBuf::from(local))
+                StoreSource::Local(PathBuf::from(local))
             } else {
-                StoreSource::RemoteHttp(store.url.clone())
+                StoreSource::Http(store.url.clone())
             };
 
-            let client = SdkClient::new(source);
-            match client.fetch_catalog::<StoreCatalog>("Node").await {
+            let mut client = SdkClient::new(source);
+            match client.fetch_catalog::<StoreEntry>("Node", false).await {
                 Ok(catalog) => {
                     for mut entry in catalog.packages {
                         if seen.insert(entry.id.clone()) {
@@ -78,7 +78,7 @@ impl StoreClient {
                     }
                 }
                 Err(e) => {
-                    let msg = format!("Store '{}': {:#}", store.name, e);
+                    let msg = format!("Store '{}': {e}", store.name);
                     tracing::warn!("{}", msg);
                     errors.push(msg);
                 }
