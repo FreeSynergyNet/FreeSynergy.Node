@@ -15,19 +15,17 @@ Stand: 2026-03
 
 ---
 
-## E3 — CSS / Theme-Erweiterungen (fsn-theme)
+## E3 — CSS / Theme-Erweiterungen (fsn-theme) ✓ DONE
 
-Neue Theme-Assets und `theme.toml`-Sektionen für Glass + Animation.
-
-- [ ] `fsn-theme/assets/glass.css` — Glassmorphism-Klassen (`.glass`, `.glass-card`, `.glass-sidebar`)
-- [ ] `fsn-theme/assets/animations.css` — `fadeInUp`, `slideInRight`, Skeleton-Loading, `@media (prefers-reduced-motion)`
-- [ ] `theme.toml` um `[glass]`-Sektion erweitern (`bg_opacity`, `blur`, `border_opacity`)
-- [ ] `theme.toml` um `[animation]`-Sektion erweitern (`fast`, `base`, `slow` in ms)
-- [ ] `theme.toml` um `[shadows]`-Sektion erweitern (`sm`, `md`, `lg`, `xl`)
-- [ ] `ThemeEngine`: CSS-Variablen `--transition-fast/base/slow`, `--shadow-*` aus `theme.toml` generieren
-- [ ] Dark Mode via `@media (prefers-color-scheme: dark)` in generierten CSS
-- [ ] `@media (prefers-contrast: more)` — High-Contrast-Variante für alle Glass-Klassen
-- [ ] `ThemeProvider` trait: `glass()`, `shadow(level)`, `animation(kind)` → Implementierungen: `TomlTheme`, `SystemTheme`, `HighContrastTheme`
+- [x] `fsn-theme/assets/glass.css` — Glassmorphism-Klassen (`.glass`, `.glass-card`, `.glass-sidebar`)
+- [x] `fsn-theme/assets/animations.css` — `fadeInUp`, `slideInRight`, Skeleton-Loading, `@media (prefers-reduced-motion)`
+- [x] `theme.toml` um `[glass]`-Sektion erweitern (`bg_opacity`, `blur`, `border_opacity`)
+- [x] `theme.toml` um `[animation]`-Sektion erweitern (`fast`, `base`, `slow` in ms)
+- [x] `theme.toml` um `[shadows]`-Sektion erweitern (`sm`, `md`, `lg`, `xl`)
+- [x] `ThemeEngine`: CSS-Variablen `--transition-fast/base/slow`, `--shadow-*` aus `theme.toml` generieren
+- [x] Dark Mode via `@media (prefers-color-scheme: dark)` in generierten CSS
+- [x] `@media (prefers-contrast: more)` — High-Contrast-Variante für alle Glass-Klassen
+- [x] `ThemeProvider` trait: `glass()`, `shadow(level)`, `animation(kind)` → Implementierungen: `TomlTheme`, `SystemTheme`, `HighContrastTheme`
 
 ---
 
@@ -41,32 +39,28 @@ Neue Theme-Assets und `theme.toml`-Sektionen für Glass + Animation.
 
 ---
 
-## E5 — Component Library (fsn-components in FreeSynergy.Lib)
+## E5 — Component Library (fsn-components in FreeSynergy.Lib) ✓ DONE
 
-Neues Crate `fsn-components` — alle UI-Primitives einmal definiert, überall genutzt.
-
-- [ ] Crate `fsn-components` in Lib anlegen (Dioxus + feature `desktop`/`web`)
-- [ ] Enum-basiertes Varianten-System: `ButtonVariant` (Primary/Secondary/Ghost/Danger), `ButtonSize` (Sm/Md/Lg)
-- [ ] `Button`-Komponente mit Varianten, Loading-State, Left-/Right-Icon
-- [ ] `Input`, `Select`, `Textarea`, `Checkbox` — einheitlich, mit `aria-*`
-- [ ] `FormField`-Wrapper: Label + Input + Error-Message (DRY, kein Copy-Paste mehr)
-- [ ] `Card`, `Badge`, `Divider`, `Spinner`, `Tooltip`
-- [ ] `Toast`-System: `ToastProvider` Context + `use_toast()` Hook (ersetzt separate Notification-Impl in fsd-shell)
-- [ ] `ToastBus` + `ErrorBus` als globale `mpsc::channel`-basierte Busse — können auch aus non-Dioxus-Code (CLI, Background-Services) gesendet werden
+- [x] Crate `fsn-components` in Lib anlegen (Dioxus + feature `desktop`/`web`)
+- [x] Enum-basiertes Varianten-System: `ButtonVariant` (Primary/Secondary/Ghost/Danger), `ButtonSize` (Sm/Md/Lg)
+- [x] `Button`-Komponente mit Varianten, Loading-State, Left-/Right-Icon
+- [x] `Input`, `Select`, `Textarea`, `Checkbox` — einheitlich, mit `aria-*`
+- [x] `FormField`-Wrapper: Label + Input + Error-Message (DRY, kein Copy-Paste mehr)
+- [x] `Card`, `Badge`, `Divider`, `Spinner`, `Tooltip`
+- [x] `Toast`-System: `ToastProvider` Context + `use_toast()` Hook
+- [x] `ToastBus` + `ErrorBus` als globale broadcast-channel-basierte Busse
 - [ ] `SchemaForm` — generiert Formulare automatisch aus JSON-Schema (nutzt `schemars`)
-- [ ] `fsd-showcase` verdrahtet alle Komponenten aus `fsn-components`
+- [x] `fsd-showcase` verdrahtet alle Komponenten aus `fsn-components`
 
 ---
 
-## E6 — Render-Abstraktion (fsn-render)
+## E6 — Render-Abstraktion (fsn-render) ✓ DONE
 
-`ViewRenderer`-Trait als gemeinsame Abstraktionsschicht für TUI (ratatui), Desktop (Dioxus) und späteres Web/Mobile. Business-Logik bleibt renderer-agnostisch.
-
-- [ ] `ViewRenderer`-Trait definieren: `render(&self, ctx: &RenderCtx)`, `handle_event(&mut self, event: UserEvent)`, `update(&mut self, delta: Duration) -> bool`
-- [ ] Trait in `fsn-types` oder eigenem Crate `fsn-render` (je nach Größe entscheiden)
-- [ ] TUI-Implementierung: `RatatuiRenderer` wraps bestehende `FormNode`-Logik
-- [ ] Dioxus-Implementierung: `DioxusRenderer` als Wrapper für fsd-* Komponenten
-- [ ] `RenderCtx`: enthält Theme + i18n + FeatureFlags (injiziert, nicht global)
+- [x] `ViewRenderer`-Trait definieren: `render(&self, ctx: &RenderCtx)`, `handle_event(&mut self, event: UserEvent)`, `update(&mut self, delta: Duration) -> bool`
+- [x] Eigenes Crate `fsn-render` (Trait + RenderCtx + UserEvent + FeatureFlags)
+- [x] TUI-Implementierung: `RatatuiRenderer` (feature `tui`)
+- [x] Dioxus-Implementierung: `DioxusRenderer` (feature `dioxus`)
+- [x] `RenderCtx`: enthält Theme + i18n locale + FeatureFlags (injiziert, nicht global)
 
 ---
 
@@ -103,12 +97,12 @@ Nicht für nächste Sprints — aber wichtig festzuhalten, damit Architektur-Ent
 
 ## Reihenfolge (empfohlen)
 
-1. **E3** Theme-Erweiterungen — Fundament (glass + animations CSS, ThemeProvider trait, neue theme.toml-Sektionen)
-2. **E5** fsn-components anlegen — Button, Input, FormField, ToastBus (erste 5 Komponenten + fsd-showcase)
-3. **E1** Desktop-Layout — CSS Grid Shell, WindowFrame mit Glass, SplitView
-4. **E2** App-Layouts — AppShell + 3 Standard-Layouts
-5. **E6** Render-Abstraktion — ViewRenderer trait (bevor GUI-Komplexität explodiert)
-6. **E7** ServiceHost / Supervisor — zentrales Lifecycle-Management
-7. **E4** Qualität — Panic-Handler, FeatureFlags, Snapshot-Tests
-8. **E8** TUI Accessibility
-9. **F** Vision dokumentieren, Intent-Routing evaluieren
+~~1. **E3** Theme-Erweiterungen~~ ✓
+~~2. **E5** fsn-components anlegen~~ ✓
+~~3. **E1** Desktop-Layout~~ ✓
+~~4. **E2** App-Layouts~~ ✓
+~~5. **E6** Render-Abstraktion~~ ✓
+1. **E7** ServiceHost / Supervisor — zentrales Lifecycle-Management
+2. **E4** Qualität — Panic-Handler, FeatureFlags, Snapshot-Tests
+3. **E8** TUI Accessibility
+4. **F** Vision dokumentieren, Intent-Routing evaluieren
