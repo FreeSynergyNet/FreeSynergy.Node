@@ -96,62 +96,68 @@ Stand: 2026-03
 
 ---
 
-## FreeSynergy.Desktop — Alles fehlt (neues Repo)
+## FreeSynergy.Desktop
 
-- [ ] Repo `FreeSynergy/Desktop` erstellen
-- [ ] Cargo Workspace mit Dioxus 0.7
+- [x] Repo `FreeSynergy/Desktop` erstellen
+- [x] Cargo Workspace mit Dioxus 0.6
 - [ ] CI/CD (build, clippy, rustfmt)
 
 ### fsd-shell (Taskbar + Window Manager)
 
-- [ ] Taskbar-Komponente (App-Icons, System-Tray, Uhr)
-- [ ] App-Launcher (Grid + Suche)
-- [ ] Window-Manager (Fenster öffnen, schließen, verschieben)
-- [ ] Wallpaper-Anzeige
-- [ ] Notification-System (Toast)
+- [x] Taskbar-Komponente (App-Icons, System-Tray, Uhr — live via chrono)
+- [x] App-Launcher (Grid + Suche, Vollbild-Overlay)
+- [x] Window-Manager (Fenster öffnen, schließen, verschieben, z-index)
+- [x] Wallpaper-Anzeige (Color, URL, File, Default)
+- [x] Notification-System (Toast, 4 Severity-Level)
+- [ ] WindowFrame: Minimize/Maximize verdrahten
+- [ ] AppRegistry: App-spezifischen Content in WindowFrame injizieren
 
 ### fsd-conductor (Container Management)
 
-- [ ] Service-Liste (alle laufenden FSN-Services)
-- [ ] Start / Stop / Restart pro Service
-- [ ] Log-Viewer (live streaming)
+- [x] Service-Liste (Stub)
+- [x] Log-Viewer (Stub)
+- [ ] Start / Stop / Restart pro Service (fsn-container verdrahten)
 - [ ] Ressourcen-Anzeige (CPU, RAM, Volumes)
-- [ ] Health-Status (✓/⚠/✗)
+- [ ] Health-Status (✓/⚠/✗) live
 - [ ] Abhängigkeits-Graph visualisieren
 - [ ] Bot-Management (wenn fsn-auth fertig)
 
 ### fsd-store (Package Manager)
 
-- [ ] Modul-Browser (Katalog aus fsn-store)
-- [ ] Suche + Filter
-- [ ] Install-Wizard (Setup-Fields aus Modul-Metadaten)
+- [x] Modul-Browser (Stub)
+- [x] Suche + Filter (Stub)
+- [x] Install-Wizard (Stub, Schritt-Indikator)
+- [ ] Echten Katalog aus fsn-store laden
 - [ ] Update-Check + Update durchführen
 - [ ] Modul entfernen
 
 ### fsd-studio (Plugin/Modul-Ersteller)
 
-- [ ] Docker-Compose → FSN-Modul Konverter (UI für fsn-wizard)
-- [ ] WASM-Plugin Template-Generator (wit-bindgen)
-- [ ] i18n-Editor (Sprachdateien visuell bearbeiten)
+- [x] Docker-Compose → FSN-Modul Konverter (Stub)
+- [x] WASM-Plugin Template-Generator (Stub)
+- [x] i18n-Editor (Stub, Kategorie-Navigation)
+- [ ] Konverter: echte YAML-Parsing-Logik (fsn-wizard verdrahten)
 - [ ] AI-Erweiterung (optional): Natürlichsprache → Modul-Metadaten
 
 ### fsd-settings
 
-- [ ] Appearance: Theme wählen, Wallpaper, CSS
-- [ ] Language: Sprache wählen, Sprachdateien aus Store laden
-- [ ] Service Roles: welcher Container für welche Funktion
+- [x] Appearance: Theme, Wallpaper, CSS (Stub)
+- [x] Language: Sprache wählen (Stub)
+- [x] Desktop: Taskbar-Position, Autostart (Stub)
+- [ ] Service Roles: welcher Container für welche Funktion (Logik fehlt)
 - [ ] Accounts: OIDC-Accounts verwalten
-- [ ] Desktop: Taskbar-Position, Autostart
 
 ### fsd-profile
 
+- [x] User-Profil (Stub)
 - [ ] User-Profil anzeigen + bearbeiten
 - [ ] OIDC-Verbindungen
 - [ ] SSH-Keys verwalten
 
 ### fsd-app (Einstiegspunkt)
 
-- [ ] Shell laden + alle Apps registrieren
+- [x] Shell laden (fsd-app startet Desktop)
+- [ ] AppRegistry: alle Apps registrieren + Content in WindowFrame injizieren
 - [ ] Dioxus Multiwindow Setup
 
 ---
