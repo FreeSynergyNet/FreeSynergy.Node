@@ -1,6 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use anyhow::{Context, Result};
 
+use fsn_core::config::find_project;
 use crate::cli::ConfigCommand;
 
 pub async fn run(root: &Path, project: Option<&Path>, cmd: ConfigCommand) -> Result<()> {
@@ -42,20 +43,8 @@ pub async fn run_validate(root: &Path, project: Option<&Path>) -> Result<()> {
     Ok(())
 }
 
-fn resolve_project(root: &Path, explicit: Option<&Path>) -> Result<PathBuf> {
-    if let Some(p) = explicit {
-        return Ok(p.to_path_buf());
-    }
-    // Auto-detect first *.project.toml
-    let projects = root.join("projects");
-    std::fs::read_dir(&projects)
-        .ok()
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter(|e| e.path().is_dir())
-        .flat_map(|d| std::fs::read_dir(d.path()).ok().into_iter().flatten().flatten())
-        .map(|e| e.path())
-        .find(|p| p.to_string_lossy().ends_with(".project.toml"))
-        .with_context(|| format!("No *.project.toml found under {}", projects.display()))
+fn resolve_project(root: &Path, explicit: Option<&Path>) -> anyhow::Result<std::path::PathBuf> {
+    find_project(root, explicit).with_context(|| {
+        format!("No *.project.toml found under {}", root.join("projects").display())
+    })
 }

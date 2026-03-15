@@ -3,10 +3,9 @@
 
 use std::path::Path;
 use anyhow::Result;
-use fsn_core::config::{HostConfig, ServiceRegistry, ProjectConfig, VaultConfig, resolve_plugins_dir};
+use fsn_core::config::{HostConfig, ServiceRegistry, ProjectConfig, VaultConfig,
+                       resolve_plugins_dir, find_project, find_host};
 use fsn_deploy::{diff::compute_diff, observe::observe, resolve::resolve_desired};
-
-use crate::commands::deploy::{find_project, find_host};
 
 pub async fn run(root: &Path, project: Option<&Path>) -> Result<()> {
     let proj_path = find_project(root, project).ok_or_else(|| anyhow::anyhow!("No project file found"))?;

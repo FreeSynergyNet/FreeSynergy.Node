@@ -50,15 +50,14 @@ fn which_desktop_bin() -> Option<std::path::PathBuf> {
         }
     }
 
-    // Check well-known local build locations
-    let base = "/home/kal/Server/FreeSynergy.Desktop/target";
+    // Check well-known local build locations (development fallback)
+    let home = std::env::var("HOME").unwrap_or_default();
+    let base = format!("{home}/Server/FreeSynergy.Desktop/target");
     let candidates = [
         format!("{base}/release/fsd-conductor"),
         format!("{base}/debug/fsd-conductor"),
-        "/usr/local/bin/fsd-conductor".to_string(),
         format!("{base}/release/fsd"),
         format!("{base}/debug/fsd"),
-        "/usr/local/bin/fsd".to_string(),
     ];
     candidates.iter()
         .map(std::path::PathBuf::from)

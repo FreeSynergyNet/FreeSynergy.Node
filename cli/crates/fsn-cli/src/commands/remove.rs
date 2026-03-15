@@ -1,7 +1,6 @@
 use std::path::Path;
 use anyhow::{bail, Result};
-use fsn_container::SystemdManager;
-use fsn_deploy::deploy::{DeployOpts, undeploy_instance};
+use fsn_deploy::deploy::{DeployOpts, undeploy_all, undeploy_instance};
 
 /// Remove one or all deployed services (stops units, deletes Quadlet files).
 pub async fn run(_root: &Path, _project: Option<&Path>, service: Option<&str>, confirm: bool) -> Result<()> {
@@ -16,13 +15,8 @@ pub async fn run(_root: &Path, _project: Option<&Path>, service: Option<&str>, c
         undeploy_instance(name, &opts).await?;
         println!("Removed {}", name);
     } else {
-        let systemd = SystemdManager::new();
-        let units = fsn_deploy::observe::list_fsn_units(&systemd).await?;
-        for unit in &units {
-            let name = unit.trim_end_matches(".service");
-            undeploy_instance(name, &opts).await?;
-            println!("Removed {}", name);
-        }
+        let n = undeploy_all(&opts).await?;
+        println!("Removed {} service(s).", n);
     }
     Ok(())
 }

@@ -1,6 +1,6 @@
 use std::path::Path;
 use anyhow::Result;
-use fsn_container::{SystemdManager, UnitActiveState};
+use fsn_container::SystemdManager;
 
 /// Print the systemd state of all FSN-managed services.
 pub async fn run(_root: &Path, _project: Option<&Path>) -> Result<()> {
@@ -18,15 +18,8 @@ pub async fn run(_root: &Path, _project: Option<&Path>) -> Result<()> {
     for unit in &units {
         let name = unit.trim_end_matches(".service");
         let state = match systemd.status(unit).await {
-            Ok(s) => match s.active_state {
-                UnitActiveState::Active       => "active",
-                UnitActiveState::Inactive     => "inactive",
-                UnitActiveState::Activating   => "activating",
-                UnitActiveState::Deactivating => "deactivating",
-                UnitActiveState::Failed       => "FAILED",
-                UnitActiveState::Unknown      => "unknown",
-            },
-            Err(_) => "error",
+            Ok(s)  => s.active_state.to_string(),
+            Err(_) => "error".to_string(),
         };
         println!("{:<30} {}", name, state);
     }

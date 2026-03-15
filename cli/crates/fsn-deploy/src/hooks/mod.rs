@@ -78,22 +78,40 @@ impl<'a> HookContext<'a> {
     }
 }
 
+// ── Hook registry ──────────────────────────────────────────────────────────────
+
+/// Async hook function pointer type.
+type HookFn = for<'a> fn(&'a HookContext<'a>) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + 'a>>;
+
+/// Static mapping from `class_key` to hook implementation.
+///
+/// Entries are checked in order; the first matching key wins.
+/// If no key matches, `common::ensure_data_dir` is used as the default.
+static HOOK_REGISTRY: &[(&str, HookFn)] = &[
+    ("auth/kanidm",              |ctx| Box::pin(kanidm::run(ctx))),
+    ("git/forgejo",              |ctx| Box::pin(forgejo::run(ctx))),
+    ("mail/stalwart",            |ctx| Box::pin(stalwart::run(ctx))),
+    ("collab/cryptpad",          |ctx| Box::pin(cryptpad::run(ctx))),
+    ("chat/tuwunel",             |ctx| Box::pin(tuwunel::run(ctx))),
+    ("tasks/vikunja",            |ctx| Box::pin(vikunja::run(ctx))),
+    ("observability/openobserver", |ctx| Box::pin(openobserver_hook(ctx))),
+];
+
 /// Dispatch post-deploy hook for the given instance (if one is registered).
 pub async fn run_hook(ctx: &HookContext<'_>) -> Result<()> {
-    match ctx.instance.class_key.as_str() {
-        "auth/kanidm"                                    => kanidm::run(ctx).await,
-        "git/forgejo"                                    => forgejo::run(ctx).await,
-        "mail/stalwart"                                  => stalwart::run(ctx).await,
-        "collab/cryptpad"                                => cryptpad::run(ctx).await,
-        "chat/tuwunel"                                   => tuwunel::run(ctx).await,
-        "tasks/vikunja"                                  => vikunja::run(ctx).await,
-        "observability/openobserver"                     => openobserver_stub(ctx),
-        _                                                => common::ensure_data_dir(ctx),
+    let hook = HOOK_REGISTRY
+        .iter()
+        .find(|(key, _)| *key == ctx.instance.class_key.as_str())
+        .map(|(_, f)| *f);
+
+    match hook {
+        Some(f) => f(ctx).await,
+        None    => common::ensure_data_dir(ctx),
     }
 }
 
-/// Generic fallback: just make sure the data dir exists.
-fn openobserver_stub(ctx: &HookContext<'_>) -> Result<()> {
+/// Hook for openobserver: ensure data dir + log login hint.
+async fn openobserver_hook(ctx: &HookContext<'_>) -> Result<()> {
     common::ensure_data_dir(ctx)?;
     tracing::info!(
         "{}: ready. Login at https://{}  (admin credentials in vault)",

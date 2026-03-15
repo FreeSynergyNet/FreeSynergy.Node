@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use fsn_core::config::{
+    find_project,
     resolve_plugins_dir,
     service::FieldType,
     registry::ServiceRegistry,
@@ -44,7 +45,7 @@ pub async fn run(root: &Path) -> Result<()> {
 // ── Phase 1: Project skeleton ─────────────────────────────────────────────
 
 fn ensure_project_skeleton(root: &Path) -> Result<(String, PathBuf)> {
-    if let Some(existing) = find_existing_project(root) {
+    if let Some(existing) = find_project(root, None) {
         let stem = existing.file_stem().and_then(|s| s.to_str()).unwrap_or("project");
         let slug = stem.trim_end_matches(".project").to_string();
         let proj_dir = existing.parent().unwrap_or(root).to_path_buf();
@@ -255,16 +256,6 @@ fn collect_module_secrets(root: &Path, proj_dir: &Path, modules_dir: &Path) -> R
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
-fn find_existing_project(root: &Path) -> Option<PathBuf> {
-    std::fs::read_dir(root.join("projects"))
-        .ok()?
-        .flatten()
-        .filter(|e| e.path().is_dir())
-        .flat_map(|d| std::fs::read_dir(d.path()).into_iter().flatten().flatten())
-        .map(|e| e.path())
-        .find(|p| p.to_string_lossy().ends_with(".project.toml"))
-}
-
 fn prompt(label: &str, default: Option<&str>) -> Result<String> {
     match default {
         Some(d) => print!("  {} [{}]: ", label, d),
@@ -339,30 +330,30 @@ mod tests {
     }
 
     #[test]
-    fn find_existing_project_finds_project_toml() {
+    fn find_project_finds_project_toml() {
         let tmp = tempfile::tempdir().unwrap();
         let proj_dir = tmp.path().join("projects").join("my-project");
         fs::create_dir_all(&proj_dir).unwrap();
         fs::write(proj_dir.join("my-project.project.toml"), "[project]\nname = \"my-project\"\ndomain = \"example.com\"").unwrap();
 
-        let found = find_existing_project(tmp.path());
+        let found = find_project(tmp.path(), None);
         assert!(found.is_some(), "should find the project file");
         assert!(found.unwrap().to_string_lossy().ends_with(".project.toml"));
     }
 
     #[test]
-    fn find_existing_project_returns_none_when_empty() {
+    fn find_project_returns_none_when_empty() {
         let tmp = tempfile::tempdir().unwrap();
         fs::create_dir_all(tmp.path().join("projects")).unwrap();
 
-        let found = find_existing_project(tmp.path());
+        let found = find_project(tmp.path(), None);
         assert!(found.is_none());
     }
 
     #[test]
-    fn find_existing_project_returns_none_without_projects_dir() {
+    fn find_project_returns_none_without_projects_dir() {
         let tmp = tempfile::tempdir().unwrap();
-        let found = find_existing_project(tmp.path());
+        let found = find_project(tmp.path(), None);
         assert!(found.is_none());
     }
 

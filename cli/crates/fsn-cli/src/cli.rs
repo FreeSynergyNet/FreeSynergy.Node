@@ -236,12 +236,15 @@ pub async fn run() -> Result<()> {
         Command::Serve { port, bind }      => commands::serve::run(&root, cli.project.as_deref(), &bind, port).await,
         Command::Init                      => commands::init::run(&root).await,
         Command::Tui                       => commands::tui::run(&root).await,
-        Command::Conductor { cmd }         => match cmd {
-            ConductorCommand::List { all }               => commands::conductor::list(all).await,
-            ConductorCommand::Start { service }          => commands::conductor::start(&service).await,
-            ConductorCommand::Stop { service }           => commands::conductor::stop(&service).await,
-            ConductorCommand::Restart { service }        => commands::conductor::restart(&service).await,
-            ConductorCommand::Logs { service, follow, tail } => commands::conductor::logs(&service, follow, tail).await,
+        Command::Conductor { cmd }         => {
+            let c = commands::conductor::Conductor::new()?;
+            match cmd {
+                ConductorCommand::List { all }                    => c.list(all).await,
+                ConductorCommand::Start { service }               => c.start(&service).await,
+                ConductorCommand::Stop { service }                => c.stop(&service).await,
+                ConductorCommand::Restart { service }             => c.restart(&service).await,
+                ConductorCommand::Logs { service, follow, tail }  => c.logs(&service, follow, tail).await,
+            }
         },
         Command::Store { cmd }             => match cmd {
             StoreCommand::Search { query }  => commands::store::search(&query).await,

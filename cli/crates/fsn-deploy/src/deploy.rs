@@ -157,6 +157,19 @@ pub async fn deploy_all(
     Ok(())
 }
 
+/// Stop and remove all FSN-managed services.
+///
+/// Returns the number of services that were undeployed.
+pub async fn undeploy_all(opts: &DeployOpts) -> Result<usize> {
+    let systemd = SystemdManager::new();
+    let units = crate::observe::list_fsn_units(&systemd).await?;
+    for unit in &units {
+        let name = unit.trim_end_matches(".service");
+        undeploy_instance(name, opts).await?;
+    }
+    Ok(units.len())
+}
+
 /// Stop and remove a single service (keep data directories).
 pub async fn undeploy_instance(name: &str, opts: &DeployOpts) -> Result<()> {
     let unit = format!("{}.service", name);

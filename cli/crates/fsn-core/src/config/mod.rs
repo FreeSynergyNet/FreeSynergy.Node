@@ -1,4 +1,5 @@
 pub mod bot;
+pub mod discovery;
 pub mod host;
 pub mod manifest;
 pub mod meta;
@@ -35,6 +36,7 @@ pub use project::{
 };
 pub use plugin::{PluginConfig, PluginMeta};
 pub use registry::ServiceRegistry;
+pub use discovery::{find_project, find_host, find_host_by_name};
 pub use settings::{AppSettings, StoreConfig, ServiceRoleRegistry, resolve_plugins_dir, resolve_plugins_dir_no_fallback};
 pub use vault::VaultConfig;
 
