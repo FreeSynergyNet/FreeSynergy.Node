@@ -4,7 +4,6 @@
 //! file I/O and [`RemoteSystemd`] for service control.
 
 use std::path::Path;
-use std::time::Duration;
 
 use anyhow::{Context, Result};
 use fsn_core::{
@@ -16,7 +15,7 @@ use tracing::{info, warn};
 
 use crate::{
     deploy::{flatten_instances, project_network_name},
-    generate::{env as gen_env, kdl as gen_kdl, quadlet as gen_quadlet},
+    generate::{env as gen_env, quadlet as gen_quadlet},
     health,
     hooks::{self, HookContext},
     module_runner::{ContextBuilder, ModuleRunner},

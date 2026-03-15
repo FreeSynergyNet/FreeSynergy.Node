@@ -69,7 +69,6 @@ fn default_key_path() -> String {
 /// An active SSH session to a remote host.
 pub struct SshSession {
     handle: Arc<Mutex<Handle<ClientHandler>>>,
-    user:   String,
 }
 
 impl SshSession {
@@ -102,14 +101,13 @@ impl SshSession {
         debug!("SSH authenticated as {}", host.ssh_user);
         Ok(Self {
             handle: Arc::new(Mutex::new(handle)),
-            user:   host.ssh_user.clone(),
         })
     }
 
     /// Execute a shell command on the remote host.
     pub async fn exec(&self, cmd: &str) -> Result<ExecOutput> {
         debug!("SSH exec: {cmd}");
-        let mut guard = self.handle.lock().await;
+        let guard = self.handle.lock().await;
 
         let mut channel = guard
             .channel_open_session()
@@ -144,7 +142,7 @@ impl SshSession {
     /// Write `content` to `remote_path` on the remote host (via `cat >` shell redirect).
     pub async fn write_file(&self, remote_path: &str, content: &[u8]) -> Result<()> {
         debug!("SSH write_file → {remote_path}");
-        let mut guard = self.handle.lock().await;
+        let guard = self.handle.lock().await;
 
         // Create parent directory
         let parent = std::path::Path::new(remote_path)
@@ -175,7 +173,7 @@ impl SshSession {
 
     /// Close the SSH connection gracefully.
     pub async fn close(self) -> Result<()> {
-        let mut guard = self.handle.lock().await;
+        let guard = self.handle.lock().await;
         guard.disconnect(russh::Disconnect::ByApplication, "", "en").await.ok();
         Ok(())
     }
