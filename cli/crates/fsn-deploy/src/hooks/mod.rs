@@ -15,6 +15,7 @@ pub mod common;
 pub mod cryptpad;
 pub mod forgejo;
 pub mod kanidm;
+pub mod lifecycle;
 pub mod stalwart;
 pub mod tuwunel;
 pub mod vikunja;

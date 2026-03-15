@@ -27,6 +27,7 @@ pub use service::{
     SubServiceRef, ServiceRef,
     ServiceContract, RouteSpec, HeaderSpec,
     ModuleRoles, ModuleUi,
+    ServiceLifecycle, LifecycleHook, LifecycleAction, PeerHook,
 };
 pub use project::{
     ModuleRef,       // backwards-compat alias

@@ -150,6 +150,50 @@ pub async fn deploy_all(
             warn!("  hook for {} failed: {:#}", instance.name, e);
         }
 
+        // Lifecycle on_install hooks (declared in [lifecycle] TOML block).
+        if let Err(e) = hooks::lifecycle::run_on_install(&hook_ctx).await {
+            warn!("  lifecycle on_install for {} failed: {:#}", instance.name, e);
+        }
+
+        // Fire on_peer_install for all peer services that declared matching hooks.
+        // Build peer list (all top-level services except the current one).
+        {
+            let peers: Vec<&ServiceInstance> = instances
+                .iter()
+                .filter(|s| s.name != instance.name)
+                .copied()
+                .collect();
+
+            for peer in &peers {
+                let matching: Vec<_> = peer
+                    .class
+                    .lifecycle
+                    .matching_peer_hooks(instance.class.meta.primary_type().label())
+                    .into_iter()
+                    .cloned()
+                    .collect();
+
+                if matching.is_empty() { continue; }
+
+                let peer_ctx = HookContext {
+                    instance: peer,
+                    desired,
+                    project,
+                    vault,
+                    data_root: data_root.to_path_buf(),
+                    fsn_root,
+                };
+                for hook in &matching {
+                    if let Err(e) = hooks::lifecycle::run_peer_hook_pub(&peer_ctx, hook).await {
+                        warn!(
+                            "  lifecycle on_peer_install for {} (trigger: {}) failed: {:#}",
+                            peer.name, instance.name, e
+                        );
+                    }
+                }
+            }
+        }
+
         info!("  ✓ {} running", instance.name);
     }
 

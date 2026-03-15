@@ -2,11 +2,12 @@ use fsn_error::FsyError;
 // Service class definition – maps to modules/{type}/{name}/{name}.toml
 //
 // Design Pattern: Module split:
-//   types.rs — ServiceType enum + de_service_types (role classification)
-//   mod.rs   — ServiceMeta, ServiceClass, ContainerDef, ServiceContract, setup types, …
+//   types.rs     — ServiceType enum + de_service_types (role classification)
+//   mod.rs       — ServiceMeta, ServiceClass, ContainerDef, ServiceContract,
+//                  ServiceLifecycle, setup types, …
 //
 // Field order (MANDATORY per RULES.md):
-//   module → vars → load → container → environment → setup
+//   module → vars → load → container → environment → setup → lifecycle
 //
 // The TOML key `[module]` is kept for file-level compatibility;
 // internally we use `ServiceMeta` / `ServiceClass`.
@@ -70,6 +71,10 @@ pub struct ServiceClass {
     #[serde(default, rename = "plugin")]
     #[schemars(schema_with = "schema_any_object")]
     pub manifest: Option<ModuleManifest>,
+
+    /// Lifecycle hooks — what to do on install, update, swap, decommission.
+    #[serde(default)]
+    pub lifecycle: ServiceLifecycle,
 }
 
 // ── Service Contract ──────────────────────────────────────────────────────────
@@ -403,6 +408,127 @@ pub struct HealthCheck {
     pub timeout: String,
     pub retries: u32,
     pub start_period: String,
+}
+
+// ── Service Lifecycle ─────────────────────────────────────────────────────────
+
+/// Lifecycle hooks declared under `[lifecycle]` in a module TOML.
+///
+/// Phases run in order:  init → install → configure → start → running
+///                       running → update → backup → migrate → swap → decommission
+///
+/// Each hook is idempotent by design — the engine may re-run it on reconcile.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
+pub struct ServiceLifecycle {
+    /// Hooks that fire after successful installation.
+    #[serde(default)]
+    pub on_install: Vec<LifecycleHook>,
+
+    /// Hooks that fire when another service is installed alongside this one.
+    /// Each entry declares which peer type triggers it (`trigger = "wiki.*"`).
+    #[serde(default)]
+    pub on_peer_install: Vec<PeerHook>,
+
+    /// Hooks that fire before and after an update (new image pull).
+    #[serde(default)]
+    pub on_update: Vec<LifecycleHook>,
+
+    /// Hooks that fire during a swap (this service is being replaced).
+    #[serde(default)]
+    pub on_swap: Vec<LifecycleHook>,
+
+    /// Hooks that fire during decommission (graceful shutdown + data archival).
+    #[serde(default)]
+    pub on_decommission: Vec<LifecycleHook>,
+}
+
+/// A single lifecycle hook action.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct LifecycleHook {
+    /// What to do.
+    pub action: LifecycleAction,
+
+    /// Shell command (for `run` action). Tera-template variables are supported.
+    pub command: Option<String>,
+
+    /// Bus event name (for `bus_emit` action).
+    pub event: Option<String>,
+
+    /// Payload to emit with the bus event (arbitrary TOML table).
+    #[serde(default)]
+    #[schemars(schema_with = "schema_any_object")]
+    pub data: IndexMap<String, Value>,
+
+    /// Target path or label (for `backup` / `export` actions).
+    pub target: Option<String>,
+
+    /// Export format: `"json"` | `"toml"` | `"tar"` (for `export` action).
+    pub format: Option<String>,
+}
+
+/// A lifecycle hook that fires when a specific peer service type is installed.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct PeerHook {
+    /// Glob-style trigger pattern matching the peer's primary ServiceType label.
+    /// Examples: `"wiki.*"`, `"git/forgejo"`, `"iam.*"`.
+    pub trigger: String,
+
+    /// Action to take when the trigger matches.
+    pub action: LifecycleAction,
+
+    /// Shell command (for `run` action).
+    pub command: Option<String>,
+
+    /// Script arguments (positional).
+    #[serde(default)]
+    pub args: Vec<String>,
+}
+
+/// Discriminant for lifecycle hook actions.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum LifecycleAction {
+    /// Run a shell command inside the container (via `podman exec`).
+    Run,
+    /// Emit a named event onto the FSN service bus.
+    BusEmit,
+    /// Create a data backup before proceeding.
+    Backup,
+    /// Export service data to a portable format for consumption by another service.
+    Export,
+}
+
+impl ServiceLifecycle {
+    /// Returns `true` if no hooks are defined (all fields empty).
+    pub fn is_empty(&self) -> bool {
+        self.on_install.is_empty()
+            && self.on_peer_install.is_empty()
+            && self.on_update.is_empty()
+            && self.on_swap.is_empty()
+            && self.on_decommission.is_empty()
+    }
+
+    /// Returns the peer hooks whose trigger matches the given service type label.
+    /// `peer_type_label` is the primary type label of the newly installed peer.
+    pub fn matching_peer_hooks(&self, peer_type_label: &str) -> Vec<&PeerHook> {
+        self.on_peer_install
+            .iter()
+            .filter(|h| glob_matches(&h.trigger, peer_type_label))
+            .collect()
+    }
+}
+
+/// Minimal glob matcher: `*` matches anything within a single path segment,
+/// `.*` at the end matches any sub-type.
+fn glob_matches(pattern: &str, value: &str) -> bool {
+    if pattern == "*" || pattern == value {
+        return true;
+    }
+    // Pattern like "wiki.*" → prefix match on "wiki/"
+    if let Some(prefix) = pattern.strip_suffix(".*") {
+        return value.starts_with(&format!("{prefix}/")) || value == prefix;
+    }
+    false
 }
 
 // ── Resource impl for ServiceClass ────────────────────────────────────────────

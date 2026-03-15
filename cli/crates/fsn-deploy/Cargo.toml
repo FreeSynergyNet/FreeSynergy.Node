@@ -24,6 +24,7 @@ thiserror          = { workspace = true }
 tokio              = { workspace = true }
 reqwest            = { workspace = true }
 tracing            = { workspace = true }
+chrono             = { workspace = true }
 fsn-host = { workspace = true }
 
 [dev-dependencies]

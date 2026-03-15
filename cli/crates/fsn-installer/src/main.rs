@@ -121,29 +121,21 @@ fn run_cmd(prog: &str, args: &[&str]) -> Result<()> {
     Ok(())
 }
 
-// ── Podman socket ─────────────────────────────────────────────────────────────
+// ── Systemd user lingering ────────────────────────────────────────────────────
 
-fn enable_podman_socket() {
-    let active = Command::new("systemctl")
-        .args(["--user", "is-active", "podman.socket"])
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-
-    if !active {
-        info("Enabling Podman user socket…");
-        let _ = Command::new("systemctl")
-            .args(["--user", "enable", "--now", "podman.socket"])
-            .status();
-    }
-
-    // Enable lingering so user units survive logout
+/// Enable lingering so Podman Quadlet user units survive logout.
+/// Quadlet-based deployment does NOT require the podman.socket API — only
+/// lingering is needed to keep user systemd units alive when no user session is active.
+fn enable_user_lingering() {
     if which("loginctl").is_some() {
         let user = env::var("USER").unwrap_or_default();
-        let _ = Command::new("loginctl")
-            .args(["enable-linger", &user])
-            .stderr(Stdio::null())
-            .status();
+        if !user.is_empty() {
+            info("Enabling systemd user lingering…");
+            let _ = Command::new("loginctl")
+                .args(["enable-linger", &user])
+                .stderr(Stdio::null())
+                .status();
+        }
     }
 }
 
@@ -261,7 +253,7 @@ async fn main() -> Result<()> {
     info(&format!("Detected OS: {os}"));
 
     install_deps(&os)?;
-    enable_podman_socket();
+    enable_user_lingering();
     ensure_repo(&args.repo, &target)?;
 
     if args.skip_build {

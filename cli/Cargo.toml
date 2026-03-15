@@ -73,6 +73,9 @@ age            = { version = "0.10", features = ["armor"] }
 # YAML parsing (wizard)
 serde_yaml     = { version = "0.9" }
 
+# Time
+chrono         = { version = "0.4", features = ["serde"] }
+
 # Misc
 walkdir        = { version = "2" }
 async-trait    = { version = "0.1" }
