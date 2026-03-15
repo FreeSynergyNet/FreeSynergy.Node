@@ -15,4 +15,5 @@ pub mod remote;
 pub mod resolve;
 pub mod setup;
 pub mod store;
+pub mod swap;
 pub mod template;

@@ -410,6 +410,90 @@ pub struct HealthCheck {
     pub start_period: String,
 }
 
+// ── Service Phase ─────────────────────────────────────────────────────────────
+
+/// All phases a service passes through during its lifetime.
+///
+/// Used for status display, progress tracking and phase-gated hook execution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ServicePhase {
+    /// Service record created, nothing deployed yet.
+    Init,
+    /// Container image is being pulled and Quadlets written.
+    Install,
+    /// Post-install configuration (secrets, initial data, peer registration).
+    Configure,
+    /// Container is starting up.
+    Start,
+    /// Waiting for health checks to pass.
+    HealthCheck,
+    /// Service is fully operational.
+    Running,
+    /// New image is being pulled and Quadlets are being updated.
+    Update,
+    /// Data backup in progress before a destructive operation.
+    Backup,
+    /// Schema / data migration running (e.g. database upgrade).
+    Migrate,
+    /// A replacement service is being installed; this service is still live.
+    Swap,
+    /// Service is being removed; data archival running.
+    Decommission,
+    /// Container is stopped; data retained on disk.
+    Stop,
+}
+
+impl ServicePhase {
+    /// Short display label shown in TUI and CLI output.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Init         => "Init",
+            Self::Install      => "Install",
+            Self::Configure    => "Configure",
+            Self::Start        => "Start",
+            Self::HealthCheck  => "Health Check",
+            Self::Running      => "Running",
+            Self::Update       => "Update",
+            Self::Backup       => "Backup",
+            Self::Migrate      => "Migrate",
+            Self::Swap         => "Swap",
+            Self::Decommission => "Decommission",
+            Self::Stop         => "Stop",
+        }
+    }
+
+    /// One-sentence description of what happens during this phase.
+    pub fn description(self) -> &'static str {
+        match self {
+            Self::Init         => "Service record created; no containers deployed yet.",
+            Self::Install      => "Container image is being pulled and Quadlet files written.",
+            Self::Configure    => "Post-install configuration: secrets, initial data, peer registration.",
+            Self::Start        => "Systemd unit is starting the container.",
+            Self::HealthCheck  => "Waiting for health checks to pass before marking Running.",
+            Self::Running      => "Service is fully operational.",
+            Self::Update       => "New image is being pulled; Quadlet files are being updated.",
+            Self::Backup       => "Data backup in progress before a destructive operation.",
+            Self::Migrate      => "Schema or data migration is running.",
+            Self::Swap         => "A replacement service is being installed; this one is still live.",
+            Self::Decommission => "Service is being removed; data archival in progress.",
+            Self::Stop         => "Container stopped; data retained on disk.",
+        }
+    }
+}
+
+// ── Service Installed (Bus Event) ─────────────────────────────────────────────
+
+/// Payload emitted on the service bus when a service finishes installation.
+/// Consumed by peers that have `on_peer_install` hooks.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ServiceInstalled {
+    /// Primary type label of the installed service (e.g. `"wiki/outline"`).
+    pub service_type: String,
+    /// Unique instance identifier within the project.
+    pub service_id: String,
+}
+
 // ── Service Lifecycle ─────────────────────────────────────────────────────────
 
 /// Lifecycle hooks declared under `[lifecycle]` in a module TOML.
@@ -424,6 +508,10 @@ pub struct ServiceLifecycle {
     #[serde(default)]
     pub on_install: Vec<LifecycleHook>,
 
+    /// Hooks that fire during the configure phase (secrets, peer registration).
+    #[serde(default)]
+    pub on_configure: Vec<LifecycleHook>,
+
     /// Hooks that fire when another service is installed alongside this one.
     /// Each entry declares which peer type triggers it (`trigger = "wiki.*"`).
     #[serde(default)]
@@ -432,6 +520,10 @@ pub struct ServiceLifecycle {
     /// Hooks that fire before and after an update (new image pull).
     #[serde(default)]
     pub on_update: Vec<LifecycleHook>,
+
+    /// Hooks that fire during a migrate phase (schema or data migration).
+    #[serde(default)]
+    pub on_migrate: Vec<LifecycleHook>,
 
     /// Hooks that fire during a swap (this service is being replaced).
     #[serde(default)]
@@ -502,8 +594,10 @@ impl ServiceLifecycle {
     /// Returns `true` if no hooks are defined (all fields empty).
     pub fn is_empty(&self) -> bool {
         self.on_install.is_empty()
+            && self.on_configure.is_empty()
             && self.on_peer_install.is_empty()
             && self.on_update.is_empty()
+            && self.on_migrate.is_empty()
             && self.on_swap.is_empty()
             && self.on_decommission.is_empty()
     }

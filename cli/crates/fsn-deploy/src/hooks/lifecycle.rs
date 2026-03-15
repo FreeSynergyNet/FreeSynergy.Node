@@ -35,6 +35,38 @@ pub async fn run_on_install(ctx: &HookContext<'_>) -> Result<()> {
     Ok(())
 }
 
+/// Run `on_configure` hooks for the given instance.
+///
+/// Called during the Configure phase: after installation, before first start.
+/// Typical use: set admin password, register with IAM, import seed data.
+pub async fn run_on_configure(ctx: &HookContext<'_>) -> Result<()> {
+    let hooks = ctx.instance.class.lifecycle.on_configure.clone();
+    if hooks.is_empty() { return Ok(()); }
+    info!("[lifecycle] {} on_configure: {} hook(s)", ctx.instance.name, hooks.len());
+    for hook in &hooks {
+        if let Err(e) = run_hook(ctx, hook).await {
+            warn!("[lifecycle] {} on_configure hook failed (continuing): {:#}", ctx.instance.name, e);
+        }
+    }
+    Ok(())
+}
+
+/// Run `on_migrate` hooks for the given instance.
+///
+/// Called during the Migrate phase: schema upgrades, data transformations,
+/// or any preparation needed before swapping to a new service version.
+pub async fn run_on_migrate(ctx: &HookContext<'_>) -> Result<()> {
+    let hooks = ctx.instance.class.lifecycle.on_migrate.clone();
+    if hooks.is_empty() { return Ok(()); }
+    info!("[lifecycle] {} on_migrate: {} hook(s)", ctx.instance.name, hooks.len());
+    for hook in &hooks {
+        if let Err(e) = run_hook(ctx, hook).await {
+            warn!("[lifecycle] {} on_migrate hook failed (continuing): {:#}", ctx.instance.name, e);
+        }
+    }
+    Ok(())
+}
+
 /// Run `on_update` hooks for the given instance.
 pub async fn run_on_update(ctx: &HookContext<'_>) -> Result<()> {
     let hooks = ctx.instance.class.lifecycle.on_update.clone();
