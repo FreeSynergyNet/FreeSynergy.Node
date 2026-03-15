@@ -93,7 +93,7 @@ tonic          = { version = "0.12" }
 prost          = { version = "0.13" }
 
 # JSON-Schema Generation aus Rust-Structs
-schemars       = { version = "0.8", features = ["preserve_order"] }
+schemars       = { version = "0.8", features = ["preserve_order", "indexmap2"] }
 
 # Test infrastructure (declared here; individual crates use in [dev-dependencies])
 rstest         = { version = "0.23" }

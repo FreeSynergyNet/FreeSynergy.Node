@@ -16,8 +16,17 @@ pub mod types;
 pub use types::{Capability, ExportedVarContract, ServiceType, de_service_types};
 
 use indexmap::IndexMap;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use toml::Value;
+
+// ── Schema helpers ─────────────────────────────────────────────────────────────
+
+/// JSON-Schema helper for `IndexMap<String, toml::Value>` fields.
+/// `toml::Value` has no JsonSchema impl — we accept any JSON object here.
+fn schema_any_object(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+    schemars::schema::Schema::Bool(true)
+}
 
 use crate::config::manifest::ModuleManifest;
 
@@ -27,13 +36,16 @@ use crate::resource::Resource;
 
 /// A service class definition (the template/blueprint for a service).
 /// Loaded from modules/{type}/{name}/{name}.toml.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ServiceClass {
     /// Metadata block – TOML key is `[module]` for file compatibility.
     #[serde(rename = "module")]
     pub meta: ServiceMeta,
 
+    /// Jinja2 template variables declared by the module.
+    /// Any TOML value is accepted; validated at render time.
     #[serde(default)]
+    #[schemars(schema_with = "schema_any_object")]
     pub vars: IndexMap<String, Value>,
 
     #[serde(default)]
@@ -56,6 +68,7 @@ pub struct ServiceClass {
     /// Plugin manifest – commands, inputs and outputs for the process plugin protocol.
     /// Absent for modules that have not yet been migrated to the plugin system.
     #[serde(default, rename = "plugin")]
+    #[schemars(schema_with = "schema_any_object")]
     pub manifest: Option<ModuleManifest>,
 }
 
@@ -68,7 +81,7 @@ pub struct ServiceClass {
 /// what it needs; the proxy decides how to implement it.
 ///
 /// Empty `routes` = no proxy routing generated (internal services).
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 pub struct ServiceContract {
     /// HTTP routes this service exposes. Empty = proxy skips this service.
     #[serde(default)]
@@ -90,7 +103,7 @@ pub struct ServiceContract {
 }
 
 /// A URL route this service exposes through the proxy.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct RouteSpec {
     /// Unique identifier within this module (e.g. "main", "admin", "api").
     pub id: String,
@@ -107,7 +120,7 @@ pub struct RouteSpec {
 }
 
 /// An HTTP header the proxy injects when forwarding requests.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct HeaderSpec {
     /// Header name (e.g. "X-Forwarded-Proto").
     pub name: String,
@@ -118,14 +131,14 @@ pub struct HeaderSpec {
 // ── Setup wizard types ────────────────────────────────────────────────────────
 
 /// All configuration fields this service requires during `fsn init`.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 pub struct ServiceSetup {
     #[serde(default)]
     pub fields: Vec<SetupField>,
 }
 
 /// A single field the wizard will prompt for.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct SetupField {
     /// Key to set: "vault_*" → stored in vault, anything else → env reminder.
     pub key: String,
@@ -157,7 +170,7 @@ pub struct SetupField {
 
 fn default_true() -> bool { true }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, Default, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum FieldType {
     #[default]
@@ -172,7 +185,7 @@ pub enum FieldType {
 // ── Service Metadata ──────────────────────────────────────────────────────────
 
 /// Core metadata declared under the `[module]` TOML key.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ServiceMeta {
     pub name: String,
 
@@ -190,6 +203,7 @@ pub struct ServiceMeta {
         default,
         deserialize_with = "de_service_types"
     )]
+    #[schemars(with = "Vec<ServiceType>", rename = "types")]
     pub service_types: Vec<ServiceType>,
 
     pub author: Option<String>,
@@ -236,7 +250,7 @@ pub struct ServiceMeta {
 /// Roles are MIME-like identifiers for system functions (e.g. "proxy", "iam").
 /// `provides` lists what this module can fulfil.
 /// `requires` lists what must be assigned before this module will work.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 pub struct ModuleRoles {
     /// Role IDs this module can fulfil (e.g. `["proxy", "webhoster"]`).
     #[serde(default)]
@@ -250,7 +264,7 @@ pub struct ModuleRoles {
 // ── ModuleUi ──────────────────────────────────────────────────────────────────
 
 /// Desktop UI hints embedded in `[module.ui]`.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 pub struct ModuleUi {
     /// Whether this service has a web UI that can be opened in the Desktop browser.
     #[serde(default)]
@@ -292,7 +306,7 @@ impl ServiceMeta {
 }
 
 /// Deployment constraints declared per service class.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 pub struct Constraints {
     /// Maximum number of instances of this service class per host (null = unlimited).
     pub per_host: Option<u32>,
@@ -304,13 +318,13 @@ pub struct Constraints {
     pub locality: Option<Locality>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Locality {
     SameHost,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct FederationMeta {
     pub enabled: bool,
     pub min_trust: u8,
@@ -319,7 +333,7 @@ pub struct FederationMeta {
 // ── Load / Dependencies ───────────────────────────────────────────────────────
 
 /// Sub-service and service references declared under `[load]`.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 pub struct ServiceLoad {
     /// Sub-services this service owns and creates (e.g. postgres, dragonfly).
     /// TOML key: `modules` kept for file compatibility.
@@ -331,7 +345,7 @@ pub struct ServiceLoad {
     pub services: IndexMap<String, ServiceRef>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct SubServiceRef {
     /// Class key, e.g. "database/postgres".
     /// TOML: `module_class` or `service_class` (both accepted).
@@ -339,13 +353,13 @@ pub struct SubServiceRef {
     pub service_class: String,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema)]
 pub struct ServiceRef {}
 
 // ── Container Definition ──────────────────────────────────────────────────────
 
 /// Container definition – maps to the `[container]` TOML block.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ContainerDef {
     pub name: String,
     pub image: String,
@@ -376,11 +390,13 @@ pub struct ContainerDef {
     #[serde(default)]
     pub security_opt: Vec<String>,
 
+    /// Resource limits (ulimit key → value). Any TOML value accepted.
     #[serde(default)]
+    #[schemars(schema_with = "schema_any_object")]
     pub ulimits: IndexMap<String, Value>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct HealthCheck {
     pub cmd: String,
     pub interval: String,

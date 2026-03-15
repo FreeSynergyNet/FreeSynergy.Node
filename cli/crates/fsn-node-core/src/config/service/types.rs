@@ -10,6 +10,7 @@
 
 use std::collections::HashMap;
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 // ── ServiceType ───────────────────────────────────────────────────────────────
@@ -24,7 +25,7 @@ use serde::{Deserialize, Serialize};
 /// TOML accepts either a single string (legacy) or an array:
 ///   type   = "proxy"               # legacy / single
 ///   types  = ["proxy", "webhoster_simple"]   # multi-type
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ServiceType {
     // ── IAM ──────────────────────────────────────────────────────────────
@@ -344,7 +345,7 @@ impl ServiceType {
 /// ServiceType::capabilities() returns the guaranteed minimum for ALL plugins of
 /// that type. Individual container plugins declare additional capabilities in their
 /// TOML via `[module] capabilities = ["iam_scim", "database_postgres", …]`.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Capability {
     // ── Infrastructure ─────────────────────────────────────────────────────

@@ -71,12 +71,14 @@ fsn-help/               Kontextsensitives Hilfe-System
 ### FreeSynergy/Node — Deployment-Engine
 
 ```
-crates/
-  fsn-core/             Node-spezifische Logik + Datentypen
-  fsn-deploy/           Quadlet-Generation, Zentinel
-  fsn-host/             Host-Management, SSH, Remote-Install
-  fsn-wizard/           Container-Assistent (YAML → Modul)
-  fsn-cli/              CLI Binary (clap) — kein UI, nur Befehle
+cli/crates/
+  fsn-node-core/        Node-spezifische Logik + Datentypen (Config, State, Health, Store)
+  fsn-deploy/           Quadlet-Generation, Zentinel, Reconciliation, Hooks
+  fsn-dns/              DNS-Provider Integrationen (Hetzner, Cloudflare)
+  fsn-host/             Host-Management, SSH, Remote-Install, Provisioning
+  fsn-wizard/           Container-Assistent (Docker Compose → FSN-Modul)
+  fsn-node-cli/         CLI Binary (clap) — `fsn` Kommando, kein UI-Code
+  fsn-installer/        Server-Setup-Tooling (Erstinstallation)
 ```
 
 **Kein UI-Code in Node.** Das UI gehört in Desktop.
@@ -668,41 +670,41 @@ Da wir auf **Dioxus** umsteigen (hat `dioxus-terminal` für TUI), fällt ratatui
 
 ## 13. Umsetzungsplan
 
-### Phase 0: Setup
+### Phase 0: Setup ✓
 
-- [ ] `FreeSynergy/Lib` erstellen, CI einrichten
-- [ ] `FreeSynergy/Desktop` erstellen, CI einrichten
-- [ ] `FreeSynergy/UI` archivieren
-- [ ] `FreeSynergy/Node` bereinigen (ratatui/rat-salsa entfernen, fsn-app entfernen)
-- [ ] CLAUDE.md in allen Repos aktualisieren
+- [x] `FreeSynergy/Lib` erstellen, CI einrichten
+- [x] `FreeSynergy/Desktop` erstellen, CI einrichten
+- [x] `FreeSynergy/UI` archivieren
+- [x] `FreeSynergy/Node` bereinigen (ratatui/rat-salsa entfernen, fsn-app entfernen)
+- [x] CLAUDE.md in allen Repos aktualisieren
 
-### Phase 1: Fundament (FreeSynergy.Lib)
+### Phase 1: Fundament (FreeSynergy.Lib) ✓
 
-fsn-types, fsn-error, fsn-config, fsn-i18n, fsn-theme, fsn-help, fsn-db
+fsn-types, fsn-error, fsn-config, fsn-i18n, fsn-theme, fsn-help, fsn-db, fsn-health
 
-### Phase 2: CRDT + Sync
+### Phase 2: CRDT + Sync (Stub)
 
-fsn-sync (Automerge)
+fsn-sync (Automerge) — Stub implementiert, aktive Integration ausstehend
 
-### Phase 3: Store + Plugins
+### Phase 3: Store + Plugins (Stub)
 
-fsn-store, fsn-plugin-sdk, fsn-plugin-runtime
+fsn-store, fsn-plugin-sdk, fsn-plugin-runtime — Stubs implementiert
 
-### Phase 4: Auth + Federation
+### Phase 4: Auth + Federation (Stub)
 
-fsn-auth, fsn-federation, fsn-crypto
+fsn-auth, fsn-federation, fsn-crypto — Stubs implementiert
 
-### Phase 5: Container + Templates
+### Phase 5: Container + Templates (Stub)
 
-fsn-container, fsn-template, fsn-health
+fsn-container, fsn-template, fsn-health — implementiert
 
-### Phase 6: Node Application
+### Phase 6: Node Application ✓
 
-fsn-core, fsn-deploy, fsn-host, fsn-wizard, fsn-cli
+fsn-node-core, fsn-deploy, fsn-host, fsn-wizard, fsn-node-cli, fsn-dns, fsn-installer
 
 ### Phase 7: Desktop (FreeSynergy.Desktop)
 
-fsd-shell, fsd-conductor, fsd-store, fsd-settings, fsd-profile, fsd-studio, fsd-app
+fsd-shell, fsd-conductor, fsd-store, fsd-settings, fsd-profile, fsd-studio, fsd-app — in Planung
 
 ### Phase 8: Bridges (ongoing)
 
@@ -811,4 +813,6 @@ fsn-bridge-sdk + erste WASM-Bridge-Plugins
 
 ## Nächster Schritt
 
-Phase 0: Drei Repos aufsetzen (Lib, Node bereinigen, Desktop neu). Dann Phase 1: fsn-types + fsn-error + fsn-config + fsn-i18n. Das Fundament.
+Phase 7: FreeSynergy.Desktop — Dioxus-App mit fsd-shell, fsd-conductor (Hosts/Services/Projekte), fsd-store (Plugin-Browser), fsd-studio (Modul-Builder), fsd-settings, fsd-profile, fsd-app.
+
+Parallel: Phase 2–4 Stubs in FreeSynergy.Lib aktivieren (fsn-sync Automerge, fsn-auth OIDC, fsn-federation ActivityPub).

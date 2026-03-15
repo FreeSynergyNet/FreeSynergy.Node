@@ -8,7 +8,7 @@
 
 use std::path::PathBuf;
 
-use fsn_core::config::registry::ServiceRegistry;
+use fsn_node_core::config::registry::ServiceRegistry;
 
 fn store_modules_dir() -> PathBuf {
     // From cli/crates/fsn-core/ go up 4 levels → /home/kal/Server/
