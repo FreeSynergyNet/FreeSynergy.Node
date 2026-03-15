@@ -5,7 +5,7 @@
 // (Podman Quadlet format, picked up by systemd after daemon-reload)
 
 use anyhow::Result;
-use fsn_core::state::desired::ServiceInstance;
+use fsn_node_core::state::desired::ServiceInstance;
 
 /// Generate a Podman Quadlet .container unit file for the given instance.
 ///
@@ -126,7 +126,7 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use indexmap::IndexMap;
-    use fsn_core::{
+    use fsn_node_core::{
         config::service::{
             Constraints, ContainerDef, HealthCheck, ServiceClass, ServiceContract,
             ServiceLoad, ServiceMeta, ServiceSetup, ServiceType,

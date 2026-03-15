@@ -4,7 +4,7 @@
 use std::time::Duration;
 
 use anyhow::{bail, Result};
-use fsn_core::state::{desired::ServiceInstance, HealthStatus};
+use fsn_node_core::state::{desired::ServiceInstance, HealthStatus};
 use tracing::debug;
 
 const _DEFAULT_TIMEOUT: Duration = Duration::from_secs(120);

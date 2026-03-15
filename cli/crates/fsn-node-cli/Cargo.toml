@@ -1,5 +1,5 @@
 [package]
-name        = "fsn-cli"
+name        = "fsn-node-cli"
 description = "FreeSynergy.Node – command-line management tool"
 version.workspace    = true
 edition.workspace    = true
@@ -10,7 +10,7 @@ name = "fsn"
 path = "src/main.rs"
 
 [dependencies]
-fsn-core      = { workspace = true }
+fsn-node-core      = { workspace = true }
 fsn-db        = { workspace = true }
 fsn-deploy    = { workspace = true }
 fsn-dns       = { workspace = true }

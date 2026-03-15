@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
 use anyhow::{Context, Result};
-use fsn_core::audit::AuditEntry;
+use fsn_node_core::audit::AuditEntry;
 use fsn_db::{BufferedWrite, DbBackend, DbConnection, Migrator, WriteBuffer};
 use tracing::warn;
 

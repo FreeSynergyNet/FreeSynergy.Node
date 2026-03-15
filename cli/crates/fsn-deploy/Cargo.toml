@@ -10,7 +10,7 @@ wasm = ["fsn-plugin-runtime/wasm"]
 
 [dependencies]
 fsn-store          = { workspace = true }
-fsn-core           = { workspace = true }
+fsn-node-core           = { workspace = true }
 fsn-plugin-runtime = { workspace = true }
 fsn-plugin-sdk     = { workspace = true }
 fsn-template       = { workspace = true }

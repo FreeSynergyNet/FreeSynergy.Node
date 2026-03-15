@@ -6,7 +6,7 @@
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use fsn_core::{
+use fsn_node_core::{
     config::{ProjectConfig, VaultConfig},
     state::desired::{DesiredState, ServiceInstance},
 };

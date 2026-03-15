@@ -2,7 +2,7 @@
 // Replaces playbooks/tasks/check-constraints.yml
 
 use anyhow::{bail, Result};
-use fsn_core::state::DesiredState;
+use fsn_node_core::state::DesiredState;
 
 /// Check all deployment constraints for the resolved desired state.
 /// Returns Err if any constraint is violated.
@@ -51,7 +51,7 @@ fn collect_all_instances(
 }
 
 fn push_instance(
-    instance: &fsn_core::state::desired::ServiceInstance,
+    instance: &fsn_node_core::state::desired::ServiceInstance,
     out: &mut Vec<(String, String, Option<u32>)>,
 ) {
     out.push((

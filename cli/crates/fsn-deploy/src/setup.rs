@@ -4,7 +4,7 @@
 // deduplicates by key (same vault_* key shared across modules → asked only once),
 // and returns an ordered list of what the wizard needs to ask.
 
-use fsn_core::{
+use fsn_node_core::{
     config::service::SetupField,
     state::desired::{DesiredState, ServiceInstance},
 };

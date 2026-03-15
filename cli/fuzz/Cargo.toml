@@ -9,7 +9,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-fsn-core      = { path = "../crates/fsn-core" }
+fsn-node-core      = { path = "../crates/fsn-node-core" }
 fsn-deploy    = { path = "../crates/fsn-deploy" }
 
 # cargo-fuzz requires profile.release overrides

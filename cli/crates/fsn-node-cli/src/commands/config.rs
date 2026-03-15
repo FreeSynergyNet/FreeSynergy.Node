@@ -1,7 +1,7 @@
 use std::path::Path;
 use anyhow::{Context, Result};
 
-use fsn_core::config::find_project;
+use fsn_node_core::config::find_project;
 use crate::cli::ConfigCommand;
 
 pub async fn run(root: &Path, project: Option<&Path>, cmd: ConfigCommand) -> Result<()> {

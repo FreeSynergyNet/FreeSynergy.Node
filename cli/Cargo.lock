@@ -1397,29 +1397,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fsn-cli"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "fsn-container",
- "fsn-core",
- "fsn-db",
- "fsn-deploy",
- "fsn-dns",
- "fsn-host",
- "fsn-i18n",
- "fsn-store",
- "libc",
- "rand 0.8.5",
- "tempfile",
- "tokio",
- "toml 0.8.23",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "fsn-container"
 version = "0.1.0"
 dependencies = [
@@ -1431,27 +1408,6 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
-]
-
-[[package]]
-name = "fsn-core"
-version = "0.1.0"
-dependencies = [
- "age",
- "anyhow",
- "fsn-error",
- "fsn-health",
- "fsn-plugin-sdk",
- "fsn-store",
- "indexmap 2.13.0",
- "insta",
- "rstest",
- "schemars 0.8.22",
- "secrecy 0.10.3",
- "serde",
- "serde_json",
- "toml 0.8.23",
- "walkdir",
 ]
 
 [[package]]
@@ -1472,8 +1428,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "fsn-container",
- "fsn-core",
  "fsn-host",
+ "fsn-node-core",
  "fsn-plugin-runtime",
  "fsn-plugin-sdk",
  "fsn-store",
@@ -1497,7 +1453,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "fsn-core",
+ "fsn-node-core",
  "reqwest",
  "serde",
  "serde_json",
@@ -1525,7 +1481,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "fsn-core",
+ "fsn-node-core",
  "russh",
  "russh-keys",
  "serde",
@@ -1542,8 +1498,65 @@ version = "0.1.0"
 dependencies = [
  "fluent-bundle",
  "fsn-error",
+ "serde",
  "toml 0.8.23",
  "unic-langid",
+]
+
+[[package]]
+name = "fsn-installer"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "reqwest",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "fsn-node-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "fsn-container",
+ "fsn-db",
+ "fsn-deploy",
+ "fsn-dns",
+ "fsn-host",
+ "fsn-i18n",
+ "fsn-node-core",
+ "fsn-store",
+ "libc",
+ "rand 0.8.5",
+ "tempfile",
+ "tokio",
+ "toml 0.8.23",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "fsn-node-core"
+version = "0.1.0"
+dependencies = [
+ "age",
+ "anyhow",
+ "fsn-error",
+ "fsn-health",
+ "fsn-plugin-sdk",
+ "fsn-store",
+ "indexmap 2.13.0",
+ "insta",
+ "rstest",
+ "schemars 0.8.22",
+ "secrecy 0.10.3",
+ "serde",
+ "serde_json",
+ "toml 0.8.23",
+ "walkdir",
 ]
 
 [[package]]

@@ -22,7 +22,7 @@ pub mod vikunja;
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
-use fsn_core::{
+use fsn_node_core::{
     config::{ProjectConfig, VaultConfig},
     state::desired::{DesiredState, ServiceInstance},
 };

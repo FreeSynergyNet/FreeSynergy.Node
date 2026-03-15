@@ -1,5 +1,5 @@
 [package]
-name        = "fsn-core"
+name        = "fsn-node-core"
 description = "FreeSynergy.Node – core data types and config parsing"
 version.workspace    = true
 edition.workspace    = true

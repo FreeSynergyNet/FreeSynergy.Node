@@ -11,7 +11,7 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use fsn_core::config::{
+use fsn_node_core::config::{
     find_project,
     resolve_plugins_dir,
     service::FieldType,
@@ -99,7 +99,7 @@ fn ensure_project_skeleton(root: &Path) -> Result<(String, PathBuf)> {
 
 fn select_modules(_root: &Path, proj_dir: &Path, slug: &str, modules_dir: &Path) -> Result<()> {
     let registry = ServiceRegistry::load(modules_dir)?;
-    let mut all_classes: Vec<(&str, &fsn_core::config::service::ServiceClass)> =
+    let mut all_classes: Vec<(&str, &fsn_node_core::config::service::ServiceClass)> =
         registry.all().collect();
     all_classes.sort_by_key(|(k, _)| *k);
 
@@ -156,7 +156,7 @@ fn collect_module_secrets(root: &Path, proj_dir: &Path, modules_dir: &Path) -> R
         return Ok(());
     }
 
-    let project = fsn_core::config::ProjectConfig::load(&proj_toml)
+    let project = fsn_node_core::config::ProjectConfig::load(&proj_toml)
         .with_context(|| format!("Loading {}", proj_toml.display()))?;
 
     if project.load.services.is_empty() || !modules_dir.exists() {
@@ -168,7 +168,7 @@ fn collect_module_secrets(root: &Path, proj_dir: &Path, modules_dir: &Path) -> R
     let vault = VaultConfig::load(proj_dir, None).unwrap_or_default();
 
     let host_path = root.join("hosts").join(format!("{}.host.toml", slug));
-    let host = fsn_core::config::HostConfig::load(&host_path)
+    let host = fsn_node_core::config::HostConfig::load(&host_path)
         .with_context(|| format!("Loading {}", host_path.display()))?;
 
     let desired = fsn_deploy::resolve::resolve_desired(&project, &host, &registry, &vault, None)

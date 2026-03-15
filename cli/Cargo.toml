@@ -1,11 +1,12 @@
 [workspace]
 members = [
-    "crates/fsn-core",
+    "crates/fsn-node-core",
     "crates/fsn-deploy",
     "crates/fsn-dns",
     "crates/fsn-host",
     "crates/fsn-wizard",
-    "crates/fsn-cli",
+    "crates/fsn-node-cli",
+    "crates/fsn-installer",
 ]
 resolver = "2"
 
@@ -34,7 +35,7 @@ fsn-db             = { path = "../../FreeSynergy.Lib/fsn-db", features = ["sqlit
 fsn-store          = { path = "../../FreeSynergy.Lib/fsn-store" }
 
 # Internal crates
-fsn-core    = { path = "crates/fsn-core" }
+fsn-node-core = { path = "crates/fsn-node-core" }
 fsn-deploy  = { path = "crates/fsn-deploy" }
 fsn-dns     = { path = "crates/fsn-dns" }
 fsn-host    = { path = "crates/fsn-host" }

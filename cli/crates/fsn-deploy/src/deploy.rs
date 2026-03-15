@@ -21,7 +21,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use fsn_core::{
+use fsn_node_core::{
     config::{ProjectConfig, VaultConfig, service::ServiceType},
     state::desired::{DesiredState, ServiceInstance},
 };

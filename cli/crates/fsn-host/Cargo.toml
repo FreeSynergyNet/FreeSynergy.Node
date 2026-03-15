@@ -6,7 +6,7 @@ edition.workspace   = true
 license.workspace   = true
 
 [dependencies]
-fsn-core   = { workspace = true }
+fsn-node-core   = { workspace = true }
 serde      = { workspace = true }
 serde_json = { workspace = true }
 toml       = { workspace = true }

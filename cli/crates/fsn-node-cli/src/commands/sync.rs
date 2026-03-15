@@ -3,7 +3,7 @@
 
 use std::path::Path;
 use anyhow::Result;
-use fsn_core::config::{HostConfig, ServiceRegistry, ProjectConfig, VaultConfig,
+use fsn_node_core::config::{HostConfig, ServiceRegistry, ProjectConfig, VaultConfig,
                        resolve_plugins_dir, find_project, find_host};
 use fsn_deploy::{diff::compute_diff, observe::observe, resolve::resolve_desired};
 

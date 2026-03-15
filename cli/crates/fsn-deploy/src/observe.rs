@@ -3,7 +3,7 @@
 
 use anyhow::Result;
 use fsn_container::{SystemdManager, UnitActiveState};
-use fsn_core::state::{ActualState, HealthStatus, RunState, ServiceStatus};
+use fsn_node_core::state::{ActualState, HealthStatus, RunState, ServiceStatus};
 
 /// Query the current state of all FSN-managed services on this host.
 pub async fn observe() -> Result<ActualState> {

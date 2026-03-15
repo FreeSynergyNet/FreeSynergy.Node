@@ -14,7 +14,7 @@ use std::collections::HashMap;
 
 use anyhow::{bail, Context, Result};
 
-use fsn_core::{
+use fsn_node_core::{
     config::{HostConfig, ServiceRegistry, ProjectConfig, VaultConfig},
     config::service::ServiceType,
     resource::ProjectResource,
@@ -218,7 +218,7 @@ fn resolve_instance(
     }
 
     // Merge capability set: type defaults + plugin-declared extras.
-    let mut capabilities: Vec<fsn_core::config::Capability> = class.meta.service_types.iter()
+    let mut capabilities: Vec<fsn_node_core::config::Capability> = class.meta.service_types.iter()
         .flat_map(|t| t.capabilities())
         .collect();
     for cap in &class.meta.capabilities {

@@ -8,7 +8,7 @@
 //
 // Variable syntax: ${VAR:-default} — compatible with Docker Compose and Podman Compose.
 
-use fsn_core::config::{ProjectConfig, ServiceEntry};
+use fsn_node_core::config::{ProjectConfig, ServiceEntry};
 
 // ── Known image paths ─────────────────────────────────────────────────────────
 

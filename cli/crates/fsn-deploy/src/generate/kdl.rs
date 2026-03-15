@@ -27,7 +27,7 @@
 //
 // Zentinel is Pingora-based — NOT Caddy. The KDL syntax is its own.
 
-use fsn_core::{
+use fsn_node_core::{
     config::service::ServiceType,
     state::desired::{DesiredState, ServiceInstance},
 };
@@ -161,7 +161,7 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use indexmap::IndexMap;
-    use fsn_core::{
+    use fsn_node_core::{
         config::service::{
             Constraints, ContainerDef, ServiceClass, ServiceContract,
             ServiceLoad, ServiceMeta, ServiceSetup, ServiceType,

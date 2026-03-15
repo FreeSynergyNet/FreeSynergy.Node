@@ -1,6 +1,6 @@
 // State diff – compare desired vs actual to determine what needs to change.
 
-use fsn_core::state::{ActualState, DesiredState, RunState, StateDiff};
+use fsn_node_core::state::{ActualState, DesiredState, RunState, StateDiff};
 
 /// Compare desired state with actual state and return what needs to change.
 pub fn compute_diff(desired: &DesiredState, actual: &ActualState) -> StateDiff {
@@ -27,7 +27,7 @@ pub fn compute_diff(desired: &DesiredState, actual: &ActualState) -> StateDiff {
 }
 
 fn check_instance(
-    instance: &fsn_core::state::desired::ServiceInstance,
+    instance: &fsn_node_core::state::desired::ServiceInstance,
     actual: &ActualState,
     diff: &mut StateDiff,
 ) {
@@ -57,7 +57,7 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use indexmap::IndexMap;
-    use fsn_core::{
+    use fsn_node_core::{
         config::service::{
             Capability, Constraints, ContainerDef, ServiceClass, ServiceContract,
             ServiceLoad, ServiceMeta, ServiceSetup, ServiceType,

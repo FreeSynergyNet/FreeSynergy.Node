@@ -13,7 +13,7 @@ use fsn_template::{TemplateContext as LibCtx, TemplateEngine};
 
 /// FSN-level alias for callers within this crate.
 pub type TemplateContext<'a> = FsnTemplateContext<'a>;
-use fsn_core::config::{RouteSpec, VaultConfig};
+use fsn_node_core::config::{RouteSpec, VaultConfig};
 
 // ── ProxyServiceSpec ──────────────────────────────────────────────────────────
 

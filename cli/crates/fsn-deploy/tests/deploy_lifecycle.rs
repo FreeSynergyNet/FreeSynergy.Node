@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::time::Duration;
 
-use fsn_core::{
+use fsn_node_core::{
     config::{
         project::{ProjectConfig, ProjectLoad, ProjectMeta, ServiceSlots},
         service::{

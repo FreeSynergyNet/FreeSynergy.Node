@@ -74,12 +74,12 @@ impl ContextBuilder {
     /// Construct a [`PluginContext`] from a resolved `ServiceInstance` and its peers.
     pub fn build(
         command: &str,
-        instance: &fsn_core::state::desired::ServiceInstance,
+        instance: &fsn_node_core::state::desired::ServiceInstance,
         project_domain: &str,
         data_root: &str,
-        peers: &[&fsn_core::state::desired::ServiceInstance],
+        peers: &[&fsn_node_core::state::desired::ServiceInstance],
     ) -> PluginContext {
-        use fsn_core::resource::VarProvider as _;
+        use fsn_node_core::resource::VarProvider as _;
         use fsn_plugin_sdk::{InstanceInfo, PeerRoute, PeerService};
 
         let peer_services: Vec<PeerService> = peers.iter().map(|p| {

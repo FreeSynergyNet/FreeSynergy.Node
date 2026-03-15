@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use anyhow::{Context, Result};
-use fsn_core::{
+use fsn_node_core::{
     config::{HostConfig, ServiceRegistry, ProjectConfig, VaultConfig, resolve_plugins_dir,
              find_project, find_host, find_host_by_name},
 };
@@ -61,7 +61,7 @@ pub async fn run(
 
     // Filter to a single service if requested
     let deploy_desired = if let Some(svc) = service {
-        use fsn_core::state::DesiredState;
+        use fsn_node_core::state::DesiredState;
         let services = desired.services.into_iter()
             .filter(|m| m.name == svc || m.sub_services.iter().any(|s| s.name == svc))
             .collect();
@@ -83,7 +83,7 @@ pub async fn run(
         .context("Deploy failed")?;
 
     crate::db::write_audit_entry(
-        &fsn_core::audit::AuditEntry::new("system", "deploy", "project", &proj.project.meta.name),
+        &fsn_node_core::audit::AuditEntry::new("system", "deploy", "project", &proj.project.meta.name),
     ).await;
 
     println!("\n✓ Deploy complete ({} service(s))", deploy_desired.services.len());

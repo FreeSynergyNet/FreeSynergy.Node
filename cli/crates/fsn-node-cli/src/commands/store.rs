@@ -5,7 +5,7 @@
 // the module is added to the project config.
 
 use anyhow::{Context, Result};
-use fsn_core::store::StoreEntry;
+use fsn_node_core::store::StoreEntry;
 use fsn_store::StoreClient;
 
 // ── Catalog helper ─────────────────────────────────────────────────────────────

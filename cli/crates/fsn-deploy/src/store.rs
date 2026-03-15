@@ -24,7 +24,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use tracing::info;
 
-use fsn_core::{
+use fsn_node_core::{
     config::{AppSettings, ServiceRegistry},
     store::{StoreCatalog, StoreEntry},
 };

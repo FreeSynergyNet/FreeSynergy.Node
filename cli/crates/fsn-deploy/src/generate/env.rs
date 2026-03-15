@@ -4,7 +4,7 @@
 // Output: ~/.config/containers/systemd/{name}.env
 
 use anyhow::Result;
-use fsn_core::state::desired::ServiceInstance;
+use fsn_node_core::state::desired::ServiceInstance;
 
 /// Generate the .env file content for the given module instance.
 /// All Jinja2 vars are already resolved in instance.resolved_env.
@@ -34,7 +34,7 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
     use indexmap::IndexMap;
-    use fsn_core::{
+    use fsn_node_core::{
         config::service::{
             Constraints, ContainerDef, ServiceClass, ServiceContract,
             ServiceLoad, ServiceMeta, ServiceSetup, ServiceType,
